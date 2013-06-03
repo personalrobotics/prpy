@@ -24,20 +24,25 @@ class Planner(object):
         except AttributeError:
             raise UnsupportedPlanningError
 
-    def bind(self, robot):
+    def bind(self, instance, executer=None):
         from functools import wraps
+
+        # The default executer is simply a wrapper for the planner.
+        if executer is None:
+            def executer(planning_method, args, kw_args):
+                return planning_method(*args, **kw_args)
 
         def create_wrapper(planning_method):
             @wraps(planning_method)
             def wrapper_method(*args, **kw_args):
-                return planning_method(robot, *args, **kw_args)
+                return executer(planning_method, args, kw_args)
 
             return wrapper_method
 
         for method_name in self.__class__.methods:
             planning_method = getattr(self, method_name)
             wrapper_method = create_wrapper(planning_method)
-            setattr(robot, method_name, wrapper_method)
+            setattr(instance, method_name, wrapper_method)
 
 class Sequence(Planner):
     def __init__(self, *planners):
