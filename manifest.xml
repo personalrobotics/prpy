@@ -1,0 +1,18 @@
+<package>
+    <description brief="Python utilities for OpenRAVE.">
+        prpy is a Python library used by the Personal Robotics Laboratory at
+        Carnegie Mellon University. This library includes robot-agnostic
+        utilities that make it easier to use OpenRAVE in Python scripts. This
+        includes a high-level planning pipeline, helper functions, and
+        visualization tools.
+    </description>
+    <author>Michael Koval</author>
+    <license>BSD</license>
+    <depend package="openrave"/>
+    <depend package="manipulation2"/>
+    <export>
+        <openrave optional="cbirrt2"/>
+        <openrave optional="orcdchomp"/>
+        <openrave optional="or_ompl"/>
+    </export>
+</package>
