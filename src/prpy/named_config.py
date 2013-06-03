@@ -1,11 +1,18 @@
 import numpy
 
-class NamedConfigurations:
-    def __init__(self, num_dofs):
-        self._num_dofs = num_dofs
+class ConfigurationLibrary:
+    def __init__(self):
         self._indices = set()
         self._groups = dict()
         self._configs = dict()
+
+    def load_yaml(self, path):
+        with open(path, 'rb') as config_file:
+            import yaml
+            config_yaml = yaml.load(config_file)
+
+        for name, groups in config_yaml['configurations'].items():
+            self.add_configuration(name, **groups)
 
     def add_group(self, name, dof_indices):
         duplicate_indices = self._indices.intersection(dof_indices)

@@ -1,2 +1,2 @@
 import planning
-from named_config import ConfigurationTemplate
+from named_config import ConfigurationLibrary
