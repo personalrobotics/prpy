@@ -40,7 +40,7 @@ class CBiRRTPlanner(Planner):
         
         response = self.problem.SendCommand(args_str)
         if int(response) != 1:
-            raise planner.PlanningError('Planning with CBiRRT failed.')
+            raise PlanningError('Planning with CBiRRT failed.')
 
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
