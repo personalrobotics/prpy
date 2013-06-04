@@ -38,7 +38,7 @@ class CBiRRTPlanner(Planner):
         args += [ 'filename', traj_path ]
         args_str = ' '.join(args)
 
-        response = self.problem.SendCommand(args_str)
+        response = self.problem.SendCommand(args_str, True)
         if int(response) != 1:
             raise PlanningError('Unknown error.')
 

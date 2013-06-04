@@ -1,5 +1,7 @@
 import logging, functools, openravepy
 
+logger = logging.getLogger('planning')
+
 class PlanningError(Exception):
     pass
 
@@ -11,7 +13,6 @@ class MetaPlanningError(PlanningError):
         PlanningError.__init__(self, message)
         self.errors = errors
 
-    # TODO: Make errors a mapping from planners to errors.
     # TODO: Print the inner exceptions.
 
 class PlanningMethod(object):
@@ -52,9 +53,9 @@ class Planner(object):
         setattr(cls, method_name, plan_wrapper)
 
     def plan(self, method, args, kw_args):
+        logger.info('Started planning with %s', self)
         try:
             method = getattr(self, method)
-            print 'Calling %s' % method
             return method(*args, **kw_args)
         except AttributeError:
             raise UnsupportedPlanningError
@@ -96,10 +97,10 @@ class Sequence(MetaPlanner):
             try:
                 return planner.plan(method, args, kw_args)
             except MetaPlanningError as e:
-                errors.append(e)
+                errors[planner] = e
             except PlanningError as e:
-                logging.warning('Planning with %s failed: %s', planner, e)
-                errors.append(e)
+                logger.warning('Planning with %s failed: %s', planner, e)
+                errors[planner] = e
 
         raise MetaPlanningError('All planners failed.', errors)
 
@@ -108,7 +109,67 @@ class Ranked(MetaPlanner):
         self._planners = planners
 
     def plan(self, method, args, kw_args):
-        raise NotImplemented
+        from threading import Condition, Thread
+
+        planning_threads = list()
+        results = [ None ] * len(self._planners)
+        condition = Condition()
+
+        # Start planning in parallel.
+        for index, planner in enumerate(self._planners):
+            def planning_thread(index, planner):
+                try:
+                    results[index] = planner.plan(method, args, kw_args)
+                except PlanningError as e:
+                    logger.warning('Planning with %s failed: %s', planner, e)
+                    results[index] = e
+
+                # Notify the main thread that we're done.
+                condition.acquire()
+                condition.notifyAll()
+                condition.release()
+
+            thread = Thread(target=planning_thread, args=(index, planner),
+                            name='%s-planning' % planner)
+            thread.daemon = True
+            thread.start()
+
+        # Block until a dominant planner finishes.
+        traj = None
+        condition.acquire()
+
+        while True:
+            # TODO: Can we replace this with a fold?
+            previous_done = True
+            for planner, result in zip(self._planners, results):
+                if result is None:
+                    previous_done = False
+                elif isinstance(result, openravepy.Trajectory):
+                    # All better planners have failed. Short-circuit and return this
+                    # trajectory. It must be the highest-ranked one.
+                    if previous_done:
+                        break
+                elif not isinstance(result, PlanningError):
+                    # TODO: Fill in the planning errors.
+                    raise MetaPlanningError('Planner %s returned %r of type %r; '
+                                            'expected a trajectory or PlanningError.'\
+                                            % (planner, result, type(result)), list())
+
+            # We're done! Save the best trajectory that succeeded.
+            if previous_done:
+                traj = result
+                print 'Returning plan from %s' % planner
+                break
+
+            # Wait for a planner to finish.
+            condition.wait()
+
+        condition.release()
+
+        if traj is not None:
+            return traj
+        else:
+            raise MetaPlanningError('All planners failed.', dict(zip(self._planners, results)))
 
 class Fastest(MetaPlanner):
     def __init__(self, *planners):
