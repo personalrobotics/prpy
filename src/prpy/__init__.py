@@ -1,3 +1,2 @@
-import planning
+import planning, simulation
 from named_config import ConfigurationLibrary
-from servo_simulator import ServoSimulator

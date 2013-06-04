@@ -5,14 +5,18 @@ class CHOMPPlanner(Planner):
     Planner.register_type('PlanToConfiguration')
     Planner.register_type('PlanToEndEffectorPose')
 
-    def __init__(self, env):
+    def __init__(self):
+        self.planner_env = openravepy.Environment()
         try:
             from orcdchomp import orcdchomp
-            self.module = openravepy.RaveCreateModule(env, 'orcdchomp')
+            self.module = openravepy.RaveCreateModule(self.planner_env, 'orcdchomp')
         except ImportError:
             raise UnsupportedPlanningError('Unable to import orcdchomp.')
-        except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create orcdchomp module.')
+        except openravepy.openrave_exception as e:
+            raise UnsupportedPlanningError('Unable to create orcdchomp module: %s' % e)
+
+        if self.module is None:
+            raise UnsupportedPlanningError('Failed loading CBiRRT module.')
 
         self.initialized = False
         orcdchomp.bind(self.module)
