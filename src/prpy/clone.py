@@ -36,7 +36,7 @@ def Clone(env, destroy=True):
     return clone_env
 
 def Cloned(*instances):
-    clone_env = CloneImpl.get_env()
+    clone_env = ClonedEnvironment.get_env()
     clone_instances = list()
 
     for instance in instances:
