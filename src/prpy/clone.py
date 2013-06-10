@@ -56,6 +56,6 @@ def Cloned(*instances):
         clone_instances.append(clone_instance)
 
     if len(instances) == 1:
-        return instances[0]
+        return clone_instances[0]
     else:
         return clone_instances
