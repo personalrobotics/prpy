@@ -1,93 +1,86 @@
 import numpy, openravepy
 
-def toH(x):
-    return numpy.concatenate((x, [ 1.0 ]))
-
-def fromH(x):
-    return x[0:3]
-
-class TactileCell(object):
-    def __init__(self, name, origin, normal):
-        if not (origin.shape == (3,)):
-            raise ValueError('Origin must be a three-element vector.')
-        elif not (normal.shape == (3,)):
-            raise ValueError('Normal must be a three-element vector.')
-
-        self.name = name
-        self.origin = numpy.array(origin, dtype='float')
-        self.normal = numpy.array(normal, dtype='float')
+class TactileArray(object):
+    def __init__(self, offset, origins, normals):
+        self.offset = numpy.array(offset, dtype='float')
+        self.origins = numpy.array(origins, dtype='float')
+        self.normals = numpy.array(normals, dtype='float')
 
     def __repr__(self):
-        return 'TactileCell(name={0:s}, origin={1:s}, normal={2:s})'.format(
-                   self.name, self.origin, self.normal)
+        return 'TactileArray(offset={0:r}, origins=<{1:d}x{2:d} array>, normals=<{3:d}x{4:d} array>)'.format(
+            self.offset, self.origins.shape[0], self.origins.shape[1],
+                         self.normals.shape[0], self.origins.shape[1])
 
-class TactileArray(object):
-    def __init__(self, link_name, offset):
-        self.cells = list()
-        self.link_name = link_name
-        self.offset = numpy.array(offset, dtype='float')
+    def __len__(self):
+        return self.origins.shape[0]
+
+    def get_origins(self, link_pose):
+        offset = self.get_offset(link_pose)
+        origins = numpy.dot(offset[0:3, 0:3], self.origins.T) + offset[0:3, 3].reshape((3, 1))
+        return origins.T
+
+    def get_normals(self, link_pose):
+        offset = self.get_offset(link_pose)
+        normals = numpy.dot(offset[0:3, 0:3], self.normals.T)
+        return normals.T
+
+    def get_offset(self, link_pose):
+        return numpy.dot(link_pose, self.offset)
+
+    @classmethod
+    def from_yaml(cls, array_yaml):
+        offset_quaternion =  numpy.array(array_yaml['offset']['orientation'], dtype='float')
+        offset_pose = openravepy.matrixFromQuat(offset_quaternion)
+        offset_pose[0:3, 3] = numpy.array(array_yaml['offset']['position'], dtype='float')
+        return cls(offset_pose, array_yaml['origin'], array_yaml['normal'])
 
 class TactileSensor(object):
     def __init__(self):
-        self.pads = list()
+        self.arrays = dict()
 
-    def from_yaml(self, path):
-        self.pads = list()
-
+    @classmethod
+    def from_yaml(cls, path):
+        # Load the tactile cell origins and normals from YAML.
         with open(path, 'rb') as stream:
             import yaml
             tactile_yaml = yaml.load(stream)
 
-        for parent_link, pad_yaml in tactile_yaml.items():
-            # Extract the link offset. This, combined with the link frame,
-            # specifies the coordinate frame of the cell origins and normals.
-            offset_quaternion =  numpy.array(pad_yaml['offset']['orientation'], dtype='float')
-            offset_pose = openravepy.matrixFromQuat(offset_quaternion)
-            offset_pose[0:3, 3] = numpy.array(pad_yaml['offset']['position'], dtype='float')
+        # Create a TactileArray object for each entry in the file.
+        sensor = cls()
+        for link_name, array_yaml in tactile_yaml.items():
+            sensor.arrays[link_name] = TactileArray.from_yaml(array_yaml)
 
-            tactile_array = TactileArray(parent_link, offset_pose)
-            cells_yaml = zip(pad_yaml['origin'], pad_yaml['normal'])
+        return sensor
 
-            for index, (origin_yaml, normal_yaml) in enumerate(cells_yaml):
-                cell_name = '{0:s}_cell{1:d}'.format(parent_link, index)
-                origin = numpy.array(origin_yaml, dtype='float')
-                normal = numpy.array(normal_yaml, dtype='float')
-
-                print normal_yaml
-
-                cell = TactileCell(cell_name, origin, normal)
-                tactile_array.cells.append(cell)
-
-            self.pads.append(tactile_array)
-
-    def render(self, robot, origins=True, points=True, normals=True, length=0.01):
+    def render_cells(self, robot, origins=True, normals=True, length=0.01):
         handles = list()
-        lines = list()
+        all_lines = list()
 
-        for tactile_array in self.pads:
-            link = robot.GetLink(tactile_array.link_name)
-            if link is None:
-                raise openravepy.openrave_exception('There is no link named {0:s}.'.format(tactile_array.link_name))
-
-            # Compute the origin of the tactile array in the world frame.
+        for link_name, tactile_array in self.arrays.items():
+            # Tactile cells are relative to the link.
+            link = robot.GetLink(link_name)
             link_pose = link.GetTransform()
-            offset_pose = numpy.dot(link_pose, tactile_array.offset)
 
             # Render the origin of the tactile array.
             if origins:
-                handle = openravepy.misc.DrawAxes(robot.GetEnv(), offset_pose, dist=0.02, linewidth=2)
+                handle = openravepy.misc.DrawAxes(robot.GetEnv(), tactile_array.offset,
+                                                  dist=0.02, linewidth=2)
                 handles.append(handle)
 
-            # Compute a normal vector for each cell.
+            # Render a normal vector for each cell.
             if normals:
-                for cell in tactile_array.cells:
-                    cell_origin = fromH(numpy.dot(offset_pose, toH(cell.origin)))
-                    cell_normal = numpy.dot(offset_pose[0:3, 0:3], cell.normal)
-                    lines += [ cell_origin, cell_origin + length * cell_normal ]
+                num_cells = len(tactile_array)
+                cell_origins = tactile_array.get_origins(link_pose)
+                cell_normals = tactile_array.get_normals(link_pose)
+
+                array_lines = numpy.empty((2 * num_cells, 3))
+                array_lines[0::2, :] = cell_origins
+                array_lines[1::2, :] = cell_origins + length * cell_normals
+                all_lines.append(array_lines)
 
         # Render the normal vectors.
         if normals:
-            lines = numpy.array(lines, dtype='float')
+            lines = numpy.vstack(all_lines)
             color = numpy.array([ 1., 1., 0., 1. ])
             handle = robot.GetEnv().drawlinelist(lines, 2, color)
             handles.append(handle)
