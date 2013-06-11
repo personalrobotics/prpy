@@ -6,13 +6,12 @@ from prpy.rodrigues import *
 def GetCylinderTSR(radius, height, manip, T0_w = numpy.eye(4), lateral_tolerance = 0.02):
     """
     Generates a tsr that is appropriate for grasping a cylinder.
-    
-    Params:
-    radius - The radius of the cylinder
-    height - The height along the cylinder for performing the grasp
-    manip - The manipulator to use for the grasp
-    T0_w - A transform from the cylinder frame to the world frame
-    lateral_tolerance - The tolerance for the height at which to grab the cylinder
+        
+    @param radius - The radius of the cylinder
+    @param height - The height along the cylinder for performing the grasp
+    @param manip - The manipulator to use for the grasp
+    @param T0_w - A transform from the cylinder frame to the world frame
+    @param lateral_tolerance - The tolerance for the height at which to grab the cylinder
     """
 
     with manip.parent:
@@ -41,13 +40,12 @@ def GetTSRChainsForObjectGrab(obj, manip,
     Returns a list of tsr chains that desribe valid grasps
     for the object.
     
-    Params:
-    obj - The object to be grasped.
-    manip - The manipulator to perform the grasping
-    T0_w - The transform from world to object frame
-    start_tsr - A flag indicating the tsr should be sampled
+    @param obj - The object to be grasped.
+    @param manip - The manipulator to perform the grasping
+    @param T0_w - The transform from world to object frame
+    @param start_tsr - A flag indicating the tsr should be sampled
     for the start of the trajectory
-    goal_tsr - A flag indicating the tsr should be sampled 
+    @param goal_tsr - A flag indicating the tsr should be sampled 
     for the end of the trajectory
     """
 
@@ -101,6 +99,7 @@ def GetTSRChainsForObjectGrab(obj, manip,
                           [  .0,    .0],   
                           [  .0,    .0],   
                           [  .0,    .0]])
+
         Tw_e = numpy.eye(4)
         Tw_e[:3,:3] = rodrigues([-pi/2, 0, 0])
         Tw_e[:3,3] = [0, -obj_bb.extents()[1] - ee_offset, 0.]
@@ -113,6 +112,7 @@ def GetTSRChainsForObjectGrab(obj, manip,
                           [  .0,    .0],   
                           [  .0,    .0],   
                           [  .0,    .0]])
+        
         Tw_e = numpy.eye(4)
         Tw_e[:3,:3] = numpy.dot(rodrigues([-pi/2, 0, 0]), rodrigues([0, 0, pi]))
         Tw_e[:3,3] = [0, -obj_bb.extents()[1] - ee_offset, 0.]
@@ -198,4 +198,43 @@ def GetTSRChainsForObjectGrab(obj, manip,
 
         return chains
 
+def GetNoTiltTSRChain(manip, axis = [0., 0., 1.]):
+    """
+    Returns the no tilting tsr string for the end-effector. No-tilting
+    here means that the end-effector is allowed to rotate only along the
+    end-effecttor axis that is closest to the given axis (world +z by default).
+    it.  
     
+    @param manip - The manipulator
+    @param axis - The axis to hold steady
+    """
+    
+    # Grab the tranform for the ee on this manip
+    T0_w = manip.GetEndEffectorTransform()
+    
+    # Get the index - this is necessary for the tsr definition
+    manipindex = manip.GetActiveManipulatorIndex()
+    
+
+    # Find which axis of end-effector is aligned with the +z in world
+    projections = []
+    for idx in range(3):
+        projections.append(numpy.abs(numpy.dot(T0_w[:3,idx], numpy.array(axis))))
+        
+
+    axis_idx = max( (v,i) for i,v in enumerate(projections) )[1]
+
+    Tw_e = numpy.eye(4)
+    Bw = numpy.array([-100., 100.,
+                      -100., 100.,
+                      -100., 100.,
+                         0.,   0.,
+                         0.,   0.,
+                         0.,   0.])
+    Bw[(3+axis_idx)*2.] = -numpy.pi
+    Bw[(3+axis_idx)*2. + 1] = numpy.pi
+    
+    constraintTSR = TSR(T0_w=T0_w, Tw_e=Tw_e, Bw=Bw, manip=manipidx)
+    constraintTSRChain = TSRChain(constrain=True, TSR=constraintTSR)
+
+    return constraintTSRChain
