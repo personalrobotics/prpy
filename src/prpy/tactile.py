@@ -38,19 +38,27 @@ class TactileSensor(object):
     def __init__(self):
         self.arrays = dict()
 
-    @classmethod
-    def from_yaml(cls, path):
-        # Load the tactile cell origins and normals from YAML.
-        with open(path, 'rb') as stream:
-            import yaml
-            tactile_yaml = yaml.load(stream)
+    def render_values(self, robot, values, scale=1.0, color=None, linewidth=2):
+        all_lines = list()
 
-        # Create a TactileArray object for each entry in the file.
-        sensor = cls()
-        for link_name, array_yaml in tactile_yaml.items():
-            sensor.arrays[link_name] = TactileArray.from_yaml(array_yaml)
+        if color is None:
+            color = numpy.array([ 1., 0., 0., 1. ])
 
-        return sensor
+        for link_name, tactile_array in self.arrays.items():
+            link_pose = robot.GetLink(link_name).GetTransform()
+
+            array_values = values[link_name]
+            cell_origins = tactile_array.get_origins(link_pose)
+            cell_normals = tactile_array.get_normals(link_pose)
+            num_cells = len(tactile_array)
+
+            array_lines = numpy.empty((2 * num_cells, 3))
+            array_lines[0::2, :] = cell_origins
+            array_lines[1::2, :] = cell_origins + scale * array_values.reshape((num_cells, 1)) * cell_normals
+            all_lines.append(array_lines)
+
+        lines = numpy.vstack(all_lines)
+        return robot.GetEnv().drawlinelist(lines, linewidth, color)
 
     def render_cells(self, robot, origins=True, normals=True, length=0.01):
         handles = list()
@@ -87,13 +95,16 @@ class TactileSensor(object):
 
         return handles
 
-if __name__ == '__main__':
+    @classmethod
+    def from_yaml(cls, path):
+        # Load the tactile cell origins and normals from YAML.
+        with open(path, 'rb') as stream:
+            import yaml
+            tactile_yaml = yaml.load(stream)
 
-    env = openravepy.Environment()
-    hand = env.ReadRobotURI('robots/iHY/irobot_reduced.kinbody.xml')
-    env.Add(hand)
-    env.SetViewer('qtcoin')
+        # Create a TactileArray object for each entry in the file.
+        sensor = cls()
+        for link_name, array_yaml in tactile_yaml.items():
+            sensor.arrays[link_name] = TactileArray.from_yaml(array_yaml)
 
-    sensor = TactileSensor()
-    sensor.from_yaml('config/ihy_tactile.yaml')
-    handles = sensor.render(hand)
+        return sensor
