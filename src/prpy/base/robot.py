@@ -17,6 +17,10 @@ class Robot(openravepy.Robot):
         # Automatically bind planning methods on this object.
         planning.Planner.bind(self, lambda: self.planner, executer=self._PlanWrapper)
 
+    def CloneBindings(self, parent):
+        # TODO: Is this all I have to do?
+        self.__init__()
+
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
         Create and attach a controller to a subset of this robot's DOFs. If

@@ -1,23 +1,82 @@
+from clone import CloneException
+
+class NotCloneableException(CloneException):
+    pass
+
 class InstanceDeduplicator:
+    # FIXME: Canonical instances leak memory. They always have a pointer in the
+    # instances dictionary.
     instances = dict()
 
     @staticmethod
     def intercept(self, name):
-        # Return the canonical reference stored in this class.
-        try:
-            true_instance = object.__getattribute__(self, '_true_instance')
-        except AttributeError:
-            # Retrieve the canonical instance from the global dictionary if it is
-            # not already set. This should only occur once, after which the
-            # _true_instance field is populated.
-            if self in InstanceDeduplicator.instances:
-                true_instance = InstanceDeduplicator.instances[self]
-                self._true_instance = true_instance
-            # There is no canonical instance associated with the object.
-            else:
-                true_instance = self
+        canonical_instance = InstanceDeduplicator.get_canonical(self)
 
-        return object.__getattribute__(true_instance, name)
+        # This object has no canonical instance. However, it may be the clone
+        # of an object that does.
+        if canonical_instance is None:
+            # Build a list of the instance's clone parents in ascending order
+            # of depth in the clone tree; i.e. the first element is the root.
+            parents = [ self ]
+            while True:
+                try:
+                    parent = object.__getattribute__(parents[0], 'clone_parent')
+                    parents.insert(0, parent)
+                except AttributeError:
+                    break
+
+            # Clone each child from its parent if the parent is has a canonical
+            # instance and the child does not.
+            canonical_parent = None
+            for child in parents:
+                canonical_child = InstanceDeduplicator.get_canonical(child)
+
+                # Clone this child from the canonical parent. It will become a
+                # new canonical instance.
+                if canonical_child is None and canonical_parent is not None:
+                    # First, change the class of the child to that of the
+                    # canonical parent. This exposes the clone method.
+                    canonical_class = object.__getattribute__(canonical_parent, '__class__')
+                    child.__class__ = canonical_class
+
+                    # Next, invoke the clone method. It is invoked on the child
+                    # (destination) and take the parent (source) as an
+                    # argument.
+                    try:
+                        clone_method = object.__getattribute__(child, 'CloneBindings')
+                    except AttributeError:
+                        raise NotCloneableException('Object {0:s} does not have a CloneBindings method.'.format(child))
+
+                    canonical_class.__getattribute__ = object.__getattribute__
+                    clone_method(canonical_parent)
+                    canonical_class.__getattribute__ = InstanceDeduplicator.intercept
+
+                    # Finally, register the child as a canonical instance.
+                    InstanceDeduplicator.instances[child] = child
+                    canonical_child = child
+                    print 'Bound Clone(', canonical_parent, ' ) to', child 
+
+                canonical_parent = canonical_child
+
+            # Update our canonical instance in case we were able to clone a
+            # parent with a canonical instance.
+            canonical_instance = InstanceDeduplicator.get_canonical(self)
+
+        if canonical_instance is None:
+            canonical_instance = self
+        return object.__getattribute__(canonical_instance, name)
+
+    @staticmethod
+    def get_canonical(self):
+        canonical_instance = None
+        try:
+            canonical_instance = object.__getattribute__(self, '_true_instance')
+        except AttributeError:
+            if self in InstanceDeduplicator.instances:
+                canonical_instance = InstanceDeduplicator.instances[self]
+                self._true_instance = canonical_instance
+
+        return canonical_instance
 
     @classmethod
     def add_canonical(cls, instance):
