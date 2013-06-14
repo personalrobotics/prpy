@@ -15,6 +15,13 @@ class WAMRobot(Robot):
         self.trajectory_module = prrave.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
         manipulation2.trajectory.bind(self.trajectory_module)
 
+    def CloneBindings(self, parent):
+        Robot.CloneBindings(self, parent)
+
+        self.mac_retimer = None
+        self.trajectory_module = prrave.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
+        manipulation2.trajectory.bind(self.trajectory_module)
+
     def RetimeTrajectory(self, traj, max_jerk=30.0, synchronize=False,
                          stop_on_stall=True, stop_on_ft=False, force_direction=None,
                          force_magnitude=None, torque=None, **kw_args):
@@ -34,7 +41,7 @@ class WAMRobot(Robot):
         # Fall back on the standard OpenRAVE retimer if MacTrajectory is not
         # available.
         if self.mac_retimer is None:
-            return self.RetimeTrajectory(self, traj, **kw_args)
+            return Robot.RetimeTrajectory(self, traj, **kw_args)
 
         # Create a MacTrajectory with timestamps, joint values, velocities,
         # accelerations, and blend radii.

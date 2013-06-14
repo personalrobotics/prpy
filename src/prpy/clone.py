@@ -55,6 +55,8 @@ def Cloned(*instances):
             clone_instance = clone_env.GetKinBody(instance.GetName())
         elif isinstance(instance, openravepy.KinBody.Link):
             clone_instance = Cloned(instance.GetParent()).GetLink(instance.GetName())
+        elif isinstance(instance, openravepy.Robot.Manipulator):
+            clone_instance = Cloned(instance.GetRobot()).GetManipulator(instance.GetName())
         else:
             raise CloneException('Unable to clone object of type {0:s}.'.format(type(instance)))
 

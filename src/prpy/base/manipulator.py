@@ -5,6 +5,9 @@ class Manipulator(openravepy.Robot.Manipulator):
     def __init__(self):
         planning.Planner.bind(self, lambda: self.planner, executer=self._PlanWrapper)
 
+    def CloneBindings(self, parent):
+        self.__init__()
+
     def GetIndices(self):
         return self.GetArmIndices()
 

@@ -5,6 +5,7 @@ from prpy.clone import Clone, Cloned
 
 class Robot(openravepy.Robot):
     def __init__(self):
+        self.planner = None
         self.controllers = list()
         self.manipulators = list()
         self.configurations = named_config.ConfigurationLibrary()
@@ -18,8 +19,16 @@ class Robot(openravepy.Robot):
         planning.Planner.bind(self, lambda: self.planner, executer=self._PlanWrapper)
 
     def CloneBindings(self, parent):
-        # TODO: Is this all I have to do?
-        self.__init__()
+        self.planner = parent.planner
+        self.controllers = list()
+        self.manipulators = [ Cloned(manipulator) for manipulator in parent.manipulators ]
+        self.configurations = parent.configurations
+        self.multicontroller = MultiControllerWrapper(self)
+
+        self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
+        self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+
+        planning.Planner.bind(self, lambda: self.planner, executer=self._PlanWrapper)
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
@@ -92,7 +101,7 @@ class Robot(openravepy.Robot):
         util.WaitForControllers(active_controllers, timeout=timeout)
         return traj
 
-    def PlanToNamedConfiguration(self, name, **kw_args):
+    def PlanToNamedConfiguration(self, name, execute=True, **kw_args):
         """
         Plan to a saved configuration stored in robot.configurations.
         @param name name of a saved configuration
@@ -103,7 +112,12 @@ class Robot(openravepy.Robot):
 
         with Clone(self.GetEnv()):
             Cloned(self).SetActiveDOFs(dof_indices)
-            return Cloned(self).PlanToConfiguration(dof_values, **kw_args)
+            traj = Cloned(self).PlanToConfiguration(dof_values, execute=False, **kw_args)
+
+        if execute:
+            return self.ExecuteTrajectory(traj, **kw_args)
+        else:
+            return traj
 
     def _PlanWrapper(self, planning_method, args, kw_args):
         # Call the planner.

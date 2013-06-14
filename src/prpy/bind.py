@@ -40,21 +40,21 @@ class InstanceDeduplicator:
                     child.__class__ = canonical_class
 
                     # Next, invoke the clone method. It is invoked on the child
-                    # (destination) and take the parent (source) as an
-                    # argument.
+                    # (destination) and take the parent (source) as an argument.
                     try:
                         clone_method = object.__getattribute__(child, 'CloneBindings')
                     except AttributeError:
                         raise NotCloneableException('Object {0:s} does not have a CloneBindings method.'.format(child))
 
-                    canonical_class.__getattribute__ = object.__getattribute__
-                    clone_method(canonical_parent)
-                    canonical_class.__getattribute__ = InstanceDeduplicator.intercept
-
-                    # Finally, register the child as a canonical instance.
+                    # Register the child as a canonical instance.
                     InstanceDeduplicator.instances[child] = child
                     canonical_child = child
                     print 'Bound Clone(', canonical_parent, ' ) to', child 
+
+                    # Finally invoke the user-provided clone method.
+                    canonical_class.__getattribute__ = object.__getattribute__
+                    clone_method(canonical_parent)
+                    canonical_class.__getattribute__ = InstanceDeduplicator.intercept
 
                 canonical_parent = canonical_child
 

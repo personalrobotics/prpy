@@ -16,6 +16,9 @@ class WAM(Manipulator):
         from prpy.simulation import ServoSimulator
         self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)
 
+    def CloneBindings(self, parent):
+        self.__init__(True, None)
+
     def SetStiffness(manipulator, stiffness):
         """
         Set the WAM's stiffness. This enables or disables gravity compensation.
