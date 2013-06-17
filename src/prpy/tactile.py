@@ -14,15 +14,11 @@ class TactileArray(object):
     def __len__(self):
         return self.origins.shape[0]
 
-    def get_origins(self, link_pose):
+    def get_geometry(self, link_pose):
         offset = self.get_offset(link_pose)
         origins = numpy.dot(offset[0:3, 0:3], self.origins.T) + offset[0:3, 3].reshape((3, 1))
-        return origins.T
-
-    def get_normals(self, link_pose):
-        offset = self.get_offset(link_pose)
         normals = numpy.dot(offset[0:3, 0:3], self.normals.T)
-        return normals.T
+        return origins.T, normals.T
 
     def get_offset(self, link_pose):
         return numpy.dot(link_pose, self.offset)
@@ -38,26 +34,37 @@ class TactileSensor(object):
     def __init__(self):
         self.arrays = dict()
 
+    def get_geometry(self, robot):
+        all_origins = list()
+        all_normals = list()
+
+        for link_name, tactile_array in self.arrays.items():
+            link_pose = robot.GetLink(link_name).GetTransform()
+            array_origins, array_normals = tactile_array.get_geometry(link_pose)
+            all_origins.append(array_origins)
+            all_normals.append(array_normals)
+
+        return numpy.vstack(all_origins), numpy.vstack(all_normals)
+
     def render_values(self, robot, values, scale=1.0, color=None, linewidth=2):
         all_lines = list()
 
         if color is None:
             color = numpy.array([ 1., 0., 0., 1. ])
 
-        for link_name, tactile_array in self.arrays.items():
-            link_pose = robot.GetLink(link_name).GetTransform()
+        if isinstance(values, dict):
+            all_values = list()
+            for link_name in self.arrays.keys():
+                all_values.extend(values[link_name])
+        else:
+            all_values = values
 
-            array_values = values[link_name]
-            cell_origins = tactile_array.get_origins(link_pose)
-            cell_normals = tactile_array.get_normals(link_pose)
-            num_cells = len(tactile_array)
-
-            array_lines = numpy.empty((2 * num_cells, 3))
-            array_lines[0::2, :] = cell_origins
-            array_lines[1::2, :] = cell_origins + scale * array_values.reshape((num_cells, 1)) * cell_normals
-            all_lines.append(array_lines)
-
-        lines = numpy.vstack(all_lines)
+        num_cells = len(all_values)
+        all_values = numpy.array(all_values, dtype='float')
+        origins, normals = self.get_geometry(robot)
+        lines = numpy.empty((2 * num_cells, 3))
+        lines[0::2, :] = origins
+        lines[1::2, :] = origins + scale * all_values.reshape((num_cells, 1)) * normals
         return robot.GetEnv().drawlinelist(lines, linewidth, color)
 
     def render_cells(self, robot, origins=True, normals=True, length=0.01):
@@ -89,7 +96,7 @@ class TactileSensor(object):
         # Render the normal vectors.
         if normals:
             lines = numpy.vstack(all_lines)
-            color = numpy.array([ 1., 1., 0., 1. ])
+            color = numpy.array([ 0., 0., 1., 1. ])
             handle = robot.GetEnv().drawlinelist(lines, 2, color)
             handles.append(handle)
 
