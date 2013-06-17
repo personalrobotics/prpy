@@ -67,38 +67,25 @@ class TactileSensor(object):
         lines[1::2, :] = origins + scale * all_values.reshape((num_cells, 1)) * normals
         return robot.GetEnv().drawlinelist(lines, linewidth, color)
 
-    def render_cells(self, robot, origins=True, normals=True, length=0.01):
-        handles = list()
-        all_lines = list()
-
-        for link_name, tactile_array in self.arrays.items():
-            # Tactile cells are relative to the link.
-            link = robot.GetLink(link_name)
-            link_pose = link.GetTransform()
-
-            # Render the origin of the tactile array.
-            if origins:
-                handle = openravepy.misc.DrawAxes(robot.GetEnv(), tactile_array.offset,
-                                                  dist=0.02, linewidth=2)
-                handles.append(handle)
-
-            # Render a normal vector for each cell.
-            if normals:
-                num_cells = len(tactile_array)
-                cell_origins = tactile_array.get_origins(link_pose)
-                cell_normals = tactile_array.get_normals(link_pose)
-
-                array_lines = numpy.empty((2 * num_cells, 3))
-                array_lines[0::2, :] = cell_origins
-                array_lines[1::2, :] = cell_origins + length * cell_normals
-                all_lines.append(array_lines)
-
-        # Render the normal vectors.
-        if normals:
-            lines = numpy.vstack(all_lines)
+    def render_cells(self, robot, origins=True, normals=True, color=None, linewidth=2, length=0.01):
+        if color is None:
             color = numpy.array([ 0., 0., 1., 1. ])
-            handle = robot.GetEnv().drawlinelist(lines, 2, color)
+
+        all_origins, all_normals = self.get_geometry(robot)
+        handles = list()
+
+        if normals:
+            lines = numpy.empty((2 * all_origins.shape[0], 3))
+            lines[0::2, :] = all_origins
+            lines[1::2, :] = all_origins + length * all_normals
+            handle = robot.GetEnv().drawlinelist(lines, linewidth, color)
             handles.append(handle)
+
+        if origins:
+            for tactile_array in self.arrays.values():
+                handle = openravepy.misc.DrawAxes(robot.GetEnv(), tactile_array.offset,
+                                                  dist=0.02, linewidth=linewidth)
+                handles.append(handle)
 
         return handles
 
