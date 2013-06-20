@@ -71,6 +71,10 @@ class CHOMPPlanner(Planner):
 
         return traj
 
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, **kw_args):
+        raise UnsupportedPlanningError('PlanToTSR not implemented for CHOMP')
+
     def ComputeDistanceField(self, robot):
         # Clone the live environment into the planning environment.
         live_robot = robot
