@@ -19,7 +19,7 @@ class PlanningMethod(object):
     def __init__(self, func):
         self.func = func
         Planner.register_type(func.__name__)
-
+        
     def __call__(self, instance, live_robot, *args, **kw_args):
         live_env = live_robot.GetEnv()
         planning_env = instance.env
@@ -46,6 +46,7 @@ class Planner(object):
 
     @classmethod
     def register_type(cls, method_name):
+
         def plan_wrapper(self, *args, **kw_args):
             return self.plan(method_name, args, kw_args)
 
@@ -59,6 +60,7 @@ class Planner(object):
             return method(*args, **kw_args)
         except AttributeError:
             raise UnsupportedPlanningError
+            
 
     @classmethod
     def bind(cls, instance, lazy_planner, executer=None):
@@ -137,32 +139,34 @@ class Ranked(MetaPlanner):
         # Block until a dominant planner finishes.
         traj = None
         condition.acquire()
+        all_done = False
 
-        while True:
+        while traj is None and not all_done:
+
             # TODO: Can we replace this with a fold?
             previous_done = True
+            all_done = True #assume everyone is done
             for planner, result in zip(self._planners, results):
                 if result is None:
                     previous_done = False
+                    all_done = False
                 elif isinstance(result, openravepy.Trajectory):
                     # All better planners have failed. Short-circuit and return this
                     # trajectory. It must be the highest-ranked one.
                     if previous_done:
+                        traj = result
+                        print 'Returning plan from %s' % planner
                         break
                 elif not isinstance(result, PlanningError):
                     # TODO: Fill in the planning errors.
                     raise MetaPlanningError('Planner %s returned %r of type %r; '
                                             'expected a trajectory or PlanningError.'\
                                             % (planner, result, type(result)), list())
-
-            # We're done! Save the best trajectory that succeeded.
-            if previous_done:
-                traj = result
-                print 'Returning plan from %s' % planner
-                break
+            
 
             # Wait for a planner to finish.
-            condition.wait()
+            if not all_done:
+                condition.wait()
 
         condition.release()
 
