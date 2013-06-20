@@ -4,6 +4,7 @@ from base import Planner, PlanningError, UnsupportedPlanningError, PlanningMetho
 
 class CBiRRTPlanner(Planner):
     Planner.register_type('PlanToEndEffectorPose')
+    Planner.register_type('PlanToTSR')
 
     def __init__(self):
         self.env = openravepy.Environment()
@@ -114,15 +115,15 @@ class CBiRRTPlanner(Planner):
         extra_args = ['psample', '0.1']
         extra_args += [ 'TSRChain', goal_tsr_chain.serialize() ]
         extra_args += [ 'TSRChain', traj_tsr_chain.serialize() ]
-        return self.Plan(allowlimadj=True, timelimit=timelimit,
+        return self.Plan(robot, allowlimadj=True, timelimit=timelimit,
                          smoothingitrs=smoothingitrs,
                          extra_args=extra_args, **kw_args)
 
     @PlanningMethod
-    def PlanToTSR(self, tsrchains, **kw_args):
+    def PlanToTSR(self, robot, tsrchains, **kw_args):
         extra_args = list()
         extra_args += ['psample', '0.1']
         for chain in tsrchains:
             extra_args += [ 'TSRChain', chain.serialize() ]
             
-        return self.Plan(extra_args=extra_args, **kw_args)
+        return self.Plan(robot, extra_args=extra_args, **kw_args)

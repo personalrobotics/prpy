@@ -3,9 +3,9 @@ import numpy
 from prpy.tsr import *
 from prpy.tsr.rodrigues import *
 from prpy.tsr.tsr import *
-def GetCylinderTSR(radius, height, manip, T0_w = numpy.eye(4), lateral_tolerance = 0.02):
+def GetCylinderTSR(radius, height, manip, T0_w = numpy.eye(4), Tw_e = numpy.eye(4), lateral_tolerance = 0.02):
     """
-    Generates a tsr that is appropriate for grasnumpy.ping a cylinder.
+    Generates a tsr that is appropriate for grasping a cylinder.
         
     @param radius - The radius of the cylinder
     @param height - The height along the cylinder for performing the grasp
@@ -24,16 +24,17 @@ def GetCylinderTSR(radius, height, manip, T0_w = numpy.eye(4), lateral_tolerance
                       [  .0,    .0],   
                       [  .0,    .0],   
                       [ -numpy.pi,    numpy.pi]])
-    Tw_e = numpy.eye(4)
-    Tw_e[:3,:3] = rodrigues([numpy.pi/2, 0, 0])
-    Tw_e[:3,3] = [0, radius, height/2]
-    cylinderTSR = TSR(T0_w=T0_w, Tw_e=Tw_e, Bw=Bw, manip=manipidx)
+    Tw_ee = Tw_e.copy()
+    Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
+    Tw_ee[:3,3] = [0, radius, height/2]
+    cylinderTSR = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
 
     return cylinderTSR
 
 
 def GetTSRChainsForObjectGrab(obj, manip,
                               T0_w = numpy.eye(4),
+                              Tw_e = numpy.eye(4),
                               start_tsr = True,
                               goal_tsr = False):
     """
@@ -41,8 +42,9 @@ def GetTSRChainsForObjectGrab(obj, manip,
     for the object.
     
     @param obj - The object to be grasped.
-    @param manip - The manipulator to perform the grasnumpy.ping
+    @param manip - The manipulator to perform the grasping
     @param T0_w - The transform from world to object frame
+    @param Tw_e - The initial transform from end effector to object
     @param start_tsr - A flag indicating the tsr should be sampled
     for the start of the trajectory
     @param goal_tsr - A flag indicating the tsr should be sampled 
@@ -78,7 +80,8 @@ def GetTSRChainsForObjectGrab(obj, manip,
         cylinderTSR = GetCylinderTSR(radius = radius,
                                      height = height,
                                      manip = manip,
-                                     T0_w = T0_w)
+                                     T0_w = T0_w,
+                                     Tw_e = Tw_e)
 
         cylinderTSRChain = TSRChain(sample_start = start_tsr,
                                     sample_goal = goal_tsr,
@@ -90,110 +93,78 @@ def GetTSRChainsForObjectGrab(obj, manip,
         # We have a box. Define a TSR for each side of the box. 
         #  Also, for each side define a TSR for two opposing end-effector orientations
 
+        # This parameter defines the largest an edge can be for it to be graspable
+        #   if one side is larger than this dimension, we won't add the associated
+        #   TSRs to the chain list.
+        max_spread = 0.2
+
         chains = []
 
-        # negative y
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.02, 0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])
+        if 2.0*obj_bb.extents()[1] < max_spread:
+            # negative y
+            Bw = numpy.array([[  .0,    .0],
+                              [  .0,    .0],
+                              [-0.02, 0.02],
+                              [  .0,    .0],   
+                              [  .0,    .0],   
+                              [  .0,    .0]])
 
-        Tw_e = numpy.eye(4)
-        Tw_e[:3,:3] = rodrigues([-numpy.pi/2, 0, 0])
-        Tw_e[:3,3] = [0, -obj_bb.extents()[1] - ee_offset, 0.]
-        boxTSR1 = TSR(T0_w=T0_w,Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR1))
-        
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,   .0],
-                          [-0.02, 0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])
-        
-        Tw_e = numpy.eye(4)
-        Tw_e[:3,:3] = numpy.dot(rodrigues([-numpy.pi/2, 0, 0]), rodrigues([0, 0, numpy.pi]))
-        Tw_e[:3,3] = [0, -obj_bb.extents()[1] - ee_offset, 0.]
-        boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR2))
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([-numpy.pi/2, 0, 0]))
+            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
+            boxTSR1 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR1))
 
-        
-        # positive y
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.02, 0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])
-        Tw_e = numpy.eye(4)
-        Tw_e[:3,:3] = rodrigues([numpy.pi/2, 0, 0])
-        Tw_e[:3, 3] = [0, obj_bb.extents()[1] + ee_offset, 0.]
-        boxTSR3 = TSR(T0_w=T0_w,Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR3))
+            Bw = numpy.array([[  .0,    .0],
+                              [  .0,   .0],
+                              [-0.02, 0.02],
+                              [  .0,    .0],   
+                              [  .0,    .0],   
+                              [  .0,    .0]])
 
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.02, 0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])
-        Tw_e = numpy.eye(4)
-        Tw_e[:3,:3] = numpy.dot(rodrigues([numpy.pi/2, 0, 0]), rodrigues([0, 0, numpy.pi]))
-        Tw_e[:3, 3] = [0, obj_bb.extents()[1] + ee_offset, 0.]
-        boxTSR4 = TSR(T0_w=T0_w,Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR4))
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([-numpy.pi/2, 0, 0]), rodrigues([0, 0, numpy.pi])))
+            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
+            boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR2))
 
-        # positive x
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.02,  0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])
-        Tw_e = numpy.eye(4)
-        Tw_e[:3,:3] = numpy.dot(rodrigues([0, -numpy.pi/2, 0]), rodrigues([0, 0, numpy.pi/2]))
-        Tw_e[:3, 3] = [obj_bb.extents()[0] + ee_offset, 0., 0.]
-        boxTSR5 = TSR(T0_w=T0_w,Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR5))
 
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.02,  0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])
-        Tw_e = numpy.eye(4)
-        Tw_e[:3, :3] = numpy.dot(rodrigues([0, -numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2]))
-        Tw_e[:3, 3] = [obj_bb.extents()[0] + ee_offset, 0., 0.]
-        boxTSR6 = TSR(T0_w=T0_w,Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR6))
+            # positive y
+            Bw = numpy.array([[  .0,    .0],
+                              [  .0,    .0],
+                              [-0.02, 0.02],
+                              [  .0,    .0],   
+                              [  .0,    .0],   
+                              [  .0,    .0]])
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
+            Tw_ee[:3, 3] += [0, obj_bb.extents()[1] + ee_offset, 0.]
+            boxTSR3 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR3))
 
-        # negative x
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.02,  0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])
-        Tw_e = numpy.eye(4)
-        Tw_e[:3,:3] = numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, numpy.pi/2]))
-        Tw_e[:3, 3] = [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-        boxTSR7 = TSR(T0_w=T0_w,Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR7))
+            Bw = numpy.array([[  .0,    .0],
+                              [  .0,    .0],
+                              [-0.02, 0.02],
+                              [  .0,    .0],   
+                              [  .0,    .0],   
+                              [  .0,    .0]])
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, numpy.pi/2])))
+            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
+            boxTSR7 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR7))
 
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.02,  0.02],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]])  
-        Tw_e = numpy.eye(4)
-        Tw_e[:3,:3] = numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2]))
-        Tw_e[:3, 3] = [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-        boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-        chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR8))
+            Bw = numpy.array([[  .0,    .0],
+                              [  .0,    .0],
+                              [-0.02,  0.02],
+                              [  .0,    .0],   
+                              [  .0,    .0],   
+                              [  .0,    .0]])  
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2])))
+            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
+            boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR8))
 
 
         return chains
