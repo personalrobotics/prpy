@@ -1,12 +1,12 @@
-import numpy, openravepy
+import copy, numpy, openravepy
 from .. import clone, planning
 
 class Manipulator(openravepy.Robot.Manipulator):
     def __init__(self):
-        planning.Planner.bind(self, lambda: self.planner, executer=self._PlanWrapper)
+        planning.Planner.bind(self, lambda: self.GetRobot().planner, executer=self._PlanWrapper)
 
     def CloneBindings(self, parent):
-        self.__init__()
+        self.__init__(self)
 
     def GetIndices(self):
         return self.GetArmIndices()
@@ -37,8 +37,22 @@ class Manipulator(openravepy.Robot.Manipulator):
         self.GetRobot().SetDOFAccelerationLimits(or_accel_limits)
 
     def _PlanWrapper(self, planning_method, args, kw_args):
-        from clone import *
-        robot = manipulator.GetRobot()
+        from prpy.clone import *
+        robot = self.GetRobot()
         with Clone(robot.GetEnv()):
-            Cloned(robot).SetActive()
-            return Cloned(robot)._PlanWrapper(planning_method, args, kw_args)
+            Cloned(self).SetActive()
+            cloned_args = copy.copy(kw_args)
+            cloned_args['execute'] = False
+            cloned_traj = Cloned(robot)._PlanWrapper(planning_method, args, cloned_args)
+
+            # Strip inactive DOFs from the trajectory.
+            config_spec = Cloned(robot).GetActiveConfigurationSpecification()
+            openravepy.planningutils.ConvertTrajectorySpecification(cloned_traj, config_spec)
+            traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), '')
+            traj.Clone(cloned_traj, 0)
+
+        # Optionally execute the trajectory.
+        if 'execute' not in kw_args or kw_args['execute']:
+            return self.GetRobot().ExecuteTrajectory(traj, **kw_args)
+        else:
+            return traj
