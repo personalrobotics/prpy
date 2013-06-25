@@ -1,4 +1,5 @@
 import logging, functools, openravepy
+from .. import ik_ranking
 
 logger = logging.getLogger('planning')
 
@@ -24,17 +25,24 @@ class PlanningMethod(object):
         live_env = live_robot.GetEnv()
         planning_env = instance.env
 
-        # Clone the live environment for planning.
-        from openravepy import CloningOptions
-        planning_env.Clone(live_env, CloningOptions.Bodies)
-        planning_robot = planning_env.GetRobot(live_robot.GetName())
+        if live_env != planning_env:
+            # Clone the live environment for planning.
+            from openravepy import CloningOptions
+            planning_env.Clone(live_env, CloningOptions.Bodies)
+            planning_robot = planning_env.GetRobot(live_robot.GetName())
+        else:
+            planning_robot = live_robot
 
         # Call the planner.
         planning_traj = self.func(instance, planning_robot, *args, **kw_args)
 
         # Copy the trajectory back into the live environment to be safe.
-        live_traj = openravepy.RaveCreateTrajectory(live_env, '')
-        live_traj.Clone(planning_traj, 0)
+        if live_env != planning_env:
+            live_traj = openravepy.RaveCreateTrajectory(live_env, '')
+            live_traj.Clone(planning_traj, 0)
+        else:
+            live_traj = planning_traj
+
         return live_traj
 
     def __get__(self, instance, instancetype):
@@ -46,7 +54,6 @@ class Planner(object):
 
     @classmethod
     def register_type(cls, method_name):
-
         def plan_wrapper(self, *args, **kw_args):
             return self.plan(method_name, args, kw_args)
 
@@ -60,7 +67,6 @@ class Planner(object):
             return method(*args, **kw_args)
         except AttributeError:
             raise UnsupportedPlanningError
-            
 
     @classmethod
     def bind(cls, instance, lazy_planner, executer=None):
@@ -81,6 +87,50 @@ class Planner(object):
         for method_name in cls.methods:
             wrapper_method = create_wrapper(method_name)
             setattr(instance, method_name, wrapper_method)
+
+class BasePlanner(Planner):
+    @PlanningMethod
+    def PlanToIK(self, robot, goal_pose, ranker=ik_ranking.JointLimitAvoidance, num_attempts=1, **kw_args):
+        import numpy
+        from openravepy import IkFilterOptions, IkParameterization, IkParameterizationType
+
+        # FIXME: Currently meta-planners duplicate IK ranking in each planning
+        # thread. It should be possible to fix this by IK ranking once, then
+        # calling PlanToConfiguration in separate threads.
+
+        # Find an unordered list of IK solutions.
+        with robot.GetEnv():
+            manipulator = robot.GetActiveManipulator()
+            ik_param = IkParameterization(goal_pose, IkParameterizationType.Transform6D)
+            ik_solutions = manipulator.FindIKSolutions(ik_param, IkFilterOptions.CheckEnvCollisions)
+
+        if ik_solutions.shape[0] == 0:
+            raise PlanningError('There is no IK solution at the goal pose.')
+
+        # Sort the IK solutions in ascending order by the costs returned by the
+        # ranker. Lower cost solutions are better and infinite cost solutions are
+        # assumed to be infeasible.
+        scores = ranker(robot, ik_solutions)
+        sorted_indices = numpy.argsort(scores)
+        sorted_indices = sorted_indices[~numpy.isposinf(scores)]
+        sorted_ik_solutions = ik_solutions[sorted_indices, :]
+
+        if sorted_ik_solutions.shape[0] == 0:
+            raise PlanningError('All IK solutions have infinite cost.')
+
+        # Sequentially plan to the solutions in descending order of cost.
+        num_attempts = min(sorted_ik_solutions.shape[0], num_attempts)
+        for i, ik_solution in enumerate(sorted_ik_solutions[0:num_attempts, :]):
+            try:
+                traj = self.PlanToConfiguration(robot, ik_solution)
+                logger.info('Planned to IK solution %d of %d.', i + 1, num_attempts)
+                return traj
+            except PlanningError as e:
+                logger.warning('Planning to IK solution %d of %d failed: %s',
+                               i + 1, num_attempts, e)
+
+        raise PlanningError('Planning to the top {0:d} of {1:d} IK solutions failed.'.format(
+                            num_attempts, sorted_ik_solutions.shape[0]))
 
 class MetaPlanner(Planner):
     pass
@@ -141,9 +191,8 @@ class Ranked(MetaPlanner):
         condition.acquire()
         all_done = False
 
+        # TODO: Can we replace this with a fold?
         while traj is None and not all_done:
-
-            # TODO: Can we replace this with a fold?
             previous_done = True
             all_done = True #assume everyone is done
             for planner, result in zip(self._planners, results):
@@ -155,7 +204,6 @@ class Ranked(MetaPlanner):
                     # trajectory. It must be the highest-ranked one.
                     if previous_done:
                         traj = result
-                        print 'Returning plan from %s' % planner
                         break
                 elif not isinstance(result, PlanningError):
                     # TODO: Fill in the planning errors.

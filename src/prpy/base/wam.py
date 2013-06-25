@@ -12,6 +12,12 @@ class WAM(Manipulator):
             args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
             dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
 
+        # Load the IK database.
+        self.ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(
+            self.GetRobot(), iktype=openravepy.IkParameterization.Type.Transform6D)
+        if not self.ikmodel.load():
+            self.ikmodel.autogenerate()
+
         # Enable servo motions in simulation mode.
         from prpy.simulation import ServoSimulator
         self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)

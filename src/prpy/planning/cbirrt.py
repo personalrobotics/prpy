@@ -1,8 +1,8 @@
 import logging, numpy, openravepy, os, tempfile
 import prrave.kin, prrave.tsr
-from base import Planner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
-class CBiRRTPlanner(Planner):
+class CBiRRTPlanner(BasePlanner):
     def __init__(self):
         self.env = openravepy.Environment()
         try:

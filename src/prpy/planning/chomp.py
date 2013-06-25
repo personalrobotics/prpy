@@ -1,7 +1,7 @@
 import contextlib, logging, numpy, openravepy, rospkg
-from base import Planner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
-class CHOMPPlanner(Planner):
+class CHOMPPlanner(BasePlanner):
     def __init__(self):
         self.env = openravepy.Environment()
         try:
