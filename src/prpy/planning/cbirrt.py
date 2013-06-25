@@ -3,15 +3,12 @@ import prrave.kin, prrave.tsr
 from base import Planner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 class CBiRRTPlanner(Planner):
-    Planner.register_type('PlanToEndEffectorPose')
-    Planner.register_type('PlanToTSR')
-
     def __init__(self):
         self.env = openravepy.Environment()
         try:
             self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
         except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create module.')
+            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
     def __str__(self):
         return 'CBiRRT'

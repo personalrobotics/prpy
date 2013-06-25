@@ -2,9 +2,6 @@ import contextlib, logging, numpy, openravepy, rospkg
 from base import Planner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 class CHOMPPlanner(Planner):
-    Planner.register_type('PlanToConfiguration')
-    Planner.register_type('PlanToEndEffectorPose')
-
     def __init__(self):
         self.env = openravepy.Environment()
         try:
