@@ -33,3 +33,49 @@ def WaitForControllers(controllers, timeout=None, rate=20):
         time.sleep(timestep)
 
     return True
+
+def SetCameraFromXML(viewer, xml):
+    import lxml.etree
+    from StringIO import StringIO
+    padded_xml = '<bogus>{0:s}</bogus>'.format(xml)
+    camera_xml = lxml.etree.parse(StringIO(padded_xml))
+
+    translation_raw = camera_xml.find('//camtrans').text
+    axis_raw = camera_xml.find('//camrotationaxis').text
+    focal_raw = camera_xml.find('//camfocal').text
+
+    translation = numpy.loadtxt(StringIO(translation_raw))
+    axis_angle = numpy.loadtxt(StringIO(axis_raw))
+    axis_angle = axis_angle[3] * axis_angle[0:3] * (numpy.pi / 180)
+    focal = float(focal_raw)
+
+    transform = openravepy.matrixFromAxisAngle(axis_angle)
+    transform[0:3, 3] = translation
+    viewer.SetCamera(transform, focal)
+
+class Recorder(object):
+    MPEG = 13
+
+    def __init__(self, env, filename, width=1920, height=1080, codec=MPEG):
+        self.env = env
+        self.filename = filename
+        self.width = width
+        self.height = height
+        self.codec = codec
+
+        self.module = openravepy.RaveCreateModule(env, 'ViewerRecorder')
+        env.Add(self.module)
+
+    def __enter__(self):
+        cmd = 'Start {width:d} {height:d} 30 codec {codec:d} timing realtime filename {filename:s}'\
+              '\nviewer {viewer:s}'.format(
+            width = self.width,
+            height = self.height,
+            codec = self.codec,
+            filename = self.filename,
+            viewer = self.env.GetViewer().GetName()
+        )
+        self.module.SendCommand(cmd)
+
+    def __exit__(self):
+        self.module.SendCommand('Stop')

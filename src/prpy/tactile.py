@@ -69,7 +69,7 @@ class TactileSensor(object):
 
     def render_cells(self, robot, origins=True, normals=True, color=None, linewidth=2, length=0.01):
         if color is None:
-            color = numpy.array([ 0., 0., 1., 1. ])
+            color = numpy.array([ 1., 1., 0., 1. ])
 
         all_origins, all_normals = self.get_geometry(robot)
         handles = list()
