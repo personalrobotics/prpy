@@ -4,7 +4,8 @@ from prpy.clone import Clone, Cloned
 from .. import util
 
 class WAM(Manipulator):
-    def __init__(self, sim, owd_namespace):
+    def __init__(self, sim, owd_namespace,
+                 iktype=openravepy.IkParameterization.Type.Transform6D):
         Manipulator.__init__(self)
 
         self.simulated = sim
@@ -13,10 +14,13 @@ class WAM(Manipulator):
             dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
 
         # Load the IK database.
-        self.ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(
-            self.GetRobot(), iktype=openravepy.IkParameterization.Type.Transform6D)
-        if not self.ikmodel.load():
-            self.ikmodel.autogenerate()
+        robot = self.GetRobot()
+        with robot:
+            robot.SetActiveManipulator(self)
+            if iktype is not None:
+                self.ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot, iktype=iktype)
+                if not self.ikmodel.load():
+                    self.ikmodel.autogenerate()
 
         # Enable servo motions in simulation mode.
         from prpy.simulation import ServoSimulator
