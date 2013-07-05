@@ -1,6 +1,36 @@
+#!/usr/bin/env python
+
+# Copyright (c) 2013, Carnegie Mellon University
+# All rights reserved.
+# Authors: Michael Koval <mkoval@cs.cmu.edu>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+# 
+# - Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+# - Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+# - Neither the name of Carnegie Mellon University nor the names of its
+#   contributors may be used to endorse or promote products derived from this
+#   software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 import logging, numpy, openravepy, os, tempfile
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
-import kin
+import prpy.kin
 
 class CBiRRTPlanner(BasePlanner):
     def __init__(self):
@@ -78,8 +108,8 @@ class CBiRRTPlanner(BasePlanner):
             H_world_ee = manip.GetEndEffectorTransform()
 
             # 'object frame w' is at ee, z pointed along direction to move
-            H_world_w = kin.H_from_op_diff(H_world_ee[0:3,3], direction)
-            H_w_ee = numpy.dot(kin.invert_H(H_world_w), H_world_ee)
+            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
+            H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
         
             # Serialize TSR string (goal)
             Hw_end = numpy.eye(4)
