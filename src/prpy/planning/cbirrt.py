@@ -1,6 +1,6 @@
 import logging, numpy, openravepy, os, tempfile
-import prrave.kin
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+import kin
 
 class CBiRRTPlanner(BasePlanner):
     def __init__(self):
@@ -78,8 +78,8 @@ class CBiRRTPlanner(BasePlanner):
             H_world_ee = manip.GetEndEffectorTransform()
 
             # 'object frame w' is at ee, z pointed along direction to move
-            H_world_w = prrave.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
-            H_w_ee = numpy.dot(prrave.kin.invert_H(H_world_w), H_world_ee)
+            H_world_w = kin.H_from_op_diff(H_world_ee[0:3,3], direction)
+            H_w_ee = numpy.dot(kin.invert_H(H_world_w), H_world_ee)
         
             # Serialize TSR string (goal)
             Hw_end = numpy.eye(4)

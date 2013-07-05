@@ -1,7 +1,7 @@
 import openravepy
 from .. import util
 from robot import Robot
-import manipulation2.trajectory, prrave.rave
+import manipulation2.trajectory, rave
 
 class WAMRobot(Robot):
     def __init__(self):
@@ -12,14 +12,14 @@ class WAMRobot(Robot):
         self.mac_retimer = openravepy.RaveCreatePlanner(self.GetEnv(), 'MacRetimer')
 
         # Trajectory blending.
-        self.trajectory_module = prrave.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
+        self.trajectory_module = rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
         manipulation2.trajectory.bind(self.trajectory_module)
 
     def CloneBindings(self, parent):
         Robot.CloneBindings(self, parent)
 
         self.mac_retimer = None
-        self.trajectory_module = prrave.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
+        self.trajectory_module = rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
         manipulation2.trajectory.bind(self.trajectory_module)
 
     def RetimeTrajectory(self, traj, max_jerk=30.0, synchronize=False,
