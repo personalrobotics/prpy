@@ -1,5 +1,4 @@
 import logging, numpy, openravepy, os, tempfile
-import prrave.kin, prrave.tsr
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 class OMPLPlanner(BasePlanner):

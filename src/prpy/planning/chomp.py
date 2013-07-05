@@ -40,7 +40,7 @@ class CHOMPPlanner(BasePlanner):
         # trajectory.
         # TODO: Replace this with a proper goalset CHOMP implementation.
         manipulator_index = robot.GetActiveManipulatorIndex()
-        goal_tsr = prrave.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
+        goal_tsr = prpy.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         start_config = robot.GetActiveDOFValues()
 
         if not self.initialized:
