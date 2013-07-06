@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import herbpy, rospkg, os, sys
+import rospkg, os, sys
 
 def append_to_env(variable, new_path, separator=':'):
     paths = os.environ.get(variable, '')
@@ -98,5 +98,5 @@ def export(package_name):
 
     if missing_packages:
         missing_packages.sort()
-        herbpy.logger.warning('Missing optional dependencies: %s', ' '.join(missing_packages))
+        print('Missing optional dependencies: %s', ' '.join(missing_packages))
     return missing_packages
