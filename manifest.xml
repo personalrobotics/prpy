@@ -10,6 +10,7 @@
     <license>BSD</license>
     <depend package="openrave"/>
     <depend package="manipulation2"/>
+    <depend package="or_multi_controller"/>
     <export>
         <openrave optional="cbirrt2"/>
         <openrave optional="orcdchomp"/>

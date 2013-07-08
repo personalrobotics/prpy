@@ -55,48 +55,58 @@ def append_to_env(variable, new_path, separator=':'):
     return paths 
 
 def export_paths(pkg, package_name):
+
+    packages = list()
+
+    # first get all the required packages
     try:
-        packages = pkg.get_depends(package_name)
-        packages.append(package_name)
+        manifest = pkg.get_manifest(package_name)
+        required_packages = pkg.get_depends(package_name)
+        packages.extend(required_packages)
     except rospkg.ResourceNotFound:
-        return False
+        return False, [package_name]
 
-    plugin_paths = list()
-    data_paths = list()
+    # next get all the optional packages
+    optional_packages = manifest.get_export('openrave', 'optional')
+    packages.extend(optional_packages)
+
+    # Process the OpenRAVE export tags. 
+    for plugin_path in manifest.get_export('openrave', 'plugins'):
+        plugin_paths = append_to_env('OPENRAVE_PLUGINS', plugin_path)
+        
+    for data_path in manifest.get_export('openrave', 'data'):
+        data_paths = append_to_env('OPENRAVE_DATA', data_path)
+        
+    for python_path in manifest.get_export('python', 'path'):
+        sys.path.append(python_path)
+
+    # Add the appropriate directories to PYTHONPATH.
+    # TODO: This is a hack. Should I parsing a Python export instead?
+    sys.path.append(pkg.get_path(package_name) + '/src')
+
+    # now dive into the subpackages
+    packages = set(packages)
+    missing_packages = list()
     for package in packages:
-        # Load the package manifest.
-        try:
-            manifest = pkg.get_manifest(package)
-        except rospkg.ResourceNotFound:
-            return False
+        success, missing = export_paths(pkg, package)
+        missing_packages.extend(missing)
+        if not success:
+            # check if this package is required
+            if package in required_packages:
+                return False, missing_packages
 
-        # Process the OpenRAVE export tags. 
-        for plugin_path in manifest.get_export('openrave', 'plugins'):
-            plugin_paths = append_to_env('OPENRAVE_PLUGINS', plugin_path)
-
-        for data_path in manifest.get_export('openrave', 'data'):
-            data_paths = append_to_env('OPENRAVE_DATA', data_path)
-
-        # Add the appropriate directories to PYTHONPATH.
-        # TODO: This is a hack. Should I parsing a Python export instead?
-        sys.path.append(pkg.get_path(package) + '/src')
-
-    return True
+    return True, missing_packages
 
 def export(package_name):
     pkg = rospkg.RosPack()
     manifest = pkg.get_manifest(package_name)
 
     # Required dependencies.
-    if not export_paths(pkg, package_name):
+    success, missing_packages = export_paths(pkg, package_name)
+    if not success:
         raise Exception('Unable to load required dependencies.')
-
-    missing_packages = list()
-    for optional_package in manifest.get_export('openrave', 'optional'):
-        if not export_paths(pkg, optional_package):
-            missing_packages.append(optional_package)
 
     if missing_packages:
         missing_packages.sort()
-        print('Missing optional dependencies: %s', ' '.join(missing_packages))
+        print 'Missing optional dependencies: %s' % ' '.join(missing_packages)
     return missing_packages
