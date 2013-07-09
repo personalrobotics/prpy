@@ -66,7 +66,8 @@ def GetTSRChainsForObjectGrab(obj, manip,
                               T0_w = numpy.eye(4),
                               Tw_e = numpy.eye(4),
                               start_tsr = True,
-                              goal_tsr = False):
+                              goal_tsr = False,
+                              ee_offset = 0.14): #TODO: we don't want to have to pass this, find a better way to compute distance from ee to palm
     """
     Returns a list of tsr chains that desribe valid grasps
     for the object.
@@ -86,10 +87,6 @@ def GetTSRChainsForObjectGrab(obj, manip,
         with manip.parent:
             manip.SetActive()
             manipidx = manip.parent.GetActiveManipulatorIndex()
-
-    # This defines the offset from the end effector frame to the palm(ish)
-    ee_offset = 0.14
-
 
     # We will use the bounding box to attempt to infer the shape of the object
     with manip.parent.GetEnv():
