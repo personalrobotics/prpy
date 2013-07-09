@@ -144,10 +144,14 @@ class Robot(openravepy.Robot):
             Cloned(self).SetActiveDOFs(dof_indices)
             traj = Cloned(self).PlanToConfiguration(dof_values, execute=False, **kw_args)
 
+            # Clone the trajectory back into the live environment
+            live_traj = openravepy.RaveCreateTrajectory(self.GetEnv(), '')
+            live_traj.Clone(traj, 0)
+
         if execute:
-            return self.ExecuteTrajectory(traj, **kw_args)
+            return self.ExecuteTrajectory(live_traj, **kw_args)
         else:
-            return traj
+            return live_traj
 
     def _PlanWrapper(self, planning_method, args, kw_args):
         # Call the planner.
