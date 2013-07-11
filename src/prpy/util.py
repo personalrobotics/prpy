@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy, time
+import logging, numpy, openravepy, time
 
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
@@ -107,5 +107,26 @@ class Recorder(object):
         )
         self.module.SendCommand(cmd)
 
-    def __exit__(self):
+    def __exit__(self, type, value, traceback):
         self.module.SendCommand('Stop')
+
+class Timer(object):
+    def __init__(self, message):
+        self.message = message
+        self.start = 0 
+
+    def __enter__(self):
+        logging.info('%s started execution.', self.message)
+        self.start = time.time()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
+        logging.info('%s executed in %.5f seconds.', self.message, self.get_duration())
+
+    def stop(self):
+        self.end = time.time()
+
+    def get_duration(self):
+        return self.end - self.start
+

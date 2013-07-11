@@ -30,12 +30,32 @@
 
 import numpy
 
-class ConfigurationLibrary:
+class ConfigurationLibrary(object):
+    """
+    Library of named configurations. Configurations are specified in terms of
+    *groups* of DOF indices. Groups must be added with *add_group* before a
+    configuration may be added.
+    """
     def __init__(self):
         self._indices = set()
         self._groups = dict()
         self._configs = dict()
 
+    """
+    Load named configurations from disk. The root of the YAML file should be of
+the following format:
+
+        configurations:
+            configuration1:
+                group1: [ 0, 0, ..dof_values... ]
+                group2: [ ... ]
+                ...
+            configuration2:
+                ...
+            ...
+
+    :param path: path to an input YAML file
+    """
     def load_yaml(self, path):
         with open(path, 'rb') as config_file:
             import yaml
@@ -44,6 +64,10 @@ class ConfigurationLibrary:
         for name, groups in config_yaml['configurations'].items():
             self.add_configuration(name, **groups)
 
+    """
+    :param name: group name
+    :param dof_indices: DOF indices
+    """
     def add_group(self, name, dof_indices):
         duplicate_indices = self._indices.intersection(dof_indices)
 
@@ -57,6 +81,10 @@ class ConfigurationLibrary:
         self._groups[name] = numpy.array(dof_indices).copy()
         self._indices |= set(dof_indices)
 
+    """
+    :param name: configuration name
+    :param **kw_args: an array of joint values for each group
+    """
     def add_configuration(self, name, **kw_args):
         all_indices = list()
         all_values = list()
@@ -76,6 +104,9 @@ class ConfigurationLibrary:
         self._configs[name] = (all_indices, all_values)
         return all_indices, all_values
 
+    """
+    :return (dof_indices, dof_values): DOF indices and corresponding DOF values
+    """
     def get_configuration(self, name):
         if name in self._configs:
             return self._configs[name]
