@@ -96,7 +96,7 @@ class Robot(openravepy.Robot):
         traj_indices = set(util.GetTrajectoryIndices(traj))
 
         active_manipulators = []
-        for manipulator in self.manipulators:
+        for manipulator in self.GetManipulators():
             manipulator_indices = set(manipulator.GetArmIndices())
             if traj_indices & manipulator_indices:
                 active_manipulators.append(manipulator)
