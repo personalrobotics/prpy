@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, numpy, openravepy, time
+import logging, numpy, openravepy, scipy.misc, time
 
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
@@ -65,6 +65,9 @@ def WaitForControllers(controllers, timeout=None, rate=20):
     return True
 
 def SetCameraFromXML(viewer, xml):
+    if isinstance(viewer, openravepy.Environment):
+        viewer = viewer.GetViewer()
+
     import lxml.etree
     from StringIO import StringIO
     padded_xml = '<bogus>{0:s}</bogus>'.format(xml)
@@ -82,6 +85,19 @@ def SetCameraFromXML(viewer, xml):
     transform = openravepy.matrixFromAxisAngle(axis_angle)
     transform[0:3, 3] = translation
     viewer.SetCamera(transform, focal)
+
+def TakeSnapshot(viewer, path=None, show_figures=True, width=1920, height=1080):
+    if isinstance(viewer, openravepy.Environment):
+        viewer = viewer.GetViewer()
+
+    viewer.SendCommand('SetFiguresInCamera {0:d}'.format(show_figures))
+    image = viewer.GetCameraImage(width, height, viewer.GetCameraTransform(),
+                                  [ width, height, width/2, height/2 ])
+
+    if path is not None:
+        scipy.misc.imsave(path, image)
+
+    return image
 
 class Recorder(object):
     MPEG = 13
