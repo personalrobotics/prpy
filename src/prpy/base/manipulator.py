@@ -67,7 +67,7 @@ class Manipulator(openravepy.Robot.Manipulator):
         self.GetRobot().SetDOFAccelerationLimits(or_accel_limits)
 
     def _PlanWrapper(self, planning_method, args, kw_args):
-        from prpy.clone import *
+        from prpy.clone import Clone, Cloned
         robot = self.GetRobot()
         with Clone(robot.GetEnv()):
             Cloned(self).SetActive()
