@@ -114,7 +114,7 @@ class Robot(openravepy.Robot):
         openravepy.planningutils.RetimeTrajectory(traj)
         return traj
 
-    def ExecuteTrajectory(self, traj, retime=True, timeout=None):
+    def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
         """
         Executes a trajectory and optionally waits for it to finish.
         @param traj input trajectory

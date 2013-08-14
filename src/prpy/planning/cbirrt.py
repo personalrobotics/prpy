@@ -30,7 +30,7 @@
 
 import logging, numpy, openravepy, os, tempfile
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
-import prpy.kin
+import prpy.kin, prpy.tsr
 
 class CBiRRTPlanner(BasePlanner):
     def __init__(self):
@@ -93,8 +93,8 @@ class CBiRRTPlanner(BasePlanner):
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, psample=0.1, **kw_args):
         manipulator_index = robot.GetActiveManipulatorIndex()
-        goal_tsr = prpy.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
-        tsr_chain = prpy.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
+        goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
+        tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
 
         extra_args  = [ 'TSRChain', tsr_chain.serialize() ]
         extra_args += [ 'psample', str(psample) ]
@@ -103,6 +103,7 @@ class CBiRRTPlanner(BasePlanner):
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 timelimit=5.0, smoothingitrs=250, **kw_args):
+
         with robot:
             manip = robot.GetActiveManipulator()
             H_world_ee = manip.GetEndEffectorTransform()
@@ -115,13 +116,12 @@ class CBiRRTPlanner(BasePlanner):
             Hw_end = numpy.eye(4)
             Hw_end[2,3] = distance
 
-            goaltsr = prpy.tsr.TSR(T0_w = numpy.dot(H_world_w,Hw_end), 
+            goaltsr = prpy.tsr.tsr.TSR(T0_w = numpy.dot(H_world_w,Hw_end), 
                                      Tw_e = H_w_ee, 
                                      Bw = numpy.zeros((6,2)), 
                                      manip = robot.GetActiveManipulatorIndex())
-            goal_tsr_chain = prpy.tsr.TSRChain(sample_goal = True,
+            goal_tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal = True,
                                                  TSRs = [goaltsr])
-
             # Serialize TSR string (whole-trajectory constraint)
             Bw = numpy.zeros((6,2))
             epsilon = 0.001
@@ -132,11 +132,11 @@ class CBiRRTPlanner(BasePlanner):
                               [-epsilon,            epsilon],
                               [-epsilon,            epsilon]])
 
-            trajtsr = prpy.tsr.TSR(T0_w = H_world_w, 
+            trajtsr = prpy.tsr.tsr.TSR(T0_w = H_world_w, 
                                    Tw_e = H_w_ee, 
                                    Bw = Bw, 
                                    manip = robot.GetActiveManipulatorIndex())
-            traj_tsr_chain = prpy.tsr.TSRChain(constrain=True, TSRs=[ trajtsr ])
+            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True, TSRs=[ trajtsr ])
         
         extra_args = ['psample', '0.1']
         extra_args += [ 'TSRChain', goal_tsr_chain.serialize() ]

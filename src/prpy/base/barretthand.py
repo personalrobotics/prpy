@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy
+import numpy, openravepy, time
 from .. import util
 from endeffector import EndEffector
 
@@ -47,8 +47,9 @@ class BarrettHand(EndEffector):
 
         # Hand state, force/torque sensor, and tactile pads.
         if not sim:
-            self.bh_sensor = util.create_sensor(env, 'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
+            self.handstate_sensor = util.create_sensor(env, 'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
 
+        self.ft_simulated = ft_sim
         if not ft_sim:
             self.ft_sensor = util.create_sensor(env, 'BarrettFTSensor {0:s} {1:s}'.format('prpy', owd_namespace))
 
@@ -112,6 +113,22 @@ class BarrettHand(EndEffector):
         else:
             # TODO: Load this angle from somewhere.
             hand.MoveHand(f1=3.2, f2=3.2, f3=3.2, spread=spread, timeout=timeout)
+
+    def ResetHand(hand):
+        """
+        Reset the hand
+        """
+        if not hand.simulated:
+            hand.controller.SendCommand('ResetHand')
+
+    def GetState(hand):
+        """
+        Gets the current state of the hand
+        """
+        if hand.simulated:
+            return 'done'
+        else:
+            return hand.handstate_sensor.SendCommand('GetState')
 
     def GetStrain(hand):
         """
