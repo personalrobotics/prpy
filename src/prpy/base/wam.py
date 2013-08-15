@@ -45,9 +45,9 @@ class WAM(Manipulator):
 
         # Load the IK database.
         robot = self.GetRobot()
-        with robot:
-            robot.SetActiveManipulator(self)
-            if iktype is not None:
+        if iktype is not None:
+            with robot:
+                self.SetActive()
                 self.ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot, iktype=iktype)
                 if not self.ikmodel.load():
                     self.ikmodel.autogenerate()

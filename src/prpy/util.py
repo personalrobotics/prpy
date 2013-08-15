@@ -86,13 +86,13 @@ def SetCameraFromXML(viewer, xml):
     transform[0:3, 3] = translation
     viewer.SetCamera(transform, focal)
 
-def TakeSnapshot(viewer, path=None, show_figures=True, width=1920, height=1080):
+def TakeSnapshot(viewer, path=None, show_figures=True, width=1920, height=1080, fx=640, fy=640):
     if isinstance(viewer, openravepy.Environment):
         viewer = viewer.GetViewer()
 
     viewer.SendCommand('SetFiguresInCamera {0:d}'.format(show_figures))
     image = viewer.GetCameraImage(width, height, viewer.GetCameraTransform(),
-                                  [ width, height, width/2, height/2 ])
+                                  [ fx, fy, width/2, height/2 ])
 
     if path is not None:
         scipy.misc.imsave(path, image)

@@ -97,7 +97,8 @@ class TactileSensor(object):
         lines[1::2, :] = origins + scale * all_values.reshape((num_cells, 1)) * normals
         return robot.GetEnv().drawlinelist(lines, linewidth, color)
 
-    def render_cells(self, robot, origins=True, normals=True, color=None, linewidth=2, length=0.01):
+    def render_cells(self, robot, origins=True, normals=True, spheres=True, color=None,
+                     size=0.0025, linewidth=2, length=0.01):
         if color is None:
             color = numpy.array([ 1., 1., 0., 1. ])
 
@@ -109,6 +110,10 @@ class TactileSensor(object):
             lines[0::2, :] = all_origins
             lines[1::2, :] = all_origins + length * all_normals
             handle = robot.GetEnv().drawlinelist(lines, linewidth, color)
+            handles.append(handle)
+
+        if spheres:
+            handle = robot.GetEnv().plot3(all_origins, size, color, True)
             handles.append(handle)
 
         if origins:
