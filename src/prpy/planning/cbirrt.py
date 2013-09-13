@@ -67,8 +67,8 @@ class CBiRRTPlanner(BasePlanner):
         args_str = ' '.join(args)
 
         response = self.problem.SendCommand(args_str, True)
-        if int(response) != 1:
-            raise PlanningError('Unknown error.')
+        if response.strip() != '1':
+            raise PlanningError('Unknown error: ' + response)
 
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()

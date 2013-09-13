@@ -202,7 +202,7 @@ class Ranked(MetaPlanner):
             def planning_thread(index, planner):
                 try:
                     results[index] = planner.plan(method, args, kw_args)
-                except PlanningError as e:
+                except Exception as e:
                     logger.warning('Planning with %s failed: %s', planner, e)
                     results[index] = e
 
