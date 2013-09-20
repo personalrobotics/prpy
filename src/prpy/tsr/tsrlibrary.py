@@ -44,9 +44,9 @@ def GetCylinderTSR(radius, height, manip, T0_w = numpy.eye(4), Tw_e = numpy.eye(
     @param lateral_tolerance - The tolerance for the height at which to grab the cylinder
     """
 
-    with manip.parent:
+    with manip.GetRobot():
         manip.SetActive()
-        manipidx= manip.parent.GetActiveManipulatorIndex()
+        manipidx= manip.GetRobot().GetActiveManipulatorIndex()
 
     Bw = numpy.array([[  .0,    .0],
                       [  .0,    .0],
@@ -83,13 +83,13 @@ def GetTSRChainsForObjectGrab(obj, manip,
     """
 
     # First grab the manipulator index, this is needed in the tsr specification
-    with manip.parent.GetEnv():
-        with manip.parent:
+    with manip.GetRobot().GetEnv():
+        with manip.GetRobot():
             manip.SetActive()
-            manipidx = manip.parent.GetActiveManipulatorIndex()
+            manipidx = manip.GetRobot().GetActiveManipulatorIndex()
 
     # We will use the bounding box to attempt to infer the shape of the object
-    with manip.parent.GetEnv():
+    with manip.GetRobot().GetEnv():
         with obj:
             # Assumption: the coordinate frame of the object is axis aligned
             identity_transform = numpy.eye(4)
