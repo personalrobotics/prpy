@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import openravepy, numpy
+import logging, openravepy, numpy
 from .. import util
 from robot import Robot
 import manipulation2.trajectory, prpy.rave
@@ -73,6 +73,12 @@ class WAMRobot(Robot):
         if self.mac_retimer is None:
             return Robot.RetimeTrajectory(self, traj, **kw_args)
 
+        # check the number of 
+        num_waypoints = traj.GetNumWaypoints()
+        if num_waypoints < 2:
+            logging.warn('RetimeTrajectory received trajectory with less than 2 waypoints. Skipping retime.')
+            return traj
+
         # Create a MacTrajectory with timestamps, joint values, velocities,
         # accelerations, and blend radii.
         generic_config_spec = traj.GetConfigurationSpecification()
@@ -90,7 +96,6 @@ class WAMRobot(Robot):
         mac_traj.Init(path_config_spec)
 
         # Copy the joint values and blend radii into the MacTrajectory.
-        num_waypoints = traj.GetNumWaypoints()
         for i in xrange(num_waypoints):
             waypoint = traj.GetWaypoint(i, path_config_spec)
             mac_traj.Insert(i, waypoint, path_config_spec)
@@ -165,6 +170,11 @@ class WAMRobot(Robot):
                 traj = self.BlendTrajectory(traj)
             if retime:
                 traj = self.RetimeTrajectory(traj, synchronize=needs_synchronization, **kw_args)
+
+        # Can't execute trajectories with less than two waypoints
+        if traj.GetNumWaypoints() < 2:
+            logging.warn('Unable to execute trajectories with less than 2 waypoints. Skipping execution.')
+            return traj
 
         # Synchronization implicitly executes on all manipulators.
         if needs_synchronization:

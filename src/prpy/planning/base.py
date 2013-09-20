@@ -173,7 +173,7 @@ class Sequence(MetaPlanner):
         return 'Sequence(%s)' % ', '.join(map(str, self._planners))
 
     def plan(self, method, args, kw_args):
-        errors = list()
+        errors = dict()
 
         for planner in self._planners:
             try:

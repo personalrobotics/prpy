@@ -33,3 +33,4 @@ from chomp import CHOMPPlanner
 from cbirrt import CBiRRTPlanner
 from ompl import OMPLPlanner
 from mk import MKPlanner
+from snap import SnapPlanner
