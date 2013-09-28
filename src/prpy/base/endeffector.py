@@ -44,7 +44,7 @@ class EndEffector(openravepy.Robot.Link):
 
     def SetDOFValues(self, dof_values,
                      limits_action=openravepy.KinBody.CheckLimitsAction.CheckLimits):
-        hand.robot.SetDOFValues(dof_values, hand.GetIndices(), limits_action)
+        self.manipulator.GetRobot().SetDOFValues(dof_values, self.GetIndices(), limits_action)
 
     def SetActive(self):
         self.GetRobot().SetActiveManipulator(self.manipulator)
