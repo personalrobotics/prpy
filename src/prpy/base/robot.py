@@ -28,8 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import openravepy
-from or_multi_controller import MultiControllerWrapper
+import openravepy, numpy
 from .. import named_config, planning, util
 from prpy.clone import Clone, Cloned
 
@@ -39,7 +38,8 @@ class Robot(openravepy.Robot):
         self.controllers = list()
         self.manipulators = list()
         self.configurations = named_config.ConfigurationLibrary()
-        self.multicontroller = MultiControllerWrapper(self)
+        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
+        self.SetController(self.multicontroller)
 
         # Standard, commonly-used OpenRAVE plugins.
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
@@ -53,7 +53,8 @@ class Robot(openravepy.Robot):
         self.controllers = list()
         self.manipulators = [ Cloned(manipulator) for manipulator in parent.manipulators ]
         self.configurations = parent.configurations
-        self.multicontroller = MultiControllerWrapper(self)
+        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
+        self.SetController(self.multicontroller)
 
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
@@ -82,7 +83,8 @@ class Robot(openravepy.Robot):
             message = 'Creating controller {0:s} of type {1:s} failed.'.format(name, type_name)
             raise openravepy.openrave_exception(message)
 
-        self.multicontroller.attach(name, delegate_controller, dof_indices, affine_dofs)
+        self.multicontroller.AttachController(delegate_controller, dof_indices, affine_dofs)
+                
         return delegate_controller
 
     def GetTrajectoryManipulators(self, traj):
