@@ -32,6 +32,7 @@ import numpy, openravepy
 from manipulator import Manipulator
 from prpy.clone import Clone, Cloned
 from .. import util
+from .. import exceptions
 
 class WAM(Manipulator):
     def __init__(self, sim, owd_namespace,

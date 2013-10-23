@@ -32,6 +32,7 @@ import logging, openravepy, numpy
 from .. import util
 from robot import Robot
 import manipulation2.trajectory, prpy.rave
+from .. import exceptions
 
 class WAMRobot(Robot):
     def __init__(self):
