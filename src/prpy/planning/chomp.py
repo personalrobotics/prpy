@@ -52,7 +52,7 @@ class CHOMPPlanner(BasePlanner):
         return 'CHOMP'
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=100, epsilon=0.2, epsilon_self=0.2, **kw_args):
+    def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15, epsilon=0.2, epsilon_self=0.2, **kw_args):
         if not self.initialized:
             raise UnsupportedPlanningError('CHOMP requires a distance field.')
 
@@ -64,7 +64,7 @@ class CHOMPPlanner(BasePlanner):
             raise PlanningError(str(e))
 
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0, n_iter=100, goal_tolerance=0.01, epsilon=0.2, epsilon_self=0.2, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0, n_iter=15, goal_tolerance=0.01, epsilon=0.2, epsilon_self=0.2, **kw_args):
         # CHOMP only supports start sets. Instead, we plan backwards from the
         # goal TSR to the starting configuration. Afterwards, we reverse the
         # trajectory.
