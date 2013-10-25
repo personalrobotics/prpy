@@ -27,7 +27,7 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-import logging, openravepy
+import logging, numpy, openravepy
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 class SnapPlanner(BasePlanner):
@@ -44,17 +44,23 @@ class SnapPlanner(BasePlanner):
 
         # Only snap if we're close to the goal configuration.
         if (goal - current_dof_values).max() > snap_tolerance:
-            raise UnsupportedPlanningError('Distance from goal larger than snap tolerance. Failing planning.')
+            raise UnsupportedPlanningError('Distance from goal larger than snap tolerance.')
 
-        # Create a two-point trajectory that takes us to the goal.
+        # Create a two-point trajectory that starts at our current
+        # configuration and takes us to the goal.
         logging.info('Snapping to goal configuration with a straight line trajectory.')
         traj = openravepy.RaveCreateTrajectory(self.env, '')
-        manip = robot.GetActiveManipulator()
-        traj.Init(manip.GetArmConfigurationSpecification())
-        traj.Insert(0, current_dof_values)
-        traj.Insert(1, goal)
-        return traj
+        config_spec = robot.GetActiveConfigurationSpecification()
+        active_indices = robot.GetActiveDOFIndices()
 
+        waypoint1, waypoint2 = numpy.zeros(config_spec.GetDOF()), numpy.zeros(config_spec.GetDOF())
+        config_spec.InsertJointValues(waypoint1, current_dof_values, robot, active_indices, False)
+        config_spec.InsertJointValues(waypoint2, current_dof_values, robot, active_indices, False)
+
+        traj.Init(config_spec)
+        traj.Insert(0, waypoint1)
+        traj.Insert(1, waypoint2)
+        return traj
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
