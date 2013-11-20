@@ -38,7 +38,43 @@ class SnapPlanner(BasePlanner):
         return 'snap'
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, snap_tolerance=0.1, **kw_args):
+    def PlanToConfiguration(self, robot, goal, **kw_args):
+        return self._Snap(robot, goal, **kw_args)
+
+    @PlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
+        raise UnsupportedPlanningError('PlanToEndEffectorOffset not implemented for snap planner')
+
+    @PlanningMethod
+    def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
+        # Find an IK solution.
+        manipulator = robot.GetActiveManipulator()
+        current_config = robot.GetDOFValues(manipulator.GetArmIndices())
+        ik_param = openravepy.IkParameterization(goal_pose, openravepy.IkParameterizationType.Transform6D)
+        ik_solutions = manipulator.FindIKSolutions(ik_param, openravepy.IkFilterOptions.CheckEnvCollisions)
+
+        if ik_solutions.shape[0] == 0:
+            raise PlanningError('There is no IK solution at the goal pose.')
+
+        # Sort the IK solutions in ascending order by the costs returned by the
+        # ranker. Lower cost solutions are better and infinite cost solutions are
+        # assumed to be infeasible.
+        scores = numpy.zeros(ik_solutions.shape[0])
+        for i in xrange(scores.shape[0]):
+            scores[i] = numpy.abs(ik_solutions[i] - current_config).max()
+
+        sorted_indices = numpy.argsort(scores)
+        sorted_indices = sorted_indices[~numpy.isposinf(scores)]
+        sorted_ik_solutions = ik_solutions[sorted_indices, :]
+
+        # Try snapping to the closest IK solution.
+        return self._Snap(robot, sorted_ik_solutions[0, :], **kw_args)
+
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, **kw_args):
+        raise UnsupportedPlanningError('PlanToTSR not implemented for snap planner')
+    
+    def _Snap(self, robot, goal, snap_tolerance=0.1, **kw_args):
         active_indices = robot.GetActiveDOFIndices()
         current_dof_values = robot.GetActiveDOFValues()
 
@@ -61,16 +97,3 @@ class SnapPlanner(BasePlanner):
         traj.Insert(0, waypoint1)
         traj.Insert(1, waypoint2)
         return traj
-
-    @PlanningMethod
-    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
-        raise UnsupportedPlanningError('PlanToEndEffectorOffset not implemented for snap planner')
-
-    @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
-        raise UnsupportedPlanningError('PlanToEndEffectorPose not implemented for snap planner')
-
-    @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, **kw_args):
-        raise UnsupportedPlanningError('PlanToTSR not implemented for snap planner')
-    

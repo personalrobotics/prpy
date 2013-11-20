@@ -52,6 +52,9 @@ class PlanningMethod(object):
         Planner.register_type(func.__name__)
         
     def __call__(self, instance, live_robot, *args, **kw_args):
+        """
+        Wrapper __call__.
+        """
         live_env = live_robot.GetEnv()
         planning_env = instance.env
 
@@ -76,8 +79,12 @@ class PlanningMethod(object):
         return live_traj
 
     def __get__(self, instance, instancetype):
-        # Bind the self reference.
-        return functools.partial(self.__call__, instance)
+        # Bind the self reference and use update_wrapper to propagate the
+        # function's metadata.
+        wrapper = functools.partial(self.__call__, instance)
+        wrapper.__doc__ = 'Wrapper __call__.'
+        functools.update_wrapper(wrapper, self.__call__)
+        return wrapper
 
 class Planner(object):
     methods = set()
