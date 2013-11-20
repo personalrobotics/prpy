@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import contextlib, logging, numpy, openravepy, rospkg
+import prpy.tsr
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 class CHOMPPlanner(BasePlanner):
@@ -52,7 +53,7 @@ class CHOMPPlanner(BasePlanner):
         return 'CHOMP'
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15, epsilon=0.2, epsilon_self=0.2, **kw_args):
+    def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15, **kw_args):
         if not self.initialized:
             raise UnsupportedPlanningError('CHOMP requires a distance field.')
 
@@ -64,7 +65,7 @@ class CHOMPPlanner(BasePlanner):
             raise PlanningError(str(e))
 
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0, n_iter=15, goal_tolerance=0.01, epsilon=0.2, epsilon_self=0.2, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0, n_iter=100, goal_tolerance=0.01, **kw_args):
         # CHOMP only supports start sets. Instead, we plan backwards from the
         # goal TSR to the starting configuration. Afterwards, we reverse the
         # trajectory.
@@ -77,7 +78,9 @@ class CHOMPPlanner(BasePlanner):
             raise UnsupportedPlanningError('CHOMP requires a distance field.')
 
         try:
-            traj = self.module.runchomp(robot=robot, adofgoal=start_config, start_tsr=goal_tsr, releasegil=True)
+            traj = self.module.runchomp(robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
+                                        lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
+                                        releasegil=True, **kw_args)
             traj = openravepy.planningutils.ReverseTrajectory(traj)
         except RuntimeError, e:
             raise PlanningError(str(e))

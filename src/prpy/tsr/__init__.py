@@ -29,3 +29,4 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import rodrigues, tsr, tsrlibrary
+from tsr import *
