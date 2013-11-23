@@ -145,7 +145,7 @@ class WAM(Manipulator):
         if not manipulator.simulated:
             manipulator.controller.SendCommand('ClearStatus')
 
-    def MoveUntilTouch(manipulator, direction, distance, max_force=5, **kw_args):
+    def MoveUntilTouch(manipulator, direction, distance, max_force=5, ignore_collisions = None, **kw_args):
         """
         Execute a straight move-until-touch action. This action stops when a
         sufficient force is is felt or the manipulator moves the maximum distance.
@@ -156,6 +156,16 @@ class WAM(Manipulator):
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
+        
+        ignore_col_obj_oldstate = []
+        if ignore_collisions is None:
+            ignore_collisions = []
+
+        for ignore_col_with in ignore_collisions:
+            ignore_col_obj_oldstate.append(ignore_col_with.IsEnabled())
+            ignore_col_with.Enable(False)
+
+
         with manipulator.GetRobot().GetEnv():
             manipulator.GetRobot().GetController().SimulationStep(0)
 
@@ -165,16 +175,62 @@ class WAM(Manipulator):
             force_direction = numpy.dot(hand_pose[0:3, 0:3].T, -direction)
 
             with manipulator.GetRobot():
+                old_active_manipulator = manipulator.GetRobot().GetActiveManipulator()
+                manipulator.SetActive()
                 traj = manipulator.PlanToEndEffectorOffset(direction, distance, execute=False, **kw_args)
                 traj = manipulator.GetRobot().BlendTrajectory(traj)
                 traj = manipulator.GetRobot().RetimeTrajectory(traj, stop_on_ft=True, force_direction=force_direction,
                                                            force_magnitude=max_force, torque=[100,100,100])
 
-        # TODO: Use a simulated force/torque sensor in simulation.
+
         try:
-            manipulator.hand.TareForceTorqueSensor()
-            manipulator.GetRobot().ExecuteTrajectory(traj, execute=True, retime=False, blend=False)
-            return False
+            if not manipulator.simulated:
+                manipulator.hand.TareForceTorqueSensor()
+                manipulator.GetRobot().ExecuteTrajectory(traj, execute=True, retime=False, blend=False)
+                for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
+                    ignore_col_with.Enable(oldstate)
+            else:
+                collided_with_obj = False
+                traj_duration = traj.GetDuration()
+                delta_t = 0.01
+
+                traj_config_spec = traj.GetConfigurationSpecification()
+                traj_angle_group = traj_config_spec.GetGroupFromName('joint_values')
+                path_config_spec = openravepy.ConfigurationSpecification()
+#                path_config_spec.AddDeltaTimeGroup()
+                path_config_spec.AddGroup(traj_angle_group.name, traj_angle_group.dof, '')
+#                path_config_spec.AddDerivativeGroups(1, False);
+#                path_config_spec.AddDerivativeGroups(2, False);
+#                path_config_spec.AddGroup('owd_blend_radius', 1, 'next')
+                path_config_spec.ResetGroupOffsets()
+
+                new_traj = openravepy.RaveCreateTrajectory(manipulator.GetRobot().GetEnv(), '')
+                new_traj.Init(path_config_spec)
+
+                for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
+                    ignore_col_with.Enable(oldstate)
+                
+                with manipulator.GetRobot():
+                    manipulator.SetActive()
+                    waypoint_ind = 0
+                    for t in numpy.arange(0, traj_duration, delta_t):
+                        traj_sample = traj.Sample(t)
+
+                        waypoint = traj_config_spec.ExtractJointValues(traj_sample, manipulator.GetRobot(), manipulator.GetArmIndices())
+                        manipulator.SetDOFValues(waypoint)
+                        if manipulator.GetRobot().GetEnv().CheckCollision(manipulator.GetRobot()):
+                            collided_with_obj = True
+                            break
+                        else:
+                            #waypoint = numpy.append(waypoint,t)
+                            new_traj.Insert(int(waypoint_ind), waypoint, path_config_spec)
+                            waypoint_ind += 1
+                    print 'execution time!!!'
+                    new_traj = manipulator.GetRobot().BlendTrajectory(new_traj)
+                    new_traj = manipulator.GetRobot().RetimeTrajectory(new_traj)
+                manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=False, blend=False)
+
+            return collided_with_obj
         # Trajectory is aborted by OWD because we felt a force.
         except exceptions.TrajectoryAborted:
             return True
