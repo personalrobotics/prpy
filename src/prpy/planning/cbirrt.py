@@ -67,7 +67,7 @@ class CBiRRTPlanner(BasePlanner):
         args_str = ' '.join(args)
 
         response = self.problem.SendCommand(args_str, True)
-        if response.strip() != '1':
+        if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response)
 
         with open(traj_path, 'rb') as traj_file:
@@ -148,8 +148,14 @@ class CBiRRTPlanner(BasePlanner):
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, **kw_args):
         extra_args = list()
-        extra_args += ['psample', '0.1']
+        
+        use_psample = False
         for chain in tsrchains:
             extra_args += [ 'TSRChain', chain.serialize() ]
-            
+            if chain.sample_start or chain.sample_goal:
+                use_psample = True
+
+        if use_psample:
+            extra_args += ['psample', '0.1']
+
         return self.Plan(robot, extra_args=extra_args, **kw_args)
