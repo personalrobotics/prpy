@@ -11,6 +11,7 @@
     <review status="released" notes="approved on 3/13"/>
     <depend package="openrave"/>
     <depend package="manipulation2"/>
+    <rosdep name="python-scipy"/>
     <export>
         <openrave optional="cbirrt2"/>
         <openrave optional="orcdchomp"/>
