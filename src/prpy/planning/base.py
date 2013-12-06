@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, functools, openravepy
+import time
 from .. import ik_ranking
 
 logger = logging.getLogger('planning')
@@ -150,6 +151,7 @@ class BasePlanner(Planner):
         scores = ranker(robot, ik_solutions)
         sorted_indices = numpy.argsort(scores)
         sorted_indices = sorted_indices[~numpy.isposinf(scores)]
+        scores = scores[~numpy.isposinf(scores)]
         sorted_ik_solutions = ik_solutions[sorted_indices, :]
 
         if sorted_ik_solutions.shape[0] == 0:

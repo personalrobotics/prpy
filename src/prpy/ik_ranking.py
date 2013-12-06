@@ -47,7 +47,7 @@ def JointLimitAvoidance(robot, ik_solutions):
     lower_distance = ik_solutions - lower_limits
     upper_distance = upper_limits - ik_solutions
     distance = numpy.minimum(lower_distance, upper_distance)
-    return numpy.sum(distance**2, axis=1)
+    return -numpy.sum(distance**2, axis=1)
 
 class NominalConfiguration(object):
     def __init__(self, q_nominal):

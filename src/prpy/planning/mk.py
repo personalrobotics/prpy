@@ -142,7 +142,6 @@ class MKPlanner(BasePlanner):
                     q_dot = self.GetStraightVelocity(manip, direction, initial_pose, nullspace, step_size)
                     q += q_dot
                     robot.SetDOFValues(q, active_dof_indices)
-                    traj.Insert(traj.GetNumWaypoints(), q)
 
                     # Check for collisions.
                     if self.env.CheckCollision(robot):
@@ -166,6 +165,8 @@ class MKPlanner(BasePlanner):
                     offset_angle = openravepy.axisAngleFromRotationMatrix(offset_pose)
                     if numpy.linalg.norm(offset_angle) > angular_tolerance:
                         raise PlanningError('Deviated from orientation constraint.')
+
+                    traj.Insert(traj.GetNumWaypoints(), q)
 
                     # Check if we've exceeded the maximum distance by projecting our
                     # displacement along the direction.
