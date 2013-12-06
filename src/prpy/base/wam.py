@@ -60,6 +60,38 @@ class WAM(Manipulator):
     def CloneBindings(self, parent):
         self.__init__(True, None)
 
+    def PlanToNamedConfiguration(self, name, execute=True, **kw_args):
+        """
+        Plan this arm to saved configuration stored in robot.configurations by
+        ignoring any other DOFs specified in the named configuration.
+        @param name name of a saved configuration
+        @param **kw_args optional arguments passed to PlanToConfiguration
+        @returns traj trajectory
+        """
+        robot = self.GetRobot()
+        saved_dof_indices, saved_dof_values = robot.configurations.get_configuration(name)
+
+        with Clone(robot.GetEnv()):
+            Cloned(self).SetActive()
+            arm_dof_indices = Cloned(robot).GetActiveDOFIndices()
+            arm_dof_values = Cloned(robot).GetActiveDOFValues()
+
+            for arm_dof_index, arm_dof_value in zip(saved_dof_indices, saved_dof_values):
+                if arm_dof_index in arm_dof_indices:
+                    i = list(arm_dof_indices).index(arm_dof_index)
+                    arm_dof_values[i] = arm_dof_value
+
+            traj = Cloned(robot).PlanToConfiguration(arm_dof_values, execute=False, **kw_args)
+
+            # Clone the trajectory back into the live environment
+            live_traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), traj.GetXMLId())
+            live_traj.Clone(traj, 0)
+
+        if execute:
+            return robot.ExecuteTrajectory(live_traj, **kw_args)
+        else:
+            return live_traj
+
     def SetStiffness(manipulator, stiffness):
         """
         Set the WAM's stiffness. This enables or disables gravity compensation.
