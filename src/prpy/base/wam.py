@@ -145,17 +145,24 @@ class WAM(Manipulator):
         if not manipulator.simulated:
             manipulator.controller.SendCommand('ClearStatus')
 
-    def MoveUntilTouch(manipulator, direction, distance, max_force=5, ignore_collisions = None, **kw_args):
+    def MoveUntilTouch(manipulator, direction, distance, max_distance=float('+inf'),
+                       max_force=5.0, max_torque=None, ignore_collisions=None, **kw_args):
         """
         Execute a straight move-until-touch action. This action stops when a
-        sufficient force is is felt or the manipulator moves the maximum distance.
+        sufficient force is is felt or the manipulator moves the maximum
+        distance. The motion is considered successful if the end-effector moves
+        at least distance.
         @param direction unit vector for the direction of motion in the world frame
-        @param distance maximum distance in meters
+        @param distance minimum distance in meters
+        @param max_distance maximum distance in meters
         @param max_force maximum force in Newtons
+        @param torque maximum torque in Newton-Meters
         @param execute optionally execute the trajectory
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
+        if max_torque is None:
+            max_torque = numpy.array([100.0, 100.0, 100.0 ])
         
         ignore_col_obj_oldstate = []
         if ignore_collisions is None:
@@ -177,11 +184,11 @@ class WAM(Manipulator):
             with manipulator.GetRobot():
                 old_active_manipulator = manipulator.GetRobot().GetActiveManipulator()
                 manipulator.SetActive()
-                traj = manipulator.PlanToEndEffectorOffset(direction, distance, execute=False, **kw_args)
+                traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
+                                                           execute=False, **kw_args)
                 traj = manipulator.GetRobot().BlendTrajectory(traj)
                 traj = manipulator.GetRobot().RetimeTrajectory(traj, stop_on_ft=True, force_direction=force_direction,
-                                                           force_magnitude=max_force, torque=[100,100,100])
-
+                                                               force_magnitude=max_force, torque=max_torque)
 
         try:
             if not manipulator.simulated:
@@ -225,7 +232,7 @@ class WAM(Manipulator):
                             #waypoint = numpy.append(waypoint,t)
                             new_traj.Insert(int(waypoint_ind), waypoint, path_config_spec)
                             waypoint_ind += 1
-                    print 'execution time!!!'
+
                     new_traj = manipulator.GetRobot().BlendTrajectory(new_traj)
                     new_traj = manipulator.GetRobot().RetimeTrajectory(new_traj)
                 manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=False, blend=False)

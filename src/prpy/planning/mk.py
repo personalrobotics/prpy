@@ -95,7 +95,7 @@ class MKPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, max_distance=None,
-                                nullspace=JointLimitAvoidance, timelimit=2.5, step_size=0.001,
+                                nullspace=JointLimitAvoidance, timelimit=5.0, step_size=0.001,
                                 position_tolerance=0.01, angular_tolerance=0.15, **kw_args):
         if distance < 0:
             raise ValueError('Distance must be non-negative.')
