@@ -31,6 +31,8 @@
 import logging, numpy, openravepy, time
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
+logger = logging.getLogger('planning')
+
 def DoNothing(robot):
     return numpy.zeros(robot.GetActiveDOF())
 
@@ -92,11 +94,29 @@ class MKPlanner(BasePlanner):
         return numpy.dot(jacobian_pinv, pose_error) + numpy.dot(nullspace_projector, nullspace_goal)
 
     @PlanningMethod
-    def PlanToEndEffectorOffset(self, robot, direction, distance, nullspace=JointLimitAvoidance,
-                                timelimit=2.5, step_size=0.001,
+    def PlanToEndEffectorOffset(self, robot, direction, distance, max_distance=None,
+                                nullspace=JointLimitAvoidance, timelimit=2.5, step_size=0.001,
                                 position_tolerance=0.01, angular_tolerance=0.15, **kw_args):
+        if distance < 0:
+            raise ValueError('Distance must be non-negative.')
+        elif numpy.linalg.norm(direction) == 0:
+            raise ValueError('Direction must be non-zero')
+        elif max_distance is None or max_distance < distance:
+            raise ValueError('Max distance is less than minimum distance.')
+        elif step_size <= 0:
+            raise ValueError('Step size must be positive.')
+        elif position_tolerance < 0:
+            raise ValueError('Position tolerance must be non-negative.')
+        elif angular_tolerance < 0:
+            raise ValueError('Angular tolerance must be non-negative.')
+
+        # Normalize the direction vector.
         direction  = numpy.array(direction, dtype='float')
         direction /= numpy.linalg.norm(direction)
+
+        # Default to moving an exact distance.
+        if max_distance is None:
+            max_distance = distance
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -111,46 +131,55 @@ class MKPlanner(BasePlanner):
 
             start_time = time.time()
             current_distance = 0.0
-            while current_distance < distance:
-                # Check for a timeout.
-                current_time = time.time()
-                if timelimit is not None and current_time - start_time > timelimit:
-                    raise PlanningError('Reached time limit.')
+            try:
+                while current_distance < max_distance:
+                    # Check for a timeout.
+                    current_time = time.time()
+                    if timelimit is not None and current_time - start_time > timelimit:
+                        raise PlanningError('Reached time limit.')
 
-                # Compute joint velocities using the Jacobian pseudoinverse.
-                q_dot = self.GetStraightVelocity(manip, direction, initial_pose, nullspace, step_size)
-                q += q_dot
-                robot.SetDOFValues(q, active_dof_indices)
-                traj.Insert(traj.GetNumWaypoints(), q)
+                    # Compute joint velocities using the Jacobian pseudoinverse.
+                    q_dot = self.GetStraightVelocity(manip, direction, initial_pose, nullspace, step_size)
+                    q += q_dot
+                    robot.SetDOFValues(q, active_dof_indices)
+                    traj.Insert(traj.GetNumWaypoints(), q)
 
-                # Check for collisions.
-                if self.env.CheckCollision(robot):
-                    raise PlanningError('Encountered collision.')
-                elif robot.CheckSelfCollision():
-                    raise PlanningError('Encountered self-collision.')
-                # Check for joint limits.
-                elif not (limits_lower < q).all() or not (q < limits_upper).all():
-                    raise PlanningError('Encountered joint limit during Jacobian move.')
+                    # Check for collisions.
+                    if self.env.CheckCollision(robot):
+                        raise PlanningError('Encountered collision.')
+                    elif robot.CheckSelfCollision():
+                        raise PlanningError('Encountered self-collision.')
+                    # Check for joint limits.
+                    elif not (limits_lower < q).all() or not (q < limits_upper).all():
+                        raise PlanningError('Encountered joint limit during Jacobian move.')
 
-                # Check our distance from the constraint.
-                current_pose = manip.GetEndEffectorTransform()
-                a = initial_pose[0:3, 3]
-                p = current_pose[0:3, 3]
-                orthogonal_proj = (a - p) - numpy.dot(a - p, direction) * direction
-                if numpy.linalg.norm(orthogonal_proj) > position_tolerance:
-                    raise PlanningError('Deviated from a straight line constraint.')
+                    # Check our distance from the constraint.
+                    current_pose = manip.GetEndEffectorTransform()
+                    a = initial_pose[0:3, 3]
+                    p = current_pose[0:3, 3]
+                    orthogonal_proj = (a - p) - numpy.dot(a - p, direction) * direction
+                    if numpy.linalg.norm(orthogonal_proj) > position_tolerance:
+                        raise PlanningError('Deviated from a straight line constraint.')
 
-                # Check our orientation against the constraint.
-                offset_pose = numpy.dot(numpy.linalg.inv(current_pose), initial_pose)
-                offset_angle = openravepy.axisAngleFromRotationMatrix(offset_pose)
-                if numpy.linalg.norm(offset_angle) > angular_tolerance:
-                    raise PlanningError('Deviated from orientation constraint.')
+                    # Check our orientation against the constraint.
+                    offset_pose = numpy.dot(numpy.linalg.inv(current_pose), initial_pose)
+                    offset_angle = openravepy.axisAngleFromRotationMatrix(offset_pose)
+                    if numpy.linalg.norm(offset_angle) > angular_tolerance:
+                        raise PlanningError('Deviated from orientation constraint.')
 
-                # Check if we've exceeded the maximum distance by projecting our
-                # displacement along the direction.
-                hand_pose = manip.GetEndEffectorTransform()
-                displacement = hand_pose[0:3, 3] - initial_pose[0:3, 3]
-                current_distance = numpy.dot(displacement, direction)
+                    # Check if we've exceeded the maximum distance by projecting our
+                    # displacement along the direction.
+                    hand_pose = manip.GetEndEffectorTransform()
+                    displacement = hand_pose[0:3, 3] - initial_pose[0:3, 3]
+                    current_distance = numpy.dot(displacement, direction)
+            except PlanningError as e:
+                # Throw an error if we haven't reached the minimum distance.
+                if current_distance < distance:
+                    raise
+                # Otherwise we'll gracefully terminate.
+                else:
+                    logger.warning('Terminated early at distance %f < %f: %s',
+                                   current_distance, max_distance, e.message)
 
         return traj
 
