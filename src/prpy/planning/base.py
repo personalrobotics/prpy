@@ -92,12 +92,14 @@ class Planner(object):
 
     @classmethod
     def register_type(cls, method_name):
+        @functools.wraps(cls.plan)
         def plan_wrapper(self, *args, **kw_args):
             return self.plan(method_name, args, kw_args)
 
         cls.methods.add(method_name)
         setattr(cls, method_name, plan_wrapper)
 
+    # TODO: This is where we're losing the docstring.
     def plan(self, method, args, kw_args):
         logger.info('Started planning with %s', self)
         try:
@@ -114,13 +116,24 @@ class Planner(object):
                 return planning_method(*args, **kw_args)
 
         def create_wrapper(method_name):
-            # TODO: Copy __name__ and __doc__ from the implementation.
-            def wrapper_method(*args, **kw_args):
-                planner = lazy_planner()
-                planning_method = getattr(planner, method_name)
-                return executer(planning_method, args, kw_args)
+            # These gymnastics are necessary to propagate the docstring through
+            # the layers of indirection. The docstring must be lazily evaluated,
+            # since the planner is not known until runtime.
+            # TODO: Also copy __name__ from the implementation.
+            class LazyPlanningMethod(object):
+                @property
+                def __doc__(self):
+                    planner = lazy_planner()
+                    planning_method = getattr(planner, method_name)
+                    return planning_method.__doc__
 
-            return wrapper_method
+                @staticmethod
+                def __call__(*args, **kw_args):
+                    planner = lazy_planner()
+                    planning_method = getattr(planner, method_name)
+                    return executer(planning_method, args, kw_args)
+
+            return LazyPlanningMethod() 
 
         for method_name in cls.methods:
             wrapper_method = create_wrapper(method_name)
