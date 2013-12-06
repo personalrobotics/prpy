@@ -76,6 +76,9 @@ def export_paths(pkg, package_name):
         
     for data_path in manifest.get_export('openrave', 'data'):
         data_paths = append_to_env('OPENRAVE_DATA', data_path)
+
+    for database_path in manifest.get_export('openrave', 'database'):
+        database_paths = append_to_env('OPENRAVE_DATABASE', database_path)
         
     for python_path in manifest.get_export('python', 'path'):
         sys.path.append(python_path)
