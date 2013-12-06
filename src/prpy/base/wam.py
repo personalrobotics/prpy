@@ -63,6 +63,7 @@ class WAM(Manipulator):
     def SetStiffness(manipulator, stiffness):
         """
         Set the WAM's stiffness. This enables or disables gravity compensation.
+        Values between 0 and 1 are experimental.
         @param stiffness value between 0.0 and 1.0
         """
         if not (0 <= stiffness <= 1):
@@ -74,7 +75,7 @@ class WAM(Manipulator):
     def Servo(manipulator, velocities):
         """
         Servo with an instantaneous vector joint velocities.
-        @param joint velocities
+        @param velocities instantaneous joint velocities in radians per second
         """
         num_dof = len(manipulator.GetArmIndices())
         if len(velocities) != num_dof:
@@ -90,10 +91,10 @@ class WAM(Manipulator):
     def ServoTo(manipulator, target, duration, timeStep = 0.05, collisionChecking= True):
         """
         Servo's the WAM to the target taking the duration passed to it
-        @param target dofs
-        @param duration of the full servo
-        @param timeStep
-        @param collisionChecking
+        @param target desired joint angles
+        @param duration duration in seconds
+        @param timestep period of the control loop
+        @param collisionchecking check collisions in the simulation environment
         """
         steps = int(math.ceil(duration/timeStep))
         original_dofs = manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices())
@@ -113,6 +114,14 @@ class WAM(Manipulator):
 
     def SetVelocityLimits(self, velocity_limits, min_accel_time,
                           openrave=True, owd=True):
+        """
+        Change the OpenRAVE and OWD joint velocity limits. Joint velocities
+        that exceed these limits will trigger a velocity fault.
+        @param velocity_limits vector of joint velocity limits in radians per second
+        @param min_accel_time minimum acceleration time used to compute acceleration limits
+        @param openrave flag to set the OpenRAVE velocity limits
+        @param owd flag to set the OWD velocity limits
+        """
         # Update the OpenRAVE limits.
         if openrave:
             Manipulator.SetVelocityLimits(self, velocity_limits, min_accel_time)
@@ -129,6 +138,7 @@ class WAM(Manipulator):
         """
         Gets the status of the current (or previous) trajectory executed by the
         controller.
+        @return status of the current (or previous) trajectory executed
         """
         if not manipulator.simulated:
             return manipulator.controller.SendCommand('GetStatus')
