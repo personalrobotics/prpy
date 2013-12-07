@@ -111,4 +111,4 @@ the following format:
         if name in self._configs:
             return self._configs[name]
         else:
-            raise Exception('There is no configuration named %s.' % name)
+            raise KeyError('There is no configuration named %s.' % name)

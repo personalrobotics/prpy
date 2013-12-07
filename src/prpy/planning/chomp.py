@@ -54,6 +54,13 @@ class CHOMPPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15, **kw_args):
+        """
+        Plan to a single configuration with single-goal CHOMP.
+        @param robot
+        @param goal goal configuration
+        @param lambda_ step size
+        @param n_iter number of iterations
+        """
         if not self.initialized:
             raise UnsupportedPlanningError('CHOMP requires a distance field.')
 

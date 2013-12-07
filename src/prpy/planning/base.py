@@ -31,6 +31,7 @@
 import logging, functools, openravepy
 import time
 from .. import ik_ranking
+from ..clone import Clone, Cloned
 
 logger = logging.getLogger('planning')
 
@@ -51,29 +52,15 @@ class PlanningMethod(object):
     def __init__(self, func):
         self.func = func
 
-    def __call__(self, instance, live_robot, *args, **kw_args):
-        live_env = live_robot.GetEnv()
-        planning_env = instance.env
+    def __call__(self, instance, robot, *args, **kw_args):
+        env = robot.GetEnv()
 
-        if live_env != planning_env:
-            # Clone the live environment for planning.
-            from openravepy import CloningOptions
-            planning_env.Clone(live_env, CloningOptions.Bodies)
-            planning_robot = planning_env.GetRobot(live_robot.GetName())
-        else:
-            planning_robot = live_robot
+        with Clone(env, clone_env=instance.env):
+            planning_traj = self.func(instance, Cloned(robot), *args, **kw_args)
+            traj = openravepy.RaveCreateTrajectory(env, planning_traj.GetXMLId())
+            traj.Clone(planning_traj, 0)
 
-        # Call the planner.
-        planning_traj = self.func(instance, planning_robot, *args, **kw_args)
-
-        # Copy the trajectory back into the live environment to be safe.
-        if live_env != planning_env:
-            live_traj = openravepy.RaveCreateTrajectory(live_env, '')
-            live_traj.Clone(planning_traj, 0)
-        else:
-            live_traj = planning_traj
-
-        return live_traj
+        return traj 
 
     def __get__(self, instance, instancetype):
         # Bind the self reference and use update_wrapper to propagate the
@@ -164,11 +151,38 @@ class MetaPlanner(Planner):
         def meta_wrapper(*args, **kw_args):
             return self.plan(method, args, kw_args)
 
-        if self._planners:
-            nominal_planner = self._planners[0]
-            planner_method = getattr(nominal_planner, method)
-            meta_wrapper.__name__ = planner_method.__name__
-            meta_wrapper.__doc__ = planner_method.__doc__
+        # Grab docstrings from the delegate planners.
+        meta_wrapper.__name__ = method
+        docstrings = list()
+        for planner in self._planners:
+            if hasattr(planner, method):
+                planner_method = getattr(planner, method)
+                docstrings.append((planner, planner_method))
+
+        # Concatenate the docstrings.
+        if docstrings:
+            meta_wrapper.__doc__ = ''
+
+            for planner, planner_method in docstrings:
+                formatted_docstring = ''
+                
+                if isinstance(planner, MetaPlanner):
+                    formatted_docstring += planner_method.__doc__
+                else:
+                    # Header for this planner.
+                    formatted_docstring += str(planner) + ': ' + planner_method.__name__ + '\n'
+                    formatted_docstring += '-' * (len(formatted_docstring) - 1) + '\n'
+
+                    # Docstring.
+                    if planner_method.__doc__ is not None:
+                        formatted_docstring += planner_method.__doc__
+                    else:
+                        formatted_docstring += '<no docstring>\n'
+
+                    # Blank line.
+                    formatted_docstring += '\n'
+
+                meta_wrapper.__doc__ += formatted_docstring
 
         return meta_wrapper
     
@@ -187,8 +201,9 @@ class Sequence(MetaPlanner):
 
         for planner in self._planners:
             try:
-                planner_method = getattr(planner, method)
-                return planner_method(*args, **kw_args)
+                if hasattr(planner, method):
+                    planner_method = getattr(planner, method)
+                    return planner_method(*args, **kw_args)
             except MetaPlanningError as e:
                 errors[planner] = e
             except PlanningError as e:
@@ -200,6 +215,9 @@ class Sequence(MetaPlanner):
 class Ranked(MetaPlanner):
     def __init__(self, *planners):
         self._planners = planners
+
+    def __str__(self):
+        return 'Ranked({0:s})'.format(', '.join(map(str, self._planners)))
 
     def plan(self, method, args, kw_args):
         from threading import Condition, Thread

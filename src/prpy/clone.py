@@ -67,8 +67,15 @@ class ClonedEnvironment(openravepy.Environment):
             cls.local.environments = list()
         return cls.local.environments
 
-def Clone(env, destroy=True, options=openravepy.CloningOptions.Bodies):
-    clone_env = openravepy.Environment()
+def Clone(env, clone_env=None, destroy=None, options=openravepy.CloningOptions.Bodies):
+    # Default to destroying environments we create and not destroying
+    # environments that were passed in as an argument.
+    if destroy is None:
+        destroy = clone_env is None
+
+    if clone_env is None:
+        clone_env = openravepy.Environment()
+
     clone_env.Clone(env, options)
     clone_env.__class__ = ClonedEnvironment
     clone_env.__init__(env, destroy)

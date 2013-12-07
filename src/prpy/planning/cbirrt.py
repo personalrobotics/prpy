@@ -79,6 +79,11 @@ class CBiRRTPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
+        """
+        Plan to a single configuration with single-goal CBiRRT.
+        @param robot
+        @param goal goal configuration
+        """
         goal_array = numpy.array(goal)
 
         if len(goal_array) != robot.GetActiveDOF():

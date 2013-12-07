@@ -154,28 +154,6 @@ class Robot(openravepy.Robot):
         util.WaitForControllers(active_controllers, timeout=timeout)
         return traj
 
-    def PlanToNamedConfiguration(self, name, execute=True, **kw_args):
-        """
-        Plan to a saved configuration stored in robot.configurations.
-        @param name name of a saved configuration
-        @param **kw_args optional arguments passed to PlanToConfiguration
-        @returns traj trajectory
-        """
-        dof_indices, dof_values = self.configurations.get_configuration(name)
-
-        with Clone(self.GetEnv()):
-            Cloned(self).SetActiveDOFs(dof_indices)
-            traj = Cloned(self).PlanToConfiguration(dof_values, execute=False, **kw_args)
-
-            # Clone the trajectory back into the live environment
-            live_traj = openravepy.RaveCreateTrajectory(self.GetEnv(), traj.GetXMLId())
-            live_traj.Clone(traj, 0)
-
-        if execute:
-            return self.ExecuteTrajectory(live_traj, **kw_args)
-        else:
-            return live_traj
-
     def _PlanWrapper(self, planning_method, args, kw_args):
         # Call the planner.
         traj = planning_method(self, *args, **kw_args)
