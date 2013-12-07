@@ -28,8 +28,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import openravepy, numpy
-from .. import named_config, planning, util
+import functools, openravepy, numpy
+from .. import bind, named_config, planning, util
 from prpy.clone import Clone, Cloned
 
 class Robot(openravepy.Robot):
@@ -45,8 +45,31 @@ class Robot(openravepy.Robot):
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
 
-        # Automatically bind planning methods on this object.
-        planning.Planner.bind(self, lambda: self.planner, executer=self._PlanWrapper)
+    def __dir__(self):
+        # We have to manually perform a lookup in InstanceDeduplicator because
+        # __methods__ bypass __getattribute__. 
+        self = bind.InstanceDeduplicator.get_canonical(self)
+
+        # Add planning methods to the tab-completion list.
+        method_names = set(self.__dict__.keys())
+        method_names.update(self.planner.get_planning_method_names())
+        return list(method_names)
+
+    def __getattr__(self, name):
+        # We have to manually perform a lookup in InstanceDeduplicator because
+        # __methods__ bypass __getattribute__. 
+        self = bind.InstanceDeduplicator.get_canonical(self)
+        delegate_method = getattr(self.planner, name)
+
+        # Resolve planner calls through the robot.planner field.
+        if self.planner.is_planning_method(name):
+            @functools.wraps(delegate_method)
+            def wrapper_method(*args, **kw_args):
+                return self._PlanWrapper(delegate_method, args, kw_args) 
+
+            return wrapper_method
+
+        raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
     def CloneBindings(self, parent):
         self.planner = parent.planner
@@ -58,8 +81,6 @@ class Robot(openravepy.Robot):
 
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
-
-        planning.Planner.bind(self, lambda: self.planner, executer=self._PlanWrapper)
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
@@ -147,7 +168,7 @@ class Robot(openravepy.Robot):
             traj = Cloned(self).PlanToConfiguration(dof_values, execute=False, **kw_args)
 
             # Clone the trajectory back into the live environment
-            live_traj = openravepy.RaveCreateTrajectory(self.GetEnv(), '')
+            live_traj = openravepy.RaveCreateTrajectory(self.GetEnv(), traj.GetXMLId())
             live_traj.Clone(traj, 0)
 
         if execute:

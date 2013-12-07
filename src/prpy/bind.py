@@ -79,7 +79,6 @@ class InstanceDeduplicator:
                     # Register the child as a canonical instance.
                     InstanceDeduplicator.instances[child] = child
                     canonical_child = child
-                    print 'Bound Clone(', canonical_parent, ' ) to', child 
 
                     # Finally invoke the user-provided clone method.
                     canonical_class.__getattribute__ = object.__getattribute__
@@ -94,7 +93,18 @@ class InstanceDeduplicator:
 
         if canonical_instance is None:
             canonical_instance = self
-        return object.__getattribute__(canonical_instance, name)
+
+        try:
+            return object.__getattribute__(canonical_instance, name)
+        except AttributeError:
+            # We have to manually call __getattr__ in case it is overriden in
+            # the canonical_instance's class or one of its superclasses. This
+            # is not handled by the recursive call to __getattribute__ because
+            # we explicitly invoke it on object.
+            if hasattr(canonical_instance, '__getattr__'):
+                return canonical_instance.__getattr__(name)
+            else:
+                raise
 
     @staticmethod
     def get_canonical(self):

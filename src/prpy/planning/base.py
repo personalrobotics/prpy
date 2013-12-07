@@ -50,12 +50,8 @@ class MetaPlanningError(PlanningError):
 class PlanningMethod(object):
     def __init__(self, func):
         self.func = func
-        Planner.register_type(func.__name__)
-        
+
     def __call__(self, instance, live_robot, *args, **kw_args):
-        """
-        Wrapper __call__.
-        """
         live_env = live_robot.GetEnv()
         planning_env = instance.env
 
@@ -81,63 +77,25 @@ class PlanningMethod(object):
 
     def __get__(self, instance, instancetype):
         # Bind the self reference and use update_wrapper to propagate the
-        # function's metadata.
+        # function's metadata (e.g. name and docstring).
         wrapper = functools.partial(self.__call__, instance)
-        wrapper.__doc__ = 'Wrapper __call__.'
-        functools.update_wrapper(wrapper, self.__call__)
+        functools.update_wrapper(wrapper, self.func)
+        wrapper.is_planning_method = True
         return wrapper
 
 class Planner(object):
-    methods = set()
+    def is_planning_method(self, method_name):
+        if hasattr(self, method_name):
+            method = getattr(self, method_name)
+            if hasattr(method, 'is_planning_method'):
+                return method.is_planning_method
+            else:
+                return False
+        else:
+            return False
 
-    @classmethod
-    def register_type(cls, method_name):
-        @functools.wraps(cls.plan)
-        def plan_wrapper(self, *args, **kw_args):
-            return self.plan(method_name, args, kw_args)
-
-        cls.methods.add(method_name)
-        setattr(cls, method_name, plan_wrapper)
-
-    # TODO: This is where we're losing the docstring.
-    def plan(self, method, args, kw_args):
-        logger.info('Started planning with %s', self)
-        try:
-            method = getattr(self, method)
-            return method(*args, **kw_args)
-        except AttributeError:
-            raise UnsupportedPlanningError
-
-    @classmethod
-    def bind(cls, instance, lazy_planner, executer=None):
-        # The default executer is simply a wrapper for the planner.
-        if executer is None:
-            def executer(planning_method, args, kw_args):
-                return planning_method(*args, **kw_args)
-
-        def create_wrapper(method_name):
-            # These gymnastics are necessary to propagate the docstring through
-            # the layers of indirection. The docstring must be lazily evaluated,
-            # since the planner is not known until runtime.
-            # TODO: Also copy __name__ from the implementation.
-            class LazyPlanningMethod(object):
-                @property
-                def __doc__(self):
-                    planner = lazy_planner()
-                    planning_method = getattr(planner, method_name)
-                    return planning_method.__doc__
-
-                @staticmethod
-                def __call__(*args, **kw_args):
-                    planner = lazy_planner()
-                    planning_method = getattr(planner, method_name)
-                    return executer(planning_method, args, kw_args)
-
-            return LazyPlanningMethod() 
-
-        for method_name in cls.methods:
-            wrapper_method = create_wrapper(method_name)
-            setattr(instance, method_name, wrapper_method)
+    def get_planning_method_names(self):
+        return filter(lambda method_name: self.is_planning_method(method_name), dir(self))
 
 class BasePlanner(Planner):
     @PlanningMethod
@@ -185,21 +143,52 @@ class BasePlanner(Planner):
                             num_attempts, sorted_ik_solutions.shape[0]))
 
 class MetaPlanner(Planner):
-    pass
+    def __init__(self):
+        self._planners = list()
+
+    def is_planning_method(self, method_name):
+        for planner in self._planners:
+            if planner.is_planning_method(method_name):
+                return True
+
+        return False
+
+    def get_planning_method_names(self):
+        method_names = set()
+        for planner in self._planners:
+            method_names.update(planner.get_planning_method_names())
+
+        return list(method_names)
+
+    def __getattr__(self, method):
+        def meta_wrapper(*args, **kw_args):
+            return self.plan(method, args, kw_args)
+
+        if self._planners:
+            nominal_planner = self._planners[0]
+            planner_method = getattr(nominal_planner, method)
+            meta_wrapper.__name__ = planner_method.__name__
+            meta_wrapper.__doc__ = planner_method.__doc__
+
+        return meta_wrapper
+    
+    def __dir__(self):
+        return self.get_planning_method_names()
 
 class Sequence(MetaPlanner):
     def __init__(self, *planners):
         self._planners = planners
 
     def __str__(self):
-        return 'Sequence(%s)' % ', '.join(map(str, self._planners))
+        return 'Sequence({0:s})'.format(', '.join(map(str, self._planners)))
 
     def plan(self, method, args, kw_args):
         errors = dict()
 
         for planner in self._planners:
             try:
-                return planner.plan(method, args, kw_args)
+                planner_method = getattr(planner, method)
+                return planner_method(*args, **kw_args)
             except MetaPlanningError as e:
                 errors[planner] = e
             except PlanningError as e:
@@ -223,7 +212,8 @@ class Ranked(MetaPlanner):
         for index, planner in enumerate(self._planners):
             def planning_thread(index, planner):
                 try:
-                    results[index] = planner.plan(method, args, kw_args)
+                    planning_method = getattr(planner, method)
+                    results[index] = planning_method(*args, **kw_args)
                 except Exception as e:
                     logger.warning('Planning with %s failed: %s', planner, e)
                     results[index] = e

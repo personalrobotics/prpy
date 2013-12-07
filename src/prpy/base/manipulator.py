@@ -28,12 +28,39 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import copy, numpy, openravepy
-from .. import clone, planning
+import copy, functools, numpy, openravepy
+from .. import bind, clone, planning
 
 class Manipulator(openravepy.Robot.Manipulator):
     def __init__(self):
-        planning.Planner.bind(self, lambda: self.GetRobot().planner, executer=self._PlanWrapper)
+        pass
+
+    def __dir__(self):
+        # We have to manually perform a lookup in InstanceDeduplicator because
+        # __methods__ bypass __getattribute__. 
+        self = bind.InstanceDeduplicator.get_canonical(self)
+
+        # Add planning methods to the tab-completion list.
+        method_names = set(self.__dict__.keys())
+        method_names.update(self.GetRobot().planner.get_planning_method_names())
+        return list(method_names)
+
+    def __getattr__(self, name):
+        # We have to manually perform a lookup in InstanceDeduplicator because
+        # __methods__ bypass __getattribute__. 
+        self = bind.InstanceDeduplicator.get_canonical(self)
+        delegate_method = getattr(self.GetRobot().planner, name)
+
+        # Resolve planner calls through the robot.planner field.
+        # FIXME: We need to replicate the _PlanWrapper functionality here.
+        if self.GetRobot().planner.is_planning_method(name):
+            @functools.wraps(delegate_method)
+            def wrapper_method(*args, **kw_args):
+                return self._PlanWrapper(delegate_method, args, kw_args) 
+
+            return wrapper_method
+
+        raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
     def CloneBindings(self, parent):
         self.__init__(self)
