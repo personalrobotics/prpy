@@ -34,7 +34,7 @@ import prpy.kin, prpy.tsr
 
 class CBiRRTPlanner(BasePlanner):
     def __init__(self):
-        self.env = openravepy.Environment()
+        super(CBiRRTPlanner, self).__init__()
         try:
             self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
         except openravepy.openrave_exception:
@@ -97,6 +97,13 @@ class CBiRRTPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, psample=0.1, **kw_args):
+        """
+        Plan to a desired end-effector pose.
+        @param robot
+        @param goal desired end-effector pose
+        @param psample probability of sampling a goal
+        @return traj
+        """
         manipulator_index = robot.GetActiveManipulatorIndex()
         goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
@@ -108,7 +115,15 @@ class CBiRRTPlanner(BasePlanner):
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 timelimit=5.0, smoothingitrs=250, **kw_args):
-
+        """
+        Plan to a desired end-effector offset.
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum distance in meters
+        @param timelimit timeout in seconds
+        @param smoothingitrs number of smoothing iterations
+        @return traj
+        """
         with robot:
             manip = robot.GetActiveManipulator()
             H_world_ee = manip.GetEndEffectorTransform()
@@ -152,6 +167,12 @@ class CBiRRTPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, **kw_args):
+        """
+        Plan to a goal TSR.
+        @param robot
+        @param tsrchains goal TSR chain
+        @return traj
+        """
         extra_args = list()
         
         use_psample = False

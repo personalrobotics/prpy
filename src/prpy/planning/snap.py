@@ -32,21 +32,36 @@ from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningM
 
 class SnapPlanner(BasePlanner):
     def __init__(self):
-        self.env = openravepy.Environment()
+        super(SnapPlanner, self).__init__()
  
     def __str__(self):
-        return 'snap'
+        return 'SnapPlanner'
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, **kw_args):
-        return self._Snap(robot, goal, **kw_args)
+    def PlanToConfiguration(self, robot, goal, snap_tolerance=0.1, **kw_args):
+        """
+        Attempt to plan a straight line trajectory from the robot's current
+        configuration to the goal configuration. This will fail if the
+        configurations differ by more than the tolerance.
+        @param robot
+        @param goal desired configuration
+        @param snap_tolerance maximum Euclidean C-space distance in radians
+        @return traj
+        """
+        return self._Snap(robot, goal, snap_tolerance=snap_tolerance, **kw_args)
 
     @PlanningMethod
-    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
-        raise UnsupportedPlanningError('PlanToEndEffectorOffset not implemented for snap planner')
-
-    @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, snap_tolerance=0.1, **kw_args):
+        """
+        Attempt to plan a straight line trajectory from the robot's current
+        configuration to a desired end-effector pose. This happens by finding
+        the nearest IK solution to the robot's current configuration and
+        attempts to snap there if possible.
+        @param robot
+        @param goal_pose desired end-effector pose
+        @param snap_tolerance maximum Euclidean C-space distance in radians
+        @return traj
+        """
         # Find an IK solution.
         manipulator = robot.GetActiveManipulator()
         current_config = robot.GetDOFValues(manipulator.GetArmIndices())
@@ -68,23 +83,18 @@ class SnapPlanner(BasePlanner):
         sorted_ik_solutions = ik_solutions[sorted_indices, :]
 
         # Try snapping to the closest IK solution.
-        return self._Snap(robot, sorted_ik_solutions[0, :], **kw_args)
+        return self._Snap(robot, sorted_ik_solutions[0, :], snap_tolerance=snap_tolerance, **kw_args)
 
-    @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, **kw_args):
-        raise UnsupportedPlanningError('PlanToTSR not implemented for snap planner')
-    
-    def _Snap(self, robot, goal, snap_tolerance=0.1, **kw_args):
+    def _Snap(self, robot, goal, snap_tolerance, **kw_args):
         active_indices = robot.GetActiveDOFIndices()
         current_dof_values = robot.GetActiveDOFValues()
 
         # Only snap if we're close to the goal configuration.
         if (goal - current_dof_values).max() > snap_tolerance:
-            raise UnsupportedPlanningError('Distance from goal larger than snap tolerance.')
+            raise PlanningError('Distance from goal larger than snap tolerance.')
 
         # Create a two-point trajectory that starts at our current
         # configuration and takes us to the goal.
-        logging.info('Snapping to goal configuration with a straight line trajectory.')
         traj = openravepy.RaveCreateTrajectory(self.env, '')
         config_spec = robot.GetActiveConfigurationSpecification()
         active_indices = robot.GetActiveDOFIndices()

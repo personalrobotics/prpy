@@ -33,7 +33,8 @@ from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningM
 
 class OMPLPlanner(BasePlanner):
     def __init__(self, algorithm='RRTConnect'):
-        self.env = openravepy.Environment()
+        super(OMPLPlanner, self).__init__()
+
         self.algorithm = algorithm
         try:
             self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL')
@@ -45,11 +46,18 @@ class OMPLPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
+        """
+        Plan to a desired configuration with OMPL. This will invoke the OMPL
+        planner specified in the OMPLPlanner constructor.
+        @param robot
+        @param goal desired configuration
+        @return traj
+        """
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
         params.SetGoalConfig(goal)
 
-        traj = openravepy.RaveCreateTrajectory(self.env, '')
+        traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
         with self.env:
             try:

@@ -58,10 +58,10 @@ def JointLimitAvoidance(robot, limit_tolerance=0.2, gain=100):
 
 class MKPlanner(BasePlanner):
     def __init__(self):
-        self.env = openravepy.Environment()
+        super(MKPlanner, self).__init__()
 
     def __str__(self):
-        return 'mk'
+        return 'MKPlanner'
 
     def GetStraightVelocity(self, manip, velocity, initial_hand_pose, nullspace_fn, step_size):
         robot = manip.GetRobot()
@@ -97,6 +97,20 @@ class MKPlanner(BasePlanner):
     def PlanToEndEffectorOffset(self, robot, direction, distance, max_distance=None,
                                 nullspace=JointLimitAvoidance, timelimit=5.0, step_size=0.001,
                                 position_tolerance=0.01, angular_tolerance=0.15, **kw_args):
+        """
+        Plan to a desired end-effector offset with move-hand-straight
+        constraint. movement less than distance will return failure. The motion
+        will not move further than max_distance.
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum distance in meters
+        @param max_distance maximum distance in meters
+        @param timelimit timeout in seconds
+        @param stepsize step size in meters for the Jacobian pseudoinverse controller
+        @param position_tolerance constraint tolerance in meters
+        @param angular_tolerance constraint tolerance in radians
+        @return traj
+        """
         if distance < 0:
             raise ValueError('Distance must be non-negative.')
         elif numpy.linalg.norm(direction) == 0:
@@ -183,15 +197,3 @@ class MKPlanner(BasePlanner):
                                    current_distance, max_distance, e.message)
 
         return traj
-
-    @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, **kw_args):
-        raise UnsupportedPlanningError('PlanToConfiguration not implemented for MK planner')
-
-    @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, psample=0.1, **kw_args):
-        raise UnsupportedPlanningError('PlanToEndEffectorPose not implemented for MK planner')
-
-    @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, **kw_args):
-        raise UnsupportedPlanningError('PlanToTSR not implemented for MK planner')

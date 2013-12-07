@@ -34,7 +34,7 @@ from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningM
 
 class CHOMPPlanner(BasePlanner):
     def __init__(self):
-        self.env = openravepy.Environment()
+        super(CHOMPPlanner, self).__init__()
         try:
             from orcdchomp import orcdchomp
             self.module = openravepy.RaveCreateModule(self.env, 'orcdchomp')
@@ -73,6 +73,15 @@ class CHOMPPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0, n_iter=100, goal_tolerance=0.01, **kw_args):
+        """
+        Plan to a desired end-effector pose using GSCHOMP
+        @param robot
+        @param goal_pose desired end-effector pose
+        @param lambda_ step size
+        @param n_iter number of iterations
+        @param goal_tolerance tolerance in meters
+        @return traj
+        """
         # CHOMP only supports start sets. Instead, we plan backwards from the
         # goal TSR to the starting configuration. Afterwards, we reverse the
         # trajectory.
@@ -107,15 +116,6 @@ class CHOMPPlanner(BasePlanner):
             raise PlanningError('CHOMP deviated from the goal pose by {0:f} meters.'.format(goal_distance))
 
         return traj
-
-    @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, **kw_args):
-        raise UnsupportedPlanningError('PlanToTSR not implemented for CHOMP')
-
-    @PlanningMethod
-    def PlanToEndEffectorOffset(self, robot, direction, distance,
-                                timelimit=5.0, smoothingitrs=250, **kw_args):
-        raise UnsupportedPlanningError('PlanToEndEffectorOffset not implemented for CHOMP')
 
     def ComputeDistanceField(self, robot):
         # Clone the live environment into the planning environment.

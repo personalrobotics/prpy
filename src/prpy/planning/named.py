@@ -32,11 +32,10 @@ from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningM
 
 class NamedPlanner(BasePlanner):
     def __init__(self):
-        # TODO: This should be in the base class.
-        self.env = openravepy.Environment()
+        super(NamedPlanner, self).__init__()
 
     def __str__(self):
-        return 'named'
+        return 'NamedConfigurationPlanner'
 
     @PlanningMethod
     def PlanToNamedConfiguration(self, robot, name, **kw_args):
@@ -65,6 +64,5 @@ class NamedPlanner(BasePlanner):
                 arm_dof_values[i] = arm_dof_value
 
         # Delegate planning to another planner.
-        return robot.PlanToConfiguration(arm_dof_values, execute=False, **kw_args)
-
+        return robot.planner.PlanToConfiguration(robot, arm_dof_values, **kw_args)
 

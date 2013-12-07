@@ -85,6 +85,9 @@ class Planner(object):
         return filter(lambda method_name: self.is_planning_method(method_name), dir(self))
 
 class BasePlanner(Planner):
+    def __init__(self):
+        self.env = openravepy.Environment()
+
     @PlanningMethod
     def PlanToIK(self, robot, goal_pose, ranker=ik_ranking.JointLimitAvoidance, num_attempts=1, **kw_args):
         import numpy
