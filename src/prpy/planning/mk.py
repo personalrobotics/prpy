@@ -115,7 +115,7 @@ class MKPlanner(BasePlanner):
             raise ValueError('Distance must be non-negative.')
         elif numpy.linalg.norm(direction) == 0:
             raise ValueError('Direction must be non-zero')
-        elif max_distance is None or max_distance < distance:
+        elif max_distance is not None and max_distance < distance:
             raise ValueError('Max distance is less than minimum distance.')
         elif step_size <= 0:
             raise ValueError('Step size must be positive.')

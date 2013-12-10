@@ -200,6 +200,7 @@ class WAM(Manipulator):
                 traj = manipulator.GetRobot().RetimeTrajectory(traj, stop_on_ft=True, force_direction=force_direction,
                                                                force_magnitude=max_force, torque=max_torque)
 
+	collided_with_obj = False
         try:
             if not manipulator.simulated:
                 manipulator.hand.TareForceTorqueSensor()
@@ -207,7 +208,6 @@ class WAM(Manipulator):
                 for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
                     ignore_col_with.Enable(oldstate)
             else:
-                collided_with_obj = False
                 traj_duration = traj.GetDuration()
                 delta_t = 0.01
 

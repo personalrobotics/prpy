@@ -88,50 +88,6 @@ class BasePlanner(Planner):
     def __init__(self):
         self.env = openravepy.Environment()
 
-    @PlanningMethod
-    def PlanToIK(self, robot, goal_pose, ranker=ik_ranking.JointLimitAvoidance, num_attempts=1, **kw_args):
-        import numpy
-        from openravepy import IkFilterOptions, IkParameterization, IkParameterizationType
-
-        # FIXME: Currently meta-planners duplicate IK ranking in each planning
-        # thread. It should be possible to fix this by IK ranking once, then
-        # calling PlanToConfiguration in separate threads.
-
-        # Find an unordered list of IK solutions.
-        with robot.GetEnv():
-            manipulator = robot.GetActiveManipulator()
-            ik_param = IkParameterization(goal_pose, IkParameterizationType.Transform6D)
-            ik_solutions = manipulator.FindIKSolutions(ik_param, IkFilterOptions.CheckEnvCollisions)
-
-        if ik_solutions.shape[0] == 0:
-            raise PlanningError('There is no IK solution at the goal pose.')
-
-        # Sort the IK solutions in ascending order by the costs returned by the
-        # ranker. Lower cost solutions are better and infinite cost solutions are
-        # assumed to be infeasible.
-        scores = ranker(robot, ik_solutions)
-        sorted_indices = numpy.argsort(scores)
-        sorted_indices = sorted_indices[~numpy.isposinf(scores)]
-        scores = scores[~numpy.isposinf(scores)]
-        sorted_ik_solutions = ik_solutions[sorted_indices, :]
-
-        if sorted_ik_solutions.shape[0] == 0:
-            raise PlanningError('All IK solutions have infinite cost.')
-
-        # Sequentially plan to the solutions in descending order of cost.
-        num_attempts = min(sorted_ik_solutions.shape[0], num_attempts)
-        for i, ik_solution in enumerate(sorted_ik_solutions[0:num_attempts, :]):
-            try:
-                traj = self.PlanToConfiguration(robot, ik_solution)
-                logger.info('Planned to IK solution %d of %d.', i + 1, num_attempts)
-                return traj
-            except PlanningError as e:
-                logger.warning('Planning to IK solution %d of %d failed: %s',
-                               i + 1, num_attempts, e)
-
-        raise PlanningError('Planning to the top {0:d} of {1:d} IK solutions failed.'.format(
-                            num_attempts, sorted_ik_solutions.shape[0]))
-
 class MetaPlanner(Planner):
     def __init__(self):
         self._planners = list()
@@ -209,7 +165,7 @@ class Sequence(MetaPlanner):
                     return planner_method(*args, **kw_args)
             except MetaPlanningError as e:
                 errors[planner] = e
-            except PlanningError as e:
+            except Exception as e:
                 logger.warning('Planning with %s failed: %s', planner, e)
                 errors[planner] = e
 
@@ -231,10 +187,16 @@ class Ranked(MetaPlanner):
 
         # Start planning in parallel.
         for index, planner in enumerate(self._planners):
+            if not hasattr(planner, method):
+                results[index] = PlanningError('%s does not implement method %s.' % (planner, method))
+                continue
+
             def planning_thread(index, planner):
                 try:
                     planning_method = getattr(planner, method)
                     results[index] = planning_method(*args, **kw_args)
+                except MetaPlanningError as e:
+                    results[index] = e
                 except Exception as e:
                     logger.warning('Planning with %s failed: %s', planner, e)
                     results[index] = e

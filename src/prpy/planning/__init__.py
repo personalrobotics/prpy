@@ -35,3 +35,4 @@ from ompl import OMPLPlanner
 from mk import MKPlanner
 from snap import SnapPlanner
 from named import NamedPlanner
+from ik import IKPlanner
