@@ -139,7 +139,7 @@ class WAMRobot(Robot):
                     blend_step_size=blend_step_size, linearity_threshold=linearity_threshold,
                     ignore_collisions=ignore_collisions)
 
-    def ExecuteTrajectory(self, traj, timeout=None, blend=True, retime=True, **kw_args):
+    def ExecuteTrajectory(self, traj, timeout=None, blend=True, retime=True, limit_tolerance=1e-3, **kw_args):
         """
         Execute a trajectory. By default, this retimes, blends, and adds the
         stop_on_stall flag to all trajectories. Additionally, this function blocks
@@ -169,6 +169,29 @@ class WAMRobot(Robot):
             self.SetActiveDOFs(active_indices)
             if blend:
                 traj = self.BlendTrajectory(traj)
+
+            # Check if the first point is not in limits.
+            unclamped_dof_values = self.GetActiveDOFValues()
+
+            first_waypoint = traj.GetWaypoint(0)
+            cspec = traj.GetConfigurationSpecification()
+            first_dof_values = cspec.ExtractJointValues(first_waypoint, self, active_indices, 0)
+            lower_limits, upper_limits = self.GetActiveDOFLimits()
+
+            for i in xrange(len(first_dof_values)):
+                if numpy.allclose(first_dof_values[i], lower_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] < lower_limits[i]:
+                    first_dof_values[i] = unclamped_dof_values[i]
+                    logging.info('Unclamped DOF %d from lower limit.', active_indices[i])
+                elif numpy.allclose(first_dof_values[i], upper_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] > upper_limits[i]:
+                    first_dof_values[i] = unclamped_dof_values[i]
+                    logging.info('Unclamped DOF %d from upper limit.', active_indices[i])
+
+            # Snap the first point to the current configuration.
+            cspec.InsertJointValues(first_waypoint, first_dof_values, self, active_indices, 0)
+            traj.Insert(0, first_waypoint, True)
+
+            # This must be last because MacTrajectories are immutable.
+            # TODO: This may break if the retimer clamps DOF values to the joint limits.
             if retime:
                 traj = self.RetimeTrajectory(traj, synchronize=needs_synchronization, **kw_args)
 

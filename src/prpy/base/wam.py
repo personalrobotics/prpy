@@ -54,8 +54,9 @@ class WAM(Manipulator):
                     self.ikmodel.autogenerate()
 
         # Enable servo motions in simulation mode.
-        from prpy.simulation import ServoSimulator
-        self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)
+        if sim:
+            from prpy.simulation import ServoSimulator
+            self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)
 
     def CloneBindings(self, parent):
         self.__init__(True, None)
