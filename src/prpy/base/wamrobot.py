@@ -181,10 +181,10 @@ class WAMRobot(Robot):
             for i in xrange(len(first_dof_values)):
                 if numpy.allclose(first_dof_values[i], lower_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] < lower_limits[i]:
                     first_dof_values[i] = unclamped_dof_values[i]
-                    logging.info('Unclamped DOF %d from lower limit.', active_indices[i])
+                    logging.warn('Unclamped DOF %d from lower limit.', active_indices[i])
                 elif numpy.allclose(first_dof_values[i], upper_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] > upper_limits[i]:
                     first_dof_values[i] = unclamped_dof_values[i]
-                    logging.info('Unclamped DOF %d from upper limit.', active_indices[i])
+                    logging.warn('Unclamped DOF %d from upper limit.', active_indices[i])
 
             # Snap the first point to the current configuration.
             cspec.InsertJointValues(first_waypoint, first_dof_values, self, active_indices, 0)
@@ -210,6 +210,7 @@ class WAMRobot(Robot):
         for manipulator in active_manipulators:
             manipulator.ClearTrajectoryStatus()
 
+        # FIXME: The IdealController attempts to sample the MacTrajectory in simulation.
         self.GetController().SetPath(traj)
 
         # Wait for trajectory execution to finish.
