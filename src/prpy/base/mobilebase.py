@@ -66,7 +66,6 @@ class MobileBase(object):
                 goal_pose = numpy.dot(start_pose, offset_pose)
 
             traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
-
             if execute:
                 return self.robot.ExecuteTrajectory(traj, **kw_args)
             else:
@@ -74,7 +73,7 @@ class MobileBase(object):
         else:
             raise NotImplementedError('DriveForward is not implemented')
 
-    def Rotate(self, angle_rad, timeout=None):
+    def Rotate(self, angle_rad, execute=True, **kw_args):
         """
         Rotates the robot the desired distance
         @param angle_rad the number of radians to rotate
@@ -82,13 +81,16 @@ class MobileBase(object):
         """
         if self.simulated:
             with self.robot.GetEnv():
-                current_pose_in_world = self.robot.GetTransform().copy()
-                desired_pose_in_herb = numpy.array([[numpy.cos(angle_rad), -numpy.sin(angle_rad), 0, 0],
-                                                    [numpy.sin(angle_rad), numpy.cos(angle_rad), 0, 0],
-                                                    [0, 0, 1, 0],
-                                                    [0, 0, 0, 1]])
-                desired_pose_in_world = numpy.dot(current_pose_in_world, desired_pose_in_herb)
-                self.robot.SetTransform(desired_pose_in_world)
+                start_pose = self.robot.GetTransform()
+
+            relative_pose = openravepy.matrixFromAxisAngle([ 0., 0., angle_rad ])
+            goal_pose = numpy.dot(start_pose, relative_pose)
+
+            traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
+            if execute:
+                return self.robot.ExecuteTrajectory(traj, **kw_args)
+            else:
+                return traj
         else:
             raise NotImplementedError('Rotate is not implemented')
 
