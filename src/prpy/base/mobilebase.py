@@ -28,7 +28,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy
+import numpy, openravepy
+
+def create_affine_trajectory(robot, poses):
+    doft = openravepy.DOFAffine.Transform
+    cspec = openravepy.RaveGetAffineConfigurationSpecification(doft, robot)
+    traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), 'GenericTrajectory')
+    traj.Init(cspec)
+
+    for iwaypoint, pose in enumerate(poses):
+        waypoint = openravepy.RaveGetAffineDOFValuesFromTransform(pose, doft)
+        traj.Insert(iwaypoint, waypoint)
+
+    return traj
+
 
 class MobileBase(object):
     def __init__(self, sim, robot):
@@ -38,7 +51,7 @@ class MobileBase(object):
     def CloneBindings(self, parent):
         pass
 
-    def Forward(self, meters, timeout=None):
+    def Forward(self, meters, execute=True, **kw_args):
         """
         Drives the robot forward the desired distance
         Note: Only implemented in simulation. Derived robots should implement this method.
@@ -47,9 +60,17 @@ class MobileBase(object):
         """
         if self.simulated:
             with self.robot.GetEnv():
-                current_pose = self.robot.GetTransform().copy()
-                current_pose[:3,3] = current_pose[:3,3] + meters*current_pose[:3,0]
-                self.robot.SetTransform(current_pose)
+                start_pose = self.robot.GetTransform()
+                offset_pose = numpy.eye(4)
+                offset_pose[0, 3] = meters
+                goal_pose = numpy.dot(start_pose, offset_pose)
+
+            traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
+
+            if execute:
+                return self.robot.ExecuteTrajectory(traj, **kw_args)
+            else:
+                return traj
         else:
             raise NotImplementedError('DriveForward is not implemented')
 
