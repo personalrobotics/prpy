@@ -2,7 +2,7 @@
 
 # Copyright (c) 2013, Carnegie Mellon University
 # All rights reserved.
-# Authors: Michael Koval <mkoval@cs.cmu.edu>
+# Authors: Evan Shapiro <eashapir@andrew.cmu.edu>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,12 +28,18 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from base import PlanningError, UnsupportedPlanningError, Planner, Sequence, Ranked, Fastest
-from chomp import CHOMPPlanner
-from cbirrt import CBiRRTPlanner
-from ompl import OMPLPlanner
-from mk import MKPlanner
-from snap import SnapPlanner
-from named import NamedPlanner
-from ik import IKPlanner
-from sbpl import SBPLPlanner
+from base import BasePlanner, PlanningMethod
+
+class SBPLPlanner(BasePlanner):
+    def __init__(self):
+        super(SBPLPlanner, self).__init__()
+    def __str__(self):
+        return 'SBPL'
+    @PlanningMethod
+    def PlanToBasePose(self, robot, goal_pose):
+        """
+        Plan to a base pose using SBPL
+        @param robot
+        @param goal_pose desired base pose
+        """
+        pass
