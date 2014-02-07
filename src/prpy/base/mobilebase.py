@@ -71,7 +71,7 @@ class MobileBase(object):
         else:
             raise NotImplementedError('Rotate is not implemented')
 
-    def DriveStraightUntilForce(robot, direction, velocity=0.1, force_threshold=3.0,
+    def DriveStraightUntilForce(self, direction, velocity=0.1, force_threshold=3.0,
                                 max_distance=None, timeout=None, left_arm=True, right_arm=True):
         """
         Drive the base in a direction until a force/torque sensor feels a force. The
