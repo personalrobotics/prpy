@@ -70,3 +70,25 @@ class MobileBase(object):
                 self.robot.SetTransform(desired_pose_in_world)
         else:
             raise NotImplementedError('Rotate is not implemented')
+
+    def DriveStraightUntilForce(robot, direction, velocity=0.1, force_threshold=3.0,
+                                max_distance=None, timeout=None, left_arm=True, right_arm=True):
+        """
+        Drive the base in a direction until a force/torque sensor feels a force. The
+        base first turns to face the desired direction, then drives forward at the
+        specified velocity. The action terminates when max_distance is reached, the
+        timeout is exceeded, or if a force is felt. The maximum distance and timeout
+        can be disabled by setting the corresponding parameters to None.
+        @param direction forward direction of motion in the world frame
+        @param velocity desired forward velocity
+        @param force_threshold threshold force in Newtons
+        @param max_distance maximum distance in meters
+        @param timeout maximum duration in seconds
+        @param left_arm flag to use the left force/torque sensor
+        @param right_arm flag to use the right force/torque sensor
+        @return felt_force flag indicating whether the action felt a force
+        """
+        if self.simulated:
+            raise NotImplementedError('DriveStraightUntilForce does not work in simulation')
+        else
+            raise NotImplementedError('DriveStraightUntilForce is not implemented')
