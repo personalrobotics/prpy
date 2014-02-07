@@ -162,38 +162,70 @@ class WAMRobot(Robot):
             raise exceptions.SynchronizationException('Unable to execute synchronized trajectory with'
                                                       ' a mixture of simulated and real controllers.')
 
+        # Disallow trajectories that include both the base and the arms when
+        # not in simulation mode. We can't guarantee synchronization in this case.
+        def has_affine_dofs(traj):
+            def has_group(cspec, group_name):
+                try:
+                    cspec.GetGroupFromName(group_name)
+                    return True
+                except openravepy.openrave_exception:
+                    return False
+
+            cspec = traj.GetConfigurationSpecification()
+            return (has_group(cspec, 'affine_transform')
+                 or has_group(cspec, 'affine_velocities')
+                 or has_group(cspec, 'affine_accelerations'))
+
+        needs_arms = bool(active_manipulators)
+        needs_base = has_affine_dofs(traj)
+        arms_simulated = all(sim_flags)
+        
+        if needs_base and needs_arms and not arms_simulated and not self.base.simulated:
+            raise NotImplementedError('Joint arm-base trajectories are not supported on hardware.')
+
         # Optionally blend and retime the trajectory before execution. Retiming
         # creates a MacTrajectory that can be directly executed by OWD.
-        active_indices = util.GetTrajectoryIndices(traj)
-        with self:
-            self.SetActiveDOFs(active_indices)
-            if blend:
-                traj = self.BlendTrajectory(traj)
+        if needs_arms:
+            active_indices = util.GetTrajectoryIndices(traj)
+            with self:
+                self.SetActiveDOFs(active_indices)
+                if blend:
+                    traj = self.BlendTrajectory(traj)
 
-            # Check if the first point is not in limits.
-            unclamped_dof_values = self.GetActiveDOFValues()
+                # Check if the first point is not in limits.
+                unclamped_dof_values = self.GetActiveDOFValues()
 
-            first_waypoint = traj.GetWaypoint(0)
-            cspec = traj.GetConfigurationSpecification()
-            first_dof_values = cspec.ExtractJointValues(first_waypoint, self, active_indices, 0)
-            lower_limits, upper_limits = self.GetActiveDOFLimits()
+                first_waypoint = traj.GetWaypoint(0)
+                cspec = traj.GetConfigurationSpecification()
+                first_dof_values = cspec.ExtractJointValues(first_waypoint, self, active_indices, 0)
+                lower_limits, upper_limits = self.GetActiveDOFLimits()
 
-            for i in xrange(len(first_dof_values)):
-                if numpy.allclose(first_dof_values[i], lower_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] < lower_limits[i]:
-                    first_dof_values[i] = unclamped_dof_values[i]
-                    logging.warn('Unclamped DOF %d from lower limit.', active_indices[i])
-                elif numpy.allclose(first_dof_values[i], upper_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] > upper_limits[i]:
-                    first_dof_values[i] = unclamped_dof_values[i]
-                    logging.warn('Unclamped DOF %d from upper limit.', active_indices[i])
+                for i in xrange(len(first_dof_values)):
+                    if numpy.allclose(first_dof_values[i], lower_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] < lower_limits[i]:
+                        first_dof_values[i] = unclamped_dof_values[i]
+                        logging.warn('Unclamped DOF %d from lower limit.', active_indices[i])
+                    elif numpy.allclose(first_dof_values[i], upper_limits[i], atol=limit_tolerance) and unclamped_dof_values[i] > upper_limits[i]:
+                        first_dof_values[i] = unclamped_dof_values[i]
+                        logging.warn('Unclamped DOF %d from upper limit.', active_indices[i])
 
-            # Snap the first point to the current configuration.
-            cspec.InsertJointValues(first_waypoint, first_dof_values, self, active_indices, 0)
-            traj.Insert(0, first_waypoint, True)
+                # Snap the first point to the current configuration.
+                cspec.InsertJointValues(first_waypoint, first_dof_values, self, active_indices, 0)
+                traj.Insert(0, first_waypoint, True)
 
-            # This must be last because MacTrajectories are immutable.
-            # TODO: This may break if the retimer clamps DOF values to the joint limits.
-            if retime:
-                traj = self.RetimeTrajectory(traj, synchronize=needs_synchronization, **kw_args)
+                # This must be last because MacTrajectories are immutable.
+                # TODO: This may break if the retimer clamps DOF values to the joint limits.
+                if retime:
+                    traj = self.RetimeTrajectory(traj, synchronize=needs_synchronization, **kw_args)
+
+        if needs_base:
+            # Retime the base trajectory in simulation.
+            if retime and self.base.simulated:
+                max_vel = numpy.concatenate((self.GetAffineTranslationMaxVels(),
+                                             [ self.GetAffineRotationQuatMaxVels() ] * 4))
+                max_accel = 3 * max_vel
+                openravepy.planningutils.RetimeAffineTrajectory(traj, max_vel,
+                                                                max_accel, False)
 
         # Can't execute trajectories with less than two waypoints
         if traj.GetNumWaypoints() < 2:
@@ -215,6 +247,9 @@ class WAMRobot(Robot):
 
         # Wait for trajectory execution to finish.
         running_controllers = [ manipulator.controller for manipulator in running_manipulators ]
+        if needs_base:
+            running_controllers += [ self.base.controller ]
+
         is_done = util.WaitForControllers(running_controllers, timeout=timeout)
             
         # Request the controller status from each manipulator.

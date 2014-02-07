@@ -39,8 +39,11 @@ def create_sensor(env, args, anonymous=True):
     return sensor
 
 def GetTrajectoryIndices(traj):
-    joint_values_group = traj.GetConfigurationSpecification().GetGroupFromName('joint_values')
-    return numpy.array([ int(index) for index in joint_values_group.name.split()[2:] ])
+    try:
+        joint_values_group = traj.GetConfigurationSpecification().GetGroupFromName('joint_values')
+        return numpy.array([ int(index) for index in joint_values_group.name.split()[2:] ])
+    except openravepy.openrave_exception:
+        return list()
 
 def WaitForControllers(controllers, timeout=None, rate=20):
     running_controllers = set(controllers)
