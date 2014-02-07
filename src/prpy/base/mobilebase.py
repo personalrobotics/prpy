@@ -90,5 +90,5 @@ class MobileBase(object):
         """
         if self.simulated:
             raise NotImplementedError('DriveStraightUntilForce does not work in simulation')
-        else
+        else:
             raise NotImplementedError('DriveStraightUntilForce is not implemented')
