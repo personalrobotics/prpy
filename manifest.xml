@@ -16,5 +16,6 @@
         <openrave optional="cbirrt2"/>
         <openrave optional="orcdchomp"/>
         <openrave optional="or_ompl"/>
+        <openrave optional="or_sbpl"/>
     </export>
 </package>

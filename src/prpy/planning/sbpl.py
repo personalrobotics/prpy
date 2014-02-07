@@ -29,12 +29,21 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from base import BasePlanner, PlanningMethod
+import openravepy
 
 class SBPLPlanner(BasePlanner):
     def __init__(self):
         super(SBPLPlanner, self).__init__()
+        
+        try:
+            self.planner = openravepy.RaveCreatePlanner(self.env, 'SBPL')
+        except openravepy.openrave_exception:
+            raise UnsupportedPlanningError('Unable to create SBPL module')
+
     def __str__(self):
         return 'SBPL'
+
+
     @PlanningMethod
     def PlanToBasePose(self, robot, goal_pose):
         """
@@ -42,4 +51,31 @@ class SBPLPlanner(BasePlanner):
         @param robot
         @param goal_pose desired base pose
         """
-        pass
+        params = openravepy.Planner.PlannerParameters()
+
+        from openravepy import DOFAffine
+        robot.SetActiveDOFs([], DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
+        params.SetRobotActiveJoints(robot)
+
+        config_spec = openravepy.RaveGetAffineConfigurationSpecification(DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis, robot)
+        #params.SetConfigurationSpecification(self.env, config_spec) # This breaks
+        
+        goal_config = openravepy.RaveGetAffineDOFValuesFromTransform(goal_pose, 
+                                                                     DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
+        params.SetGoalConfig(goal_config)
+
+        traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+
+        with self.env:
+            try:
+                self.planner.InitPlan(robot, params)
+                status = self.planner.PlanPath(traj, releasegil=True)
+            except Exception as e:
+                raise PlanningError('Planning failed with error: {0:s}'.format(e))
+
+        from openravepy import PlannerStatus
+        if status not in [ PlannerStatus.HasSolution, PlannerStatus.InterruptedWithSolution ]:
+            raise PlanningError('Planner returned with status {0:s}.'.format(str(status)))
+
+        return traj  
+        
