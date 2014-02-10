@@ -126,7 +126,10 @@ class CHOMPPlanner(BasePlanner):
             self.env.Clone(live_env, CloningOptions.Bodies)
             robot = self.env.GetRobot(live_robot.GetName())
 
-        with self.env:
+        # We can't use a with statement here because it is overriden on cloned
+        # environments.
+        self.env.Lock()
+        try:
             # Disable everything.
             for body in self.env.GetBodies():
                 body.Enable(False)
@@ -154,6 +157,10 @@ class CHOMPPlanner(BasePlanner):
                     cache_path = self.GetCachePath(body)
                     self.module.computedistancefield(body, cache_filename=cache_path, releasegil=True)
                     body.Enable(False)
+
+                logging.info('done with body %s', body.GetName())
+        finally:
+            self.env.Unlock()
 
         self.initialized = True 
 
