@@ -114,6 +114,78 @@ def TakeSnapshot(viewer, path=None, show_figures=True, width=1920, height=1080, 
 
     return image
 
+def ComputeAinv(N,dof):
+    dt = 1.0/(N-1)
+    K=numpy.mat(numpy.zeros((N-1,N-1)))
+    for i in range(1,N-1):
+        K[i,i]=1/dt;
+        K[i,i-1]=-1/dt;
+    K[0,0]=1/dt;
+    A=K.transpose()*K
+    invA_small=numpy.linalg.inv(A)
+    
+    #tensorize
+    invA = numpy.mat(numpy.zeros([(N)*dof,(N)*dof]))
+    for i in range(1,N):
+        for j in range(1,N):
+            for k in range(dof):
+                invA[i*dof+k,j*dof+k] = invA_small[i-1,j-1]
+    return invA
+    
+def MatrixToTraj(traj_matrix,cs,dof,robot):
+    env = robot.GetEnv()
+    traj = openravepy.RaveCreateTrajectory(env,'')
+    traj.Init(cs)
+    for i in range(numpy.size(traj_matrix)/dof):
+        tp = traj_matrix[range(i*dof,i*dof+dof)]
+        tp = numpy.array(tp.transpose())[0]
+        traj.Insert(i,tp)
+    openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot,False,0.2,0.2,"LinearTrajectoryRetimer","")
+    return traj
+    
+def TrajToMatrix(traj,dof):
+    traj_matrix = numpy.zeros(dof*(traj.GetNumWaypoints()))
+    traj_matrix = numpy.mat(traj_matrix).transpose()
+    for i in range(traj.GetNumWaypoints()):
+        d = traj.GetWaypoint(i)[range(dof)]
+        d = numpy.mat(d).transpose()
+        traj_matrix[range(i*dof,(i+1)*dof)]=d
+    return traj_matrix
+
+def AdaptTrajectory(traj, new_start, new_goal,robot):
+    #this does not collision check
+    cs = traj.GetConfigurationSpecification()
+    dof = cs.GetDOF()
+    
+    start = traj.GetWaypoint(0)
+    start = start[range(dof)]
+    goal = traj.GetWaypoint(traj.GetNumWaypoints()-1)
+    goal = goal[range(dof)]
+
+    traj_matrix = TrajToMatrix(traj,dof)
+
+    #translate traj to match start
+    diff_start = new_start - start
+    diff_start = numpy.mat(diff_start).transpose()
+    translated_traj = numpy.zeros(dof*(traj.GetNumWaypoints()))
+    translated_traj = numpy.mat(translated_traj).transpose()
+    for i in range(traj.GetNumWaypoints()):
+        translated_traj[range((i-1)*dof,i*dof)] = traj_matrix[range((i-1)*dof,i*dof)]-diff_start
+
+    #apply goal correction
+    new_traj_matrix = translated_traj
+    N = traj.GetNumWaypoints()
+    goal_translated = new_traj_matrix[range((N-1)*dof,(N)*dof)]
+    Ainv = ComputeAinv(N,dof)
+    goal_diff = numpy.mat(new_goal).transpose() - goal_translated
+    traj_diff = numpy.zeros(dof*(N))
+    traj_diff = numpy.mat(traj_diff).transpose()
+    traj_diff[range((N-1)*dof,(N)*dof)] = goal_diff
+    new_traj_matrix = new_traj_matrix+Ainv*traj_diff/Ainv[N*dof-1,N*dof-1]
+    
+    new_traj = MatrixToTraj(new_traj_matrix,cs,dof,robot)
+    return new_traj
+
 class Recorder(object):
     MPEG = 13
 
