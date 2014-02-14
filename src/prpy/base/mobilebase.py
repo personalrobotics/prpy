@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy
+import copy, numpy, openravepy
 
 def create_affine_trajectory(robot, poses):
     doft = openravepy.DOFAffine.Transform
@@ -49,7 +49,7 @@ class MobileBase(object):
         self.robot = robot
 
     def CloneBindings(self, parent):
-        pass
+        self.__init__(True, None)
 
     def Forward(self, meters, execute=True, direction=None, **kw_args):
         """
@@ -121,3 +121,30 @@ class MobileBase(object):
             raise NotImplementedError('DriveStraightUntilForce does not work in simulation')
         else:
             raise NotImplementedError('DriveStraightUntilForce is not implemented')
+
+    def PlanToBasePose(self, *args, **kw_args):
+
+        from prpy.clone import Clone, Cloned
+        
+        robot = self.robot
+        with Clone(robot.GetEnv()):
+            Cloned(robot).SetActiveDOFs([], 
+                                        affine = openravepy.DOFAffine.X |
+                                        openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis)
+            cloned_args = copy.copy(kw_args)
+            cloned_args['execute'] = False
+            cloned_traj = Cloned(robot).planner.PlanToBasePose(robot, args, kw_args)
+            
+            # Strip inactive DOFs from the trajectory
+            config_spec = Cloned(robot).GetActiveConfigurationSpecification()
+            openravepy.planningutils.ConvertTrajectorySpecification(cloned_traj, config_spec)
+            traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), '')
+            traj.Clone(cloned_traj, 0)
+
+            # Optionally execute the trajectory.
+            if 'execute' not in kw_args or kw_args['execute']:
+                return robot.ExecuteTrajectory(traj, **kw_args)
+            else:
+                return traj
+
+            

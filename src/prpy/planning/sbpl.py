@@ -45,7 +45,7 @@ class SBPLPlanner(BasePlanner):
 
 
     @PlanningMethod
-    def PlanToBasePose(self, robot, goal_pose):
+    def PlanToBasePose(self, robot, goal_pose, **kw_args):
         """
         Plan to a base pose using SBPL
         @param robot
@@ -62,20 +62,32 @@ class SBPLPlanner(BasePlanner):
         
         goal_config = openravepy.RaveGetAffineDOFValuesFromTransform(goal_pose, 
                                                                      DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
+
         params.SetGoalConfig(goal_config)
+        
+        # Setup default extra parameters
+        extra_params = ["cellsize", "0.1"]
+        extra_params += ["numangles", "4"]
+        extra_params += ["extents", "-1.0 1.0 -1.0 1.0"]
+        extra_params += ["action", "1.0 0.0 0.1"]
+        extra_params_str = ' '.join(extra_params)
+        params.SetExtraParameters(extra_params_str)
 
-        traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
-
-        with self.env:
-            try:
-                self.planner.InitPlan(robot, params)
-                status = self.planner.PlanPath(traj, releasegil=True)
-            except Exception as e:
-                raise PlanningError('Planning failed with error: {0:s}'.format(e))
+        traj = openravepy.RaveCreateTrajectory(self.env, '')
+ 
+        try:
+            self.planner.InitPlan(robot, params)
+            status = self.planner.PlanPath(traj, releasegil=True)
+            
+        except Exception as e:
+            raise PlanningError('Planning failed with error: {0:s}'.format(e))
 
         from openravepy import PlannerStatus
         if status not in [ PlannerStatus.HasSolution, PlannerStatus.InterruptedWithSolution ]:
             raise PlanningError('Planner returned with status {0:s}.'.format(str(status)))
+
+        import IPython
+        IPython.embed()
 
         return traj  
         
