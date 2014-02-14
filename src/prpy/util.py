@@ -38,6 +38,18 @@ def create_sensor(env, args, anonymous=True):
     env.Add(sensor, anonymous)
     return sensor
 
+def HasAffineDOFs(cspec):
+    def has_group(cspec, group_name):
+        try:
+            cspec.GetGroupFromName(group_name)
+            return True
+        except openravepy.openrave_exception:
+            return False
+
+    return (has_group(cspec, 'affine_transform')
+         or has_group(cspec, 'affine_velocities')
+         or has_group(cspec, 'affine_accelerations'))
+
 def GetTrajectoryIndices(traj):
     try:
         joint_values_group = traj.GetConfigurationSpecification().GetGroupFromName('joint_values')

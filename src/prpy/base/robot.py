@@ -145,12 +145,35 @@ class Robot(openravepy.Robot):
         @param timeout duration to wait for execution
         @returns final executed trajectory
         """
+        # Check if this is a base trajectory.
+        has_base = hasattr(self, 'base')
+        needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
+        if needs_base and not has_base:
+            raise ValueError('Unable to execute affine DOF trajectory; robot does'\
+                             ' not have a MobileBase.')
+
+        # TODO: Throw an error if the trajectory contains both normal DOFs and
+        # affine DOFs.
+
         if retime:
-            traj = self.RetimeTrajectory(traj)
+            # Retime a manipulator trajectory.
+            if not needs_base:
+                traj = self.RetimeTrajectory(traj)
+            # Retime a base trajectory.
+            else:
+                max_vel = numpy.concatenate((
+                    self.GetAffineTranslationMaxVels(),
+                    [ self.GetAffineRotationQuatMaxVels() ] * 4))
+                max_accel = 3 * max_vel
+                openravepy.planningutils.RetimeAffineTrajectory(traj, max_vel,
+                                                                max_accel, False)
 
         self.GetController().SetPath(traj)
         active_manipulators = self.GetTrajectoryManipulators(traj)
         active_controllers = [ manipulator.controller for manipulator in active_manipulators ]
+        if needs_base:
+            active_controllers += [ self.base.controller ]
+
         util.WaitForControllers(active_controllers, timeout=timeout)
         return traj
 

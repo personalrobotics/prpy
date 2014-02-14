@@ -51,18 +51,24 @@ class MobileBase(object):
     def CloneBindings(self, parent):
         pass
 
-    def Forward(self, meters, execute=True, **kw_args):
+    def Forward(self, meters, execute=True, direction=None, **kw_args):
         """
         Drives the robot forward the desired distance
         Note: Only implemented in simulation. Derived robots should implement this method.
         @param meters the distance to drive the robot
+        @param direction forward direction of motion
         @param timout duration to wait for execution
         """
+        if direction is None:
+            direction = numpy.array([ 1., 0., 0. ])
+        if abs(numpy.linalg.norm(direction) - 1.0) > 1e-3:
+            raise ValueError('Direction must be a unit vector.')
+
         if self.simulated:
             with self.robot.GetEnv():
                 start_pose = self.robot.GetTransform()
                 offset_pose = numpy.eye(4)
-                offset_pose[0, 3] = meters
+                offset_pose[0:3, 3] = meters * direction
                 goal_pose = numpy.dot(start_pose, offset_pose)
 
             traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
