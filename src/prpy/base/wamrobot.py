@@ -221,8 +221,8 @@ class WAMRobot(Robot):
         if needs_base:
             # Retime the base trajectory in simulation.
             if retime and self.base.simulated:
-                max_vel = numpy.concatenate((self.GetAffineTranslationMaxVels(),
-                                             [ self.GetAffineRotationQuatMaxVels() ] * 4))
+                max_vel = numpy.concatenate((self.GetAffineTranslationMaxVels()[:2],
+                                             [ self.GetAffineRotationQuatMaxVels() ]))
                 max_accel = 3 * max_vel
                 openravepy.planningutils.RetimeAffineTrajectory(traj, max_vel,
                                                                 max_accel, False)

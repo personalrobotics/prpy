@@ -28,10 +28,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import copy, numpy, openravepy
+import copy, functools, numpy, openravepy
+from .. import bind
+from prpy.clone import Clone, Cloned
 
 def create_affine_trajectory(robot, poses):
-    doft = openravepy.DOFAffine.Transform
+    doft = openravepy.DOFAffine.X | openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis
     cspec = openravepy.RaveGetAffineConfigurationSpecification(doft, robot)
     traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), 'GenericTrajectory')
     traj.Init(cspec)
@@ -47,6 +49,23 @@ class MobileBase(object):
     def __init__(self, sim, robot):
         self.simulated = sim
         self.robot = robot
+
+    def __getattr__(self, name):
+        # We have to manually perform a lookup in InstanceDeduplicator because
+        # __methods__ bypass __getattribute__. 
+        self = bind.InstanceDeduplicator.get_canonical(self)
+        delegate_method = getattr(self.robot.base_planner, name)
+
+        # Resolve planner calls through the robot.planner field.
+        if self.robot.base_planner.is_planning_method(name):
+            @functools.wraps(delegate_method)
+            def wrapper_method(*args, **kw_args):
+                return self._BasePlanWrapper(delegate_method, args, kw_args) 
+
+            return wrapper_method
+
+        raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
+
 
     def CloneBindings(self, parent):
         self.__init__(True, None)
@@ -122,7 +141,7 @@ class MobileBase(object):
         else:
             raise NotImplementedError('DriveStraightUntilForce is not implemented')
 
-    def PlanToBasePose(self, *args, **kw_args):
+    def _BasePlanWrapper(self, planning_method, args, kw_args):
 
         from prpy.clone import Clone, Cloned
         
@@ -131,14 +150,12 @@ class MobileBase(object):
             Cloned(robot).SetActiveDOFs([], 
                                         affine = openravepy.DOFAffine.X |
                                         openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis)
-            cloned_args = copy.copy(kw_args)
-            cloned_args['execute'] = False
-            cloned_traj = Cloned(robot).planner.PlanToBasePose(robot, args, kw_args)
-            
+            cloned_traj = planning_method(Cloned(robot), *args, **kw_args);
+
             # Strip inactive DOFs from the trajectory
             config_spec = Cloned(robot).GetActiveConfigurationSpecification()
             openravepy.planningutils.ConvertTrajectorySpecification(cloned_traj, config_spec)
-            traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), '')
+            traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), cloned_traj.GetXMLId())
             traj.Clone(cloned_traj, 0)
 
             # Optionally execute the trajectory.

@@ -86,8 +86,5 @@ class SBPLPlanner(BasePlanner):
         if status not in [ PlannerStatus.HasSolution, PlannerStatus.InterruptedWithSolution ]:
             raise PlanningError('Planner returned with status {0:s}.'.format(str(status)))
 
-        import IPython
-        IPython.embed()
-
         return traj  
         
