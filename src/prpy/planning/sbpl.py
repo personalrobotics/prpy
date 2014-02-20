@@ -67,9 +67,17 @@ class SBPLPlanner(BasePlanner):
         
         # Setup default extra parameters
         extra_params = ["cellsize", "0.1"]
-        extra_params += ["numangles", "4"]
-        extra_params += ["extents", "-1.0 1.0 -1.0 1.0"]
+        extra_params += ["numangles", "16"]
+
+
+        limits = robot.GetAffineTranslationLimits();
+        extents = [limits[0][0], limits[1][0], limits[0][1], limits[1][1]];
+        extra_params += ["extents", " ".join([str(e) for e in extents])]
         extra_params += ["action", "1.0 0.0 0.1"]
+        extra_params += ["action", "1.0 4.0 0.1"]
+        extra_params += ["action", "1.0 -4.0 0.1"]
+        extra_params += ["action", "0.0 4.0 0.1"]
+        extra_params += ["action", "0.0 -4.0 0.1"]
         extra_params_str = ' '.join(extra_params)
         params.SetExtraParameters(extra_params_str)
 
