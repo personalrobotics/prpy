@@ -190,7 +190,7 @@ def AdaptTrajectory(traj, new_start, new_goal,robot):
 
 
 def CheckCollision(traj, robot, selfcoll_only=False):
-    
+    return 0
 
 
 class Recorder(object):
