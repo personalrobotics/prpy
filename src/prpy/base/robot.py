@@ -209,9 +209,11 @@ class Robot(openravepy.Robot):
             if has_velocity_group:
                 # First check the velocities defined for the waypoint
                 velocities = config_spec.ExtractJointValues(wpt, self, traj_indices, 1)
-                if True in (velocities > velocity_limits):
-                    logging.warn('Velocity for waypoint %d violates limits' % idx)
-                    return True
+                for vidx in range(len(velocities)):
+                    if (velocities[vidx] > velocity_limits[vidx]):
+                        logging.warn('Velocity for waypoint %d joint %d violates limits (value: %0.3f, limit: %0.3f)' % 
+                                     (idx, vidx, velocities[vidx], velocity_limits[vidx]))
+                        return True
 
             # Now check the velocities calculated by differencing positions
             dt = config_spec.ExtractDeltaTime(wpt)
@@ -219,11 +221,11 @@ class Robot(openravepy.Robot):
 
             if idx > 0:
                 diff_velocities = numpy.fabs(values - prev_values)/(dt - prev_dt)
-                if True in (diff_velocities > velocity_limits):
-                    print diff_velocities
-                    print velocity_limits
-                    logging.warn('Calculated velocity for waypoint %d violates limits' % idx)
-                    return True
+                for vidx in range(len(diff_velocities)):
+                    if (diff_velocities[vidx] > velocity_limits[vidx]):
+                        logging.warn('Velocity for waypoint %d joint %d violates limits (value: %0.3f, limit: %0.3f)' % 
+                                     (idx, vidx, diff_velocities[vidx], velocity_limits[vidx]))
+                        return True
 
             # Set current to previous
             prev_dt = dt
