@@ -186,6 +186,13 @@ def AdaptTrajectory(traj, new_start, new_goal,robot):
     new_traj = MatrixToTraj(new_traj_matrix,cs,dof,robot)
     return new_traj
 
+
+
+
+def CheckCollision(traj, robot, selfcoll_only=False):
+    
+
+
 class Recorder(object):
     MPEG = 13
 
