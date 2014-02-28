@@ -161,10 +161,10 @@ class Robot(openravepy.Robot):
                 traj = self.RetimeTrajectory(traj)
             # Retime a base trajectory.
             else:
-                max_vel = numpy.concatenate((
-                    self.GetAffineTranslationMaxVels(),
-                    [ self.GetAffineRotationQuatMaxVels() ] * 4))
-                max_accel = 3 * max_vel
+                max_vel = [ self.GetAffineTranslationMaxVels()[0],
+                            self.GetAffineTranslationMaxVels()[1],
+                            self.GetAffineRotationAxisMaxVels()[2] ]
+                max_accel = [3.*v for v in max_vel]
                 openravepy.planningutils.RetimeAffineTrajectory(traj, max_vel,
                                                                 max_accel, False)
 

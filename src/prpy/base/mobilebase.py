@@ -150,6 +150,7 @@ class MobileBase(object):
             Cloned(robot).SetActiveDOFs([], 
                                         affine = openravepy.DOFAffine.X |
                                         openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis)
+
             cloned_traj = planning_method(Cloned(robot), *args, **kw_args);
 
             # Strip inactive DOFs from the trajectory
