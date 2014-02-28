@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import functools, openravepy, numpy
+import functools, logging, openravepy, numpy
 from .. import bind, named_config, planning, util
 from prpy.clone import Clone, Cloned
 
@@ -176,6 +176,60 @@ class Robot(openravepy.Robot):
 
         util.WaitForControllers(active_controllers, timeout=timeout)
         return traj
+
+    def ViolatesVelocityLimits(self, traj):
+        """
+        Checks a trajectory for velocity limit violations
+        @param traj input trajectory
+        """
+
+        # Get the limits that pertain to this trajectory
+        all_velocity_limits = self.GetDOFVelocityLimits()
+        traj_indices = util.GetTrajectoryIndices(traj)
+        velocity_limits = [all_velocity_limits[idx] for idx in traj_indices]
+
+        # Get the velocity group from the configuration specification so
+        #  that we know the offset and number of dofs
+        config_spec = traj.GetConfigurationSpecification()
+        num_waypoints = traj.GetNumWaypoints()
+        
+        # Check for the velocity group
+        has_velocity_group = True
+        try:
+            config_spec.GetGroupFromName('joint_velocities')
+        except openravepy.openrave_exception:
+            logging.warn('Trajectory does not have joint velocities defined')
+            has_velocity_group = False
+
+        # Now check all the waypoints
+        for idx in range(0, num_waypoints):
+
+            wpt = traj.GetWaypoint(idx)
+            
+            if has_velocity_group:
+                # First check the velocities defined for the waypoint
+                velocities = config_spec.ExtractJointValues(wpt, self, traj_indices, 1)
+                if True in (velocities > velocity_limits):
+                    logging.warn('Velocity for waypoint %d violates limits' % idx)
+                    return True
+
+            # Now check the velocities calculated by differencing positions
+            dt = config_spec.ExtractDeltaTime(wpt)
+            values = config_spec.ExtractJointValues(wpt, self, traj_indices, 0)
+
+            if idx > 0:
+                diff_velocities = numpy.fabs(values - prev_values)/(dt - prev_dt)
+                if True in (diff_velocities > velocity_limits):
+                    print diff_velocities
+                    print velocity_limits
+                    logging.warn('Calculated velocity for waypoint %d violates limits' % idx)
+                    return True
+
+            # Set current to previous
+            prev_dt = dt
+            prev_values = values
+
+        return False
 
     def _PlanWrapper(self, planning_method, args, kw_args):
         # Call the planner.
