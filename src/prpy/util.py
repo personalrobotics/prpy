@@ -189,8 +189,43 @@ def AdaptTrajectory(traj, new_start, new_goal,robot):
 
 
 
-def CheckCollision(traj, robot, selfcoll_only=False):
-    return 0
+def IsInCollision(traj, robot, selfcoll_only=False):
+    report = openravepy.CollisionReport()
+    
+    #get trajectory length
+    NN = traj.GetNumWaypoints()
+    ii = 0
+    total_dist = 0.0
+    for ii in range(NN-1):
+        point1 = traj.GetWaypoint(ii)
+        point2 = traj.GetWaypoint(ii+1)
+        dist = 0.0
+        total_dof = robot.GetActiveDOF()
+        for jj in range(total_dof):
+            dist += pow(point1[jj]-point2[jj],2)
+        total_dist += numpy.sqrt(dist)
+    step_dist = 0.04
+    if traj.GetDuration()<0.001:
+        openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
+    total_time = traj.GetDuration()
+    step_time = total_time*step_dist/total_dist
+    
+    #check
+    for time in numpy.arange(0.0,total_time,step_time):
+        point = traj.Sample(time)
+        collision = False
+        with robot.GetEnv():
+            robot.SetActiveDOFValues(point)
+            if robot.CheckSelfCollision(report):
+                collision = True
+            if not collision:
+                if  (not selfcoll_only) and robot.GetEnv().CheckCollision(robot,report):
+                    collision = True
+        if collision:
+            return True        
+                
+    return False    
+            
 
 
 class Recorder(object):
