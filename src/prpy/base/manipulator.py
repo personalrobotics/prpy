@@ -79,6 +79,21 @@ class Manipulator(openravepy.Robot.Manipulator):
         self.GetRobot().SetActiveManipulator(self)
         self.GetRobot().SetActiveDOFs(self.GetArmIndices())
 
+
+    def GetAccelerationLimits(self):
+        active_indices = self.GetIndices()
+        
+        or_accel_limits = self.GetRobot().GetDOFAccelerationLimits()[active_indices]
+        
+        return or_accel_limits
+
+    def GetVelocityLimits(self):
+        active_indices = self.GetIndices()
+        
+        or_velocity_limits = self.GetRobot().GetDOFVelocityLimits()[active_indices]
+        
+        return or_velocity_limits
+
     def SetVelocityLimits(self, velocity_limits, min_accel_time):
         velocity_limits = numpy.array(velocity_limits, dtype='float')
         active_indices = self.GetIndices()

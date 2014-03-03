@@ -113,6 +113,46 @@ class WAM(Manipulator):
             return True
         return False
 
+
+    def GetVelocityLimits(self, openrave=True, owd=True):
+        """
+        Get the OpenRAVE and OWD joint velocity limits. If they
+        do not match, up to some epsilon, the minimum value is taken,
+        and an error is printed.
+        @param openrave flag to set the OpenRAVE velocity limits
+        @param owd flag to set the OWD velocity limits
+        """
+        # Update the OpenRAVE limits.
+        if openrave:
+            or_velocity_limits = Manipulator.GetVelocityLimits(self)
+            if self.simulated or not owd:
+                return or_velocity_limits
+
+        # Update the OWD limits.
+        if owd and not self.simulated:
+            args  = [ 'GetSpeed' ]
+            args_str = ' '.join(args)
+            owd_speed_limits_all = self.controller.SendCommand(args_str)
+            #if we get nothing back, e.g. if the arm isn't running, return openrave lims
+            if owd_speed_limits_all is None:
+                return or_velocity_limits
+
+            owd_speed_limits = map(float, owd_speed_limits_all.split(','));
+            #first 7 numbers are velocity limits
+            owd_velocity_limits = numpy.array(owd_speed_limits[0:len(self.GetIndices())])
+
+            diff_arr = numpy.subtract(or_velocity_limits, owd_velocity_limits)
+            max_diff = max(abs(diff_arr))
+
+            if (max_diff > 0.01):
+                print('GetVelocityLimits Error: openrave and owd limits very different')
+                print('\tOpenrave limits:\t' + str(or_velocity_limits))
+                print('\tOWD limits:\t\t' + str(owd_velocity_limits))
+
+            return numpy.minimum(or_velocity_limits, owd_velocity_limits)
+
+        return or_velocity_limits
+        
     def SetVelocityLimits(self, velocity_limits, min_accel_time,
                           openrave=True, owd=True):
         """
