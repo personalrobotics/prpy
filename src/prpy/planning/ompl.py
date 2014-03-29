@@ -59,12 +59,14 @@ class OMPLPlanner(BasePlanner):
 
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
-        with self.env:
-            try:
-                self.planner.InitPlan(robot, params)
-                status = self.planner.PlanPath(traj, releasegil=True)
-            except Exception as e:
-                raise PlanningError('Planning failed with error: {0:s}'.format(e))
+        try:
+            self.env.Lock()
+            self.planner.InitPlan(robot, params)
+            status = self.planner.PlanPath(traj, releasegil=True)
+        except Exception as e:
+            raise PlanningError('Planning failed with error: {0:s}'.format(e))
+        finally:
+            self.env.Unlock()
 
         from openravepy import PlannerStatus
         if status not in [ PlannerStatus.HasSolution, PlannerStatus.InterruptedWithSolution ]:
