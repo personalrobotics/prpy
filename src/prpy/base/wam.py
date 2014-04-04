@@ -284,9 +284,9 @@ class WAM(Manipulator):
                             new_traj.Insert(int(waypoint_ind), waypoint, path_config_spec)
                             waypoint_ind += 1
 
-                    new_traj = manipulator.GetRobot().BlendTrajectory(new_traj)
-                    new_traj = manipulator.GetRobot().RetimeTrajectory(new_traj)
-                manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=False, blend=False)
+                    #new_traj = manipulator.GetRobot().BlendTrajectory(new_traj)
+                    #new_traj = manipulator.GetRobot().RetimeTrajectory(new_traj)
+                manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=True, blend=True)
 
             return collided_with_obj
         # Trajectory is aborted by OWD because we felt a force.
