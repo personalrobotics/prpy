@@ -152,8 +152,22 @@ def TrajToMatrix(traj,dof):
         traj_matrix[range(i*dof,(i+1)*dof)]=d
     return traj_matrix
 
-def AdaptTrajectory(traj, new_start, new_goal,robot):
-    #this does not collision check
+def AdaptTrajectory(traj, new_start, new_goal, robot):
+    """
+    Adapt an existing trajectory to move between a new start and goal. The
+    trajectory's configuration specification must contain exactly one group
+    called "joint_values". Note that this does NOT collision check the warped
+    trajectory.
+    @param traj input trajectory
+    @param new_start new starting configuration
+    @param new_goal new goal configuration
+    @param robot
+    @return adapted trajectory
+    """
+    # TODO: check joint limits
+    # TODO: support arbitrary trajectory types
+    # TODO: collision check the warped trajectory
+    # TODO: this should not require a robot as a parameter
     cs = traj.GetConfigurationSpecification()
     dof = cs.GetDOF()
     
@@ -185,9 +199,6 @@ def AdaptTrajectory(traj, new_start, new_goal,robot):
     
     new_traj = MatrixToTraj(new_traj_matrix,cs,dof,robot)
     return new_traj
-
-
-
 
 def IsInCollision(traj, robot, selfcoll_only=False):
     report = openravepy.CollisionReport()
