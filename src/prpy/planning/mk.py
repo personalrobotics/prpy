@@ -188,7 +188,6 @@ class MKPlanner(BasePlanner):
                     if offset_angle_norm > last_rot_error + 0.0005:
                         sign_flipper *= -1
                     last_rot_error = offset_angle_norm
-                    print sign_flipper
                     if offset_angle_norm > angular_tolerance:
                         raise PlanningError('Deviated from orientation constraint.')
 
