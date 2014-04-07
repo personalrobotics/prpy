@@ -63,7 +63,11 @@ class MKPlanner(BasePlanner):
     def __str__(self):
         return 'MKPlanner'
 
-    def GetStraightVelocity(self, manip, velocity, initial_hand_pose, nullspace_fn, step_size):
+    #Calculates a change of joint angles to maintain the same orientation, and move the position forward slightly
+        ### NOTE: The sign_flipper is a hack
+        ### Sometimes, it seems changing the direction of the error term caused it to succeed
+        ### sign_flipper is monitered by the planner. If the orientation error starts increasing, it flips the sign of the error term
+    def GetStraightVelocity(self, manip, velocity, initial_hand_pose, nullspace_fn, step_size, sign_flipper = 1):
         robot = manip.GetRobot()
         current_hand_pose = manip.GetEndEffectorTransform()
         initial_position = initial_hand_pose[0:3, 3]
@@ -79,11 +83,11 @@ class MKPlanner(BasePlanner):
         initial_ori = openravepy.quatFromRotationMatrix(initial_hand_pose)
         current_ori = openravepy.quatFromRotationMatrix(current_hand_pose)
         choices_ori = [ current_ori - initial_ori, current_ori + initial_ori ]
-        error_ori = min(choices_ori, key=lambda q: numpy.linalg.norm(q))
+        error_ori = sign_flipper*min(choices_ori, key=lambda q: numpy.linalg.norm(q))
 
         # Jacobian pseudo-inverse.
         jacobian_spatial = manip.CalculateJacobian()
-        jacobian_angular = manip.CalculateRotationJacobian()
+        jacobian_angular = manip.CalculateRotationJacobian() #this function seems very buggy/wrong
         jacobian = numpy.vstack((jacobian_spatial, jacobian_angular))
         jacobian_pinv = numpy.linalg.pinv(jacobian)
 
@@ -91,6 +95,7 @@ class MKPlanner(BasePlanner):
         nullspace_projector = numpy.eye(jacobian.shape[1]) - numpy.dot(jacobian_pinv, jacobian)
         nullspace_goal = nullspace_fn(robot)
         pose_error = numpy.hstack((error_pos, error_ori))
+
         return numpy.dot(jacobian_pinv, pose_error) + numpy.dot(nullspace_projector, nullspace_goal)
 
     @PlanningMethod
@@ -145,6 +150,8 @@ class MKPlanner(BasePlanner):
 
             start_time = time.time()
             current_distance = 0.0
+            sign_flipper = 1
+            last_rot_error = 9999999999.0
             try:
                 while current_distance < max_distance:
                     # Check for a timeout.
@@ -153,7 +160,7 @@ class MKPlanner(BasePlanner):
                         raise PlanningError('Reached time limit.')
 
                     # Compute joint velocities using the Jacobian pseudoinverse.
-                    q_dot = self.GetStraightVelocity(manip, direction, initial_pose, nullspace, step_size)
+                    q_dot = self.GetStraightVelocity(manip, direction, initial_pose, nullspace, step_size, sign_flipper=sign_flipper)
                     q += q_dot
                     robot.SetDOFValues(q, active_dof_indices)
 
@@ -177,7 +184,12 @@ class MKPlanner(BasePlanner):
                     # Check our orientation against the constraint.
                     offset_pose = numpy.dot(numpy.linalg.inv(current_pose), initial_pose)
                     offset_angle = openravepy.axisAngleFromRotationMatrix(offset_pose)
-                    if numpy.linalg.norm(offset_angle) > angular_tolerance:
+                    offset_angle_norm = numpy.linalg.norm(offset_angle)
+                    if offset_angle_norm > last_rot_error + 0.0005:
+                        sign_flipper *= -1
+                    last_rot_error = offset_angle_norm
+                    print sign_flipper
+                    if offset_angle_norm > angular_tolerance:
                         raise PlanningError('Deviated from orientation constraint.')
 
                     traj.Insert(traj.GetNumWaypoints(), q)
