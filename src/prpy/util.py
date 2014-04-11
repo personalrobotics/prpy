@@ -253,6 +253,12 @@ class Recorder(object):
         env.Add(self.module)
 
     def __enter__(self):
+        self.Start()
+
+    def __exit__(self, type, value, traceback):
+        self.Stop()
+        
+    def start(self):
         cmd = 'Start {width:d} {height:d} 30 codec {codec:d} timing realtime filename {filename:s}'\
               '\nviewer {viewer:s}'.format(
             width = self.width,
@@ -263,8 +269,9 @@ class Recorder(object):
         )
         self.module.SendCommand(cmd)
 
-    def __exit__(self, type, value, traceback):
+    def stop(self):
         self.module.SendCommand('Stop')
+
 
 class Timer(object):
     def __init__(self, message):
