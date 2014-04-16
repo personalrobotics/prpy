@@ -126,7 +126,8 @@ class MetaPlanner(Planner):
                 formatted_docstring = ''
                 
                 if isinstance(planner, MetaPlanner):
-                    formatted_docstring += planner_method.__doc__
+                    if planner_method.__doc__ is not None:
+                        formatted_docstring += planner_method.__doc__
                 else:
                     # Header for this planner.
                     formatted_docstring += str(planner) + ': ' + planner_method.__name__ + '\n'
