@@ -71,4 +71,21 @@ def initialize_logging():
     except ImportError:
         logging.warning('Install termcolor to colorize log messages.')
 
+    # Disable spammy and ROS loggers.
+    spammy_logger_names = [ 'rospy.topics', 'openravepy.databases.inversekinematics' ]
+    for spammy_logger_name in spammy_logger_names:
+        spammy_logger = logging.getLogger(spammy_logger_name)
+        spammy_logger.setLevel(logging.WARNING)
+
     return base_logger
+
+def remove_ros_logger():
+    logger = logging.getLogger()
+    new_handlers = []
+
+    for handler in logger.handlers:
+        if type(handler).__name__ != 'RosStreamHandler':
+            new_handlers.append(handler)
+
+    logger.handlers = new_handlers
+
