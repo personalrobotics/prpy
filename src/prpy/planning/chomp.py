@@ -117,6 +117,41 @@ class CHOMPPlanner(BasePlanner):
 
         return traj
 
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, lambda_=100.0, n_iter=100, goal_tolerance=0.01, **kw_args):
+        """
+        Plan to a goal TSR.
+        @param robot
+        @param tsrchains A TSR chain with a single goal tsr
+        @return traj
+        """
+        if not self.initialized:
+            raise UnsupportedPlanningError('CHOMP requires a distance field')
+
+        manipulator_index = robot.GetActiveManipulatorIndex()
+        start_config = robot.GetActiveDOFValues()
+        
+        if len(tsrchains) != 1:
+            raise UnsupportedPlanningError('CHOMP')
+        
+        tsrchain = tsrchains[0]
+        if not tsrchain.sample_goal or len(tsrchain.TSRs) > 1:
+            raise UnsupportedPlanningError('CHOMP: TSR chain must contain a single goal tsr')
+        
+        try:
+            goal_tsr = tsrchain.TSRs[0]
+            traj = self.module.runchomp(robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
+                                        lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
+                                        releasegil=True, **kw_args)
+
+            traj = openravepy.planningutils.ReverseTrajectory(traj)
+
+        except RuntimeError, e:
+            raise PlanningError(str(e))
+
+        return traj
+
+
     def ComputeDistanceField(self, robot):
         # Clone the live environment into the planning environment.
         live_robot = robot
