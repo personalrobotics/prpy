@@ -62,7 +62,7 @@ class Robot(openravepy.Robot):
         delegate_method = getattr(self.planner, name)
 
         # Resolve planner calls through the robot.planner field.
-        if self.planner.is_planning_method(name):
+        if self.planner.has_planning_method(name):
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return self._PlanWrapper(delegate_method, args, kw_args) 
@@ -235,6 +235,7 @@ class Robot(openravepy.Robot):
 
     def _PlanWrapper(self, planning_method, args, kw_args):
         # Call the planner.
+        print 'CALLING', planning_method, args, kw_args
         traj = planning_method(self, *args, **kw_args)
 
         # Strip inactive DOFs from the trajectory.

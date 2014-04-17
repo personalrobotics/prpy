@@ -71,7 +71,7 @@ class PlanningMethod(object):
         return wrapper
 
 class Planner(object):
-    def is_planning_method(self, method_name):
+    def has_planning_method(self, method_name):
         if hasattr(self, method_name):
             method = getattr(self, method_name)
             if hasattr(method, 'is_planning_method'):
@@ -82,7 +82,7 @@ class Planner(object):
             return False
 
     def get_planning_method_names(self):
-        return filter(lambda method_name: self.is_planning_method(method_name), dir(self))
+        return filter(lambda method_name: self.has_planning_method(method_name), dir(self))
 
 class BasePlanner(Planner):
     def __init__(self):
@@ -92,9 +92,9 @@ class MetaPlanner(Planner):
     def __init__(self):
         self._planners = list()
 
-    def is_planning_method(self, method_name):
+    def has_planning_method(self, method_name):
         for planner in self._planners:
-            if planner.is_planning_method(method_name):
+            if planner.has_planning_method(method_name):
                 return True
 
         return False
@@ -107,6 +107,10 @@ class MetaPlanner(Planner):
         return list(method_names)
 
     def __getattr__(self, method):
+        if not self.has_planning_method(method):
+            raise AttributeError("Object {:s} has no attribute '{:s}'.".format(
+                                 repr(self), method))
+
         def meta_wrapper(*args, **kw_args):
             return self.plan(method, args, kw_args)
 
@@ -162,8 +166,12 @@ class Sequence(MetaPlanner):
         for planner in self._planners:
             try:
                 if hasattr(planner, method):
+                    logger.debug('Sequence - Calling planner "%s".', str(planner))
                     planner_method = getattr(planner, method)
                     return planner_method(*args, **kw_args)
+                else:
+                    logger.debug('Sequence - Skipping planner "%s"; does not have "%s" method.',
+                                 str(planner), method)
             except MetaPlanningError as e:
                 errors[planner] = e
             except Exception as e:
