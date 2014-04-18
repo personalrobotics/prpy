@@ -53,7 +53,7 @@ class Manipulator(openravepy.Robot.Manipulator):
 
         # Resolve planner calls through the robot.planner field.
         # FIXME: We need to replicate the _PlanWrapper functionality here.
-        if self.GetRobot().planner.is_planning_method(name):
+        if self.GetRobot().planner.has_planning_method(name):
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return self._PlanWrapper(delegate_method, args, kw_args) 
