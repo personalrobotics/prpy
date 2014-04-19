@@ -98,7 +98,7 @@ class RankedTests(MetaPlannerTests):
         # Clean up.
         test_thread.join()
 
-    def test_SecondPlannerSucceeds_WaitfsForFirstPlanneer(self):
+    def test_SecondPlannerSucceeds_WaitsForFirstPlanner(self):
         first_planner = SuccessPlanner(self.traj, delay=True)
         second_planner = SuccessPlanner(self.traj, delay=True)
         planner = prpy.planning.Ranked(first_planner, second_planner)
