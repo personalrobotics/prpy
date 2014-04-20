@@ -32,6 +32,8 @@ import contextlib, logging, numpy, openravepy, rospkg
 import prpy.tsr
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
+logger = logging.getLogger('prpy.planning.chomp')
+
 class CHOMPPlanner(BasePlanner):
     def __init__(self):
         super(CHOMPPlanner, self).__init__()
@@ -68,7 +70,7 @@ class CHOMPPlanner(BasePlanner):
             return self.module.runchomp(robot=robot, adofgoal=goal,
                                         lambda_=lambda_, n_iter=n_iter,
                                         releasegil=True, **kw_args)
-        except RuntimeError as e:
+        except Exception as e:
             raise PlanningError(str(e))
 
     @PlanningMethod

@@ -240,11 +240,9 @@ class Ranked(MetaPlanner):
                         traj = result
                         break
                 elif not isinstance(result, PlanningError):
-                    # TODO: Fill in the planning errors.
-                    raise MetaPlanningError('Planner %s returned %r of type %r; '
-                                            'expected a trajectory or PlanningError.'\
-                                            % (planner, result, type(result)), list())
-            
+                    logger.warning('Planner %s returned %r of type %r; '
+                                   'expected a trajectory or PlanningError.',
+                                   str(planner), result, type(result))
 
             # Wait for a planner to finish.
             if not all_done:
