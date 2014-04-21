@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, functools, openravepy
+import abc, logging, functools, openravepy
 import time
 from .. import ik_ranking
 from ..clone import Clone, Cloned
@@ -89,6 +89,8 @@ class BasePlanner(Planner):
         self.env = openravepy.Environment()
 
 class MetaPlanner(Planner):
+    __metaclass__ = abc.ABCMeta
+
     def __init__(self):
         self._planners = list()
 
@@ -106,20 +108,39 @@ class MetaPlanner(Planner):
 
         return list(method_names)
 
-    def __getattr__(self, method):
-        if not self.has_planning_method(method):
+    @abc.abstractmethod
+    def get_planners(self, method_name):
+        pass
+
+    def get_planners_recursive(self, method):
+        all_planners = set()
+
+        for planner in self.get_planners(method):
+            if isinstance(planner, MetaPlanner):
+                sub_planners = planner.get_planners_recursive(method)
+                all_planners = all_planners.union(sub_planners)
+            else:
+                all_planners.add(planner)
+
+        return list(all_planners)
+    
+    def __dir__(self):
+        return self.get_planning_method_names()
+
+    def __getattr__(self, method_name):
+        if not self.has_planning_method(method_name):
             raise AttributeError("Object {:s} has no attribute '{:s}'.".format(
-                                 repr(self), method))
+                                 repr(self), method_name))
 
         def meta_wrapper(*args, **kw_args):
-            return self.plan(method, args, kw_args)
+            return self.plan(method_name, args, kw_args)
 
         # Grab docstrings from the delegate planners.
-        meta_wrapper.__name__ = method
+        meta_wrapper.__name__ = method_name
         docstrings = list()
-        for planner in self._planners:
-            if hasattr(planner, method):
-                planner_method = getattr(planner, method)
+        for planner in self.get_planners_recursive(method_name):
+            if hasattr(planner, method_name):
+                planner_method = getattr(planner, method_name)
                 docstrings.append((planner, planner_method))
 
         # Concatenate the docstrings.
@@ -149,9 +170,6 @@ class MetaPlanner(Planner):
                 meta_wrapper.__doc__ += formatted_docstring
 
         return meta_wrapper
-    
-    def __dir__(self):
-        return self.get_planning_method_names()
 
 class Sequence(MetaPlanner):
     def __init__(self, *planners):
@@ -159,6 +177,9 @@ class Sequence(MetaPlanner):
 
     def __str__(self):
         return 'Sequence({0:s})'.format(', '.join(map(str, self._planners)))
+
+    def get_planners(self, method_name):
+        return [ planner for planner in self._planners if hasattr(planner, method_name) ]
 
     def plan(self, method, args, kw_args):
         errors = dict()
@@ -186,6 +207,9 @@ class Ranked(MetaPlanner):
 
     def __str__(self):
         return 'Ranked({0:s})'.format(', '.join(map(str, self._planners)))
+
+    def get_planners(self, method_name):
+        return [ planner for planner in self._planners if hasattr(planner, method_name) ]
 
     def plan(self, method, args, kw_args):
         from threading import Condition, Thread
