@@ -278,10 +278,3 @@ class Ranked(MetaPlanner):
             return traj
         else:
             raise MetaPlanningError('All planners failed.', dict(zip(self._planners, results)))
-
-class Fastest(MetaPlanner):
-    def __init__(self, *planners):
-        self._planners = planners
-
-    def plan(self, method, args, kw_args):
-        raise NotImplemented
