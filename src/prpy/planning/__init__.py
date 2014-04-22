@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from base import PlanningError, UnsupportedPlanningError, Planner, Sequence, Ranked, Fastest
+from base import PlanningError, UnsupportedPlanningError, Planner, Sequence, Ranked
 from chomp import CHOMPPlanner
 from cbirrt import CBiRRTPlanner
 from ompl import OMPLPlanner
