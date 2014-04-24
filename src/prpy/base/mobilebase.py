@@ -50,6 +50,16 @@ class MobileBase(object):
         self.simulated = sim
         self.robot = robot
 
+    def __dir__(self):
+        # We have to manually perform a lookup in InstanceDeduplicator because
+        # __methods__ bypass __getattribute__. 
+        self = bind.InstanceDeduplicator.get_canonical(self)
+
+        # Add planning methods to the tab-completion list.
+        method_names = set(self.__dict__.keys())
+        method_names.update(self.robot.base_planner.get_planning_method_names())
+        return list(method_names)
+
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__. 
@@ -57,7 +67,7 @@ class MobileBase(object):
         delegate_method = getattr(self.robot.base_planner, name)
 
         # Resolve planner calls through the robot.planner field.
-        if self.robot.base_planner.is_planning_method(name):
+        if self.robot.base_planner.has_planning_method(name):
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return self._BasePlanWrapper(delegate_method, args, kw_args) 
