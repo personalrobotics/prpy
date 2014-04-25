@@ -76,9 +76,14 @@ def Clone(env, clone_env=None, destroy=None, options=openravepy.CloningOptions.B
     if clone_env is None:
         clone_env = openravepy.Environment()
 
-    clone_env.Clone(env, options)
-    clone_env.__class__ = ClonedEnvironment
-    clone_env.__init__(env, destroy)
+    with env:
+        clone_env.Lock()
+        try:
+            clone_env.Clone(env, options)
+            clone_env.__class__ = ClonedEnvironment
+            clone_env.__init__(env, destroy)
+        finally:
+            clone_env.Unlock()
     return clone_env
 
 def Cloned(*instances):
