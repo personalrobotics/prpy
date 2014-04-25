@@ -170,12 +170,10 @@ class AllDisabled:
               if self.padding_only:
                  for link in body.GetLinks():
                     if link.GetName().startswith('padding_'):
-                       logging.info('Disabling link: %s',link.GetName())
-                       print 'Disabling link: %s' % link.GetName()
+                       logging.debug('Disabling link: %s',link.GetName())
                        link.Enable(False)
               else:
-                 logging.info('Disabling body: %s',body.GetName())
-                 print 'Disabling body: %s' % body.GetName()
+                 logging.debug('Disabling body: %s',body.GetName())
                  body.Enable(False)
 
    def __exit__(self, exc_type, exc_val, exc_tb):
@@ -185,12 +183,10 @@ class AllDisabled:
               if self.padding_only:
                  for link in body.GetLinks():
                     if link.GetName().startswith('padding_'):
-                       logging.info('Enabling link: %s',link.GetName())
-                       print 'Enabling link: %s' % link.GetName()
+                       logging.debug('Enabling link: %s',link.GetName())
                        link.Enable(True)
               else:
-                 logging.info('Enabling body: %s',body.GetName())
-                 print 'Enabling body: %s' % body.GetName()
+                 logging.debug('Enabling body: %s',body.GetName())
                  body.Enable(True)
 
        return False
