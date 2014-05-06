@@ -44,14 +44,7 @@ class SBPLPlanner(BasePlanner):
         return 'SBPL'
 
     def SetPlannerParameters(self, params_yaml):
-        self.planner_params = []
-        for k, v in params_yaml.iteritems():
-            if k == 'actions':
-                for action in v:
-                    action_params = [str(action['dx']), str(action['dy']), str(action['rv']), str(action['dt'])]
-                    self.planner_params += ["action", ' '.join(action_params)]
-            else:                
-                self.planner_params += [k, str(v)]
+        self.planner_params = params_yaml
 
     @PlanningMethod
     def PlanToBasePose(self, robot, goal_pose, **kw_args):
@@ -79,10 +72,8 @@ class SBPLPlanner(BasePlanner):
 
         limits = robot.GetAffineTranslationLimits();
         extents = [limits[0][0], limits[1][0], limits[0][1], limits[1][1]];
-        extra_params += ["extents", " ".join([str(e) for e in extents])]
-        extra_params_str = ' '.join(extra_params)
-        print 'extra params: ', extra_params_str
-        params.SetExtraParameters(extra_params_str)
+        extra_params["extents"] = extents
+        params.SetExtraParameters(str(extra_params))
 
         traj = openravepy.RaveCreateTrajectory(self.env, '')
  
