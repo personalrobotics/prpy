@@ -276,8 +276,12 @@ class WAM(Manipulator):
 
                         waypoint = traj_config_spec.ExtractJointValues(traj_sample, manipulator.GetRobot(), manipulator.GetArmIndices())
                         manipulator.SetDOFValues(waypoint)
-                        if manipulator.GetRobot().GetEnv().CheckCollision(manipulator.GetRobot()):
-                            collided_with_obj = True
+                        #if manipulator.GetRobot().GetEnv().CheckCollision(manipulator.GetRobot()):
+                        for body in manipulator.GetRobot().GetEnv().GetBodies():
+                            if manipulator.GetRobot().GetEnv().CheckCollision(manipulator.GetRobot(), body):
+                                collided_with_obj = True
+                                break
+                        if collided_with_obj:
                             break
                         else:
                             #waypoint = numpy.append(waypoint,t)
