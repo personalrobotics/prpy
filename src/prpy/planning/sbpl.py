@@ -47,11 +47,13 @@ class SBPLPlanner(BasePlanner):
         self.planner_params = params_yaml
 
     @PlanningMethod
-    def PlanToBasePose(self, robot, goal_pose, **kw_args):
+    def PlanToBasePose(self, robot, goal_pose, timelimit=60.0, return_first=True, **kw_args):
         """
         Plan to a base pose using SBPL
         @param robot
         @param goal_pose desired base pose
+        @param timelimit timeout in seconds
+        @param return_first return the first path found
         """
         params = openravepy.Planner.PlannerParameters()
 
@@ -73,8 +75,17 @@ class SBPLPlanner(BasePlanner):
         limits = robot.GetAffineTranslationLimits();
         extents = [limits[0][0], limits[1][0], limits[0][1], limits[1][1]];
         extra_params["extents"] = extents
-        params.SetExtraParameters(str(extra_params))
 
+        extra_params["timelimit"] = timelimit
+        if return_first:
+            extra_params["return_first"] = return_first
+
+        extra_params["initial_eps"] = 1.0
+
+        for key, value in kw_args.iteritems():
+            extra_params[key] = value
+
+        params.SetExtraParameters(str(extra_params))
         traj = openravepy.RaveCreateTrajectory(self.env, '')
  
         try:
