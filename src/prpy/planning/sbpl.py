@@ -47,13 +47,13 @@ class SBPLPlanner(BasePlanner):
         self.planner_params = params_yaml
 
     @PlanningMethod
-    def PlanToBasePose(self, robot, goal_pose, timelimit=60.0, return_first=True, **kw_args):
+    def PlanToBasePose(self, robot, goal_pose, timelimit=60.0, return_first=False, **kw_args):
         """
         Plan to a base pose using SBPL
         @param robot
         @param goal_pose desired base pose
         @param timelimit timeout in seconds
-        @param return_first return the first path found
+        @param return_first return the first path found (if true, the planner will run until a path is found, ignoring the time limit)
         """
         params = openravepy.Planner.PlannerParameters()
 
@@ -78,7 +78,9 @@ class SBPLPlanner(BasePlanner):
 
         extra_params["timelimit"] = timelimit
         if return_first:
-            extra_params["return_first"] = return_first
+            extra_params["return_first"] = 1
+        else:
+            extra_params["return_first"] = 0
 
         extra_params["initial_eps"] = 1.0
 
