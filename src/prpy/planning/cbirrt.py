@@ -62,7 +62,7 @@ class CBiRRTPlanner(BasePlanner):
 
         # FIXME: Why can't we write to anything other than cmovetraj.txt or
         # /tmp/cmovetraj.txt with CBiRRT?
-        traj_path = '/tmp/cmovetraj.txt'
+        traj_path = 'cmovetraj.txt'
         args += [ 'filename', traj_path ]
         args_str = ' '.join(args)
 
