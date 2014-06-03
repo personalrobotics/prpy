@@ -237,19 +237,19 @@ class WAM(Manipulator):
                 manipulator.SetActive()
                 traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
                                                            execute=False, **kw_args)
-                #traj = manipulator.GetRobot().BlendTrajectory(traj)
-                #traj = manipulator.GetRobot().RetimeTrajectory(traj, stop_on_ft=True, force_direction=force_direction,
-                #                                               force_magnitude=max_force, torque=max_torque)
-                #traj = manipulator.GetRobot().RetimeTrajectory(traj, synchronize=False)
+                traj = manipulator.GetRobot().BlendTrajectory(traj)
+                traj = manipulator.GetRobot().RetimeTrajectory(traj, stop_on_ft=True, force_direction=force_direction,
+                                                               force_magnitude=max_force, torque=max_torque)
 
 
 	collided_with_obj = False
         try:
             if not manipulator.simulated:
                 manipulator.hand.TareForceTorqueSensor()
-                manipulator.GetRobot().ExecuteTrajectory(traj, execute=True, retime=True, blend=True, stop_on_ft=True, 
-								force_direction=force_direction, force_magnitude=max_force,
-								torque=max_torque)
+                manipulator.GetRobot().ExecuteTrajectory(traj, execute=True, retime=True, blend=False) 
+#                manipulator.GetRobot().ExecuteTrajectory(traj, execute=True, retime=True, blend=True, stop_on_ft=True, 
+#								force_direction=force_direction, force_magnitude=max_force,
+#								torque=max_torque)
                 for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
                     ignore_col_with.Enable(oldstate)
             else:
