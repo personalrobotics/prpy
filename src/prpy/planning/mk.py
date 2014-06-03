@@ -129,6 +129,13 @@ class MKPlanner(BasePlanner):
         elif angular_tolerance < 0:
             raise ValueError('Angular tolerance must be non-negative.')
 
+        # save all active bodies so we only check collision with those
+        active_bodies = []
+        for body in self.env.GetBodies():
+            if body.IsEnabled():
+                active_bodies.append(body)
+        
+
         # Normalize the direction vector.
         direction  = numpy.array(direction, dtype='float')
         direction /= numpy.linalg.norm(direction)
@@ -165,9 +172,11 @@ class MKPlanner(BasePlanner):
                     robot.SetDOFValues(q, active_dof_indices)
 
                     # Check for collisions.
-                    if self.env.CheckCollision(robot):
-                        raise PlanningError('Encountered collision.')
-                    elif robot.CheckSelfCollision():
+                    #if self.env.CheckCollision(robot):
+                    for body in active_bodies:
+                        if self.env.CheckCollision(robot, body):
+                            raise PlanningError('Encountered collision.')
+                    if robot.CheckSelfCollision():
                         raise PlanningError('Encountered self-collision.')
                     # Check for joint limits.
                     elif not (limits_lower < q).all() or not (q < limits_upper).all():
