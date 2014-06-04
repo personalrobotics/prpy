@@ -108,10 +108,11 @@ def CreateAndDiscretizeTSR(obj, manip,
         #now sample from the cylinder
         for r in numpy.arange(-numpy.pi,numpy.pi,1.2):
             trans = cylinderTSR.sample([0,0,0,0,0,r])
-            sol = None
-            sol = manip.FindIKSolution(trans,True)
-            if sol is not None:
-                discretization.append(sol)
+            sols = None
+            sols = manip.FindIKSolutions(trans,True)
+            if sols is not None:
+                for sol in sols:
+                    discretization.append(sol)
     else:
         Bw = numpy.array([[  .0,    .0],
                           [  .0,    .0],
@@ -127,10 +128,11 @@ def CreateAndDiscretizeTSR(obj, manip,
             Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
             boxTSR1 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
             trans = boxTSR1.sample([0,0,0,0,0,r])
-            sol = None
-            sol = manip.FindIKSolution(trans,True)
-            if sol is not None:
-                discretization.append(sol)
+            sols = None
+            sols = manip.FindIKSolutions(trans,True)
+            if sols is not None:
+                for sol in sols:
+                    discretization.append(sol)
                 
                 
             Tw_ee = Tw_e.copy()
@@ -138,20 +140,22 @@ def CreateAndDiscretizeTSR(obj, manip,
             Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
             boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
             trans = boxTSR2.sample([0,0,0,0,0,r])
-            sol = None
-            sol = manip.FindIKSolution(trans,True)
-            if sol is not None:
-                discretization.append(sol)
+            sols = None
+            sols = manip.FindIKSolutions(trans,True)
+            if sols is not None:
+                for sol in sols:
+                    discretization.append(sol)
                 
             Tw_ee = Tw_e.copy()
             Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
             Tw_ee[:3, 3] += [0, obj_bb.extents()[1] + ee_offset, 0.]
             boxTSR3 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)        
             trans = boxTSR3.sample([0,0,0,0,0,r])
-            sol = None
-            sol = manip.FindIKSolution(trans,True)
-            if sol is not None:
-                discretization.append(sol)    
+            sols = None
+            sols = manip.FindIKSolutions(trans,True)
+            if sols is not None:
+                for sol in sols:
+                    discretization.append(sol)  
                    
             Tw_ee = Tw_e.copy()
             Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, numpy.pi/2])))
@@ -169,10 +173,11 @@ def CreateAndDiscretizeTSR(obj, manip,
             Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
             boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
             trans = boxTSR8.sample([0,0,0,0,0,r])
-            sol = None
-            sol = manip.FindIKSolution(trans,True)
-            if sol is not None:
-                discretization.append(sol)      
+            sols = None
+            sols = manip.FindIKSolutions(trans,True)
+            if sols is not None:
+                for sol in sols:
+                    discretization.append(sol)    
                 
     return discretization                
                 
