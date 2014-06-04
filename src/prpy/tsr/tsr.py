@@ -113,7 +113,7 @@ class TSR(object): # force new-style class
          Bwvals = vals
       else:
          raise ValueError('vals must be of length %d or 6!' % Bwdims)
-      print 'Bwvals[5]:', Bwvals[5]
+      #print 'Bwvals[5]:', Bwvals[5]
       xyzypr = [Bwvals[0], Bwvals[1], Bwvals[2], Bwvals[5], Bwvals[4], Bwvals[3]]
       Tw = kin.pose_to_H(kin.pose_from_xyzypr(xyzypr))
       trans = numpy.dot(numpy.dot(self.T0_w,Tw), self.Tw_e)

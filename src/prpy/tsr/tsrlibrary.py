@@ -62,6 +62,121 @@ def GetCylinderTSR(radius, height, manip, T0_w = numpy.eye(4), Tw_e = numpy.eye(
     return cylinderTSR
 
 
+def CreateAndDiscretizeTSR(obj, manip, 
+                              T0_w = numpy.eye(4),
+                              Tw_e = numpy.eye(4),
+                              start_tsr = True,
+                              goal_tsr = False,
+                              ee_offset = 0.14):
+                              
+    discretization = []
+    
+    # First grab the manipulator index, this is needed in the tsr specification
+    with manip.GetRobot().GetEnv():
+        with manip.GetRobot():
+            manip.SetActive()
+            manipidx = manip.GetRobot().GetActiveManipulatorIndex()
+
+    # We will use the bounding box to attempt to infer the shape of the object
+    with manip.GetRobot().GetEnv():
+        with obj:
+            # Assumption: the coordinate frame of the object is axis aligned
+            identity_transform = numpy.eye(4)
+            obj.SetTransform(identity_transform)
+            obj_bb = obj.ComputeAABB()
+
+    
+    # first check if we have a cylinder
+    # Assumption: Anything with approximately matching x and y dimensions is a cylinder
+    if numpy.abs(obj_bb.extents()[0] - obj_bb.extents()[1]) < 0.001:
+        
+        # We have a cylinder
+        radius = obj_bb.extents()[0] + ee_offset
+        height = obj_bb.pos()[2]  # grasp in the middle
+        
+        Bw = numpy.array([[  .0,    .0],
+                      [  .0,    .0],
+                      [.0,.0],
+                      [  .0,    .0],   
+                      [  .0,    .0],   
+                      [ -numpy.pi,    numpy.pi]])
+        Tw_ee = Tw_e.copy()
+        Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
+        Tw_ee[:3,3] = [0, radius, height/2]
+        cylinderTSR = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+        
+        #now sample from the cylinder
+        for r in numpy.arange(-numpy.pi,numpy.pi,1.2):
+            trans = cylinderTSR.sample([0,0,0,0,0,r])
+            sol = None
+            sol = manip.FindIKSolution(trans,True)
+            if sol is not None:
+                discretization.append(sol)
+    else:
+        Bw = numpy.array([[  .0,    .0],
+                          [  .0,    .0],
+                          [-0.0, 0.0],
+                          [  .0,    .0],   
+                          [  .0,    .0],   
+                          [  .0,    .0]]) 
+        max_spread = 0.2
+
+        if 2.0*obj_bb.extents()[1] < max_spread:
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([-numpy.pi/2, 0, 0]))
+            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
+            boxTSR1 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            trans = boxTSR1.sample([0,0,0,0,0,r])
+            sol = None
+            sol = manip.FindIKSolution(trans,True)
+            if sol is not None:
+                discretization.append(sol)
+                
+                
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([-numpy.pi/2, 0, 0]), rodrigues([0, 0, numpy.pi])))
+            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
+            boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            trans = boxTSR2.sample([0,0,0,0,0,r])
+            sol = None
+            sol = manip.FindIKSolution(trans,True)
+            if sol is not None:
+                discretization.append(sol)
+                
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
+            Tw_ee[:3, 3] += [0, obj_bb.extents()[1] + ee_offset, 0.]
+            boxTSR3 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)        
+            trans = boxTSR3.sample([0,0,0,0,0,r])
+            sol = None
+            sol = manip.FindIKSolution(trans,True)
+            if sol is not None:
+                discretization.append(sol)    
+                   
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, numpy.pi/2])))
+            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
+            boxTSR7 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)  
+            trans = boxTSR7.sample([0,0,0,0,0,r])
+            sol = None
+            sol = manip.FindIKSolution(trans,True)
+            if sol is not None:
+                discretization.append(sol)    
+                
+                
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2])))
+            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
+            boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            trans = boxTSR8.sample([0,0,0,0,0,r])
+            sol = None
+            sol = manip.FindIKSolution(trans,True)
+            if sol is not None:
+                discretization.append(sol)      
+                
+    return discretization                
+                
+                
 def GetTSRChainsForObjectGrab(obj, manip,
                               T0_w = numpy.eye(4),
                               Tw_e = numpy.eye(4),
