@@ -122,62 +122,68 @@ def CreateAndDiscretizeTSR(obj, manip,
                           [  .0,    .0]]) 
         max_spread = 0.2
 
-        if 2.0*obj_bb.extents()[1] < max_spread:
+        # z points up, y to the right, x out of the plane
+        if 2.0*obj_bb.extents()[0] < max_spread: # grasp from left or right
+            # left
             Tw_ee = Tw_e.copy()
             Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([-numpy.pi/2, 0, 0]))
             Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
             boxTSR1 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            trans = boxTSR1.sample([0,0,0,0,0,r])
+            trans = boxTSR1.sample([0,0,0,0,0,0])
             sols = None
             sols = manip.FindIKSolutions(trans,True)
             if sols is not None:
                 for sol in sols:
                     discretization.append(sol)
                 
-                
+            # right
             Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([-numpy.pi/2, 0, 0]), rodrigues([0, 0, numpy.pi])))
-            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
-            boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            trans = boxTSR2.sample([0,0,0,0,0,r])
-            sols = None
-            sols = manip.FindIKSolutions(trans,True)
-            if sols is not None:
-                for sol in sols:
-                    discretization.append(sol)
-                
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],rodrigues([numpy.pi/2, 0, 0]))
             Tw_ee[:3, 3] += [0, obj_bb.extents()[1] + ee_offset, 0.]
             boxTSR3 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)        
-            trans = boxTSR3.sample([0,0,0,0,0,r])
+            trans = boxTSR3.sample([0,0,0,0,0,0])
             sols = None
             sols = manip.FindIKSolutions(trans,True)
             if sols is not None:
                 for sol in sols:
                     discretization.append(sol)  
-                   
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, numpy.pi/2])))
-            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-            boxTSR7 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)  
-            trans = boxTSR7.sample([0,0,0,0,0,r])
-            sol = None
-            sol = manip.FindIKSolution(trans,True)
-            if sol is not None:
-                discretization.append(sol)    
-                
-                
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2])))
-            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-            boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            trans = boxTSR8.sample([0,0,0,0,0,r])
+
+        if 2.0*obj_bb.extents()[1] < max_spread: #grasp from front or behind
+            #behind
+            Tw_ee = Tw_e.copy() 
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], numpy.dot(rodrigues([0,0, -numpy.pi/2]), rodrigues([-numpy.pi/2,0,0])))
+            Tw_ee[:3,3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
+            boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            trans = boxTSR2.sample([0,0,0,0,0,0])
             sols = None
             sols = manip.FindIKSolutions(trans,True)
             if sols is not None:
                 for sol in sols:
-                    discretization.append(sol)    
+                    discretization.append(sol)
+            
+            #front   
+            Tw_ee = Tw_e.copy()
+            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([-numpy.pi/2, 0, 0]), rodrigues([0, -numpy.pi/2, 0])))
+            Tw_ee[:3, 3] += [obj_bb.extents()[0] + ee_offset, 0., 0.]
+            boxTSR7 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)  
+            trans = boxTSR7.sample([0,0,0,0,0,0])
+            sols = None
+            sols = manip.FindIKSolutions(trans,True)
+            if sols is not None:
+              for sol in sols:
+                discretization.append(sol)    
+                
+                
+            # Tw_ee = Tw_e.copy()
+            # Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2])))
+            # Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
+            # boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
+            # trans = boxTSR8.sample([0,0,0,0,0,r])
+            # sols = None
+            # sols = manip.FindIKSolutions(trans,True)
+            # if sols is not None:
+            #     for sol in sols:
+            #         discretization.append(sol)    
                 
     return discretization                
                 
