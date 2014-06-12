@@ -34,8 +34,19 @@ from endeffector import EndEffector
 
 class BarrettHand(EndEffector):
     def __init__(self, sim, manipulator, owd_namespace, bhd_namespace, ft_sim=True):
+        """End-effector wrapper for the BarrettHand.
+        This class wraps a BarrettHand end-effector that is controlled by BHD
+        or OWD. The or_owd_controller, or_handstate_sensor, and
+        or_barrett_ft_sensor packages are used to communicate with the
+        underlying hardware drivers through ROS. Note that some methods (e.g.
+        reading breakaway status) are not supported on the BH-262.
+        @param sim whether the hand is simulated
+        @param manipulator manipulator the hand is attached to
+        @param owd_namespace ROS namespace that OWD is running in
+        @param bhd_namespace ROS namespace that the BarrettHand driver is running in
+        @param ft_sim whether the force/torque sensor is simulated
+        """
         EndEffector.__init__(self, manipulator)
-
         self.simulated = sim
 
         # Hand controller
@@ -47,24 +58,29 @@ class BarrettHand(EndEffector):
 
         # Hand state, force/torque sensor, and tactile pads.
         if not sim:
-            self.handstate_sensor = util.create_sensor(env, 'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
+            self.handstate_sensor = util.create_sensor(env,
+                'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
 
         self.ft_simulated = ft_sim
         if not ft_sim:
-            self.ft_sensor = util.create_sensor(env, 'BarrettFTSensor {0:s} {1:s}'.format('prpy', owd_namespace))
+            self.ft_sensor = util.create_sensor(env,
+                'BarrettFTSensor {0:s} {1:s}'.format('prpy', owd_namespace))
 
         # TODO: Attach the tactile sensor plugin.
 
     def MoveHand(hand, f1=None, f2=None, f3=None, spread=None, timeout=None):
-        """
-        Change the hand preshape. This function blocks until trajectory execution
-        finishes. This can be changed by changing the timeout parameter to a
-        maximum number of seconds. Pass zero to return instantantly.
-        @param f1 finger 1 angle
-        @param f2 finger 2 angle
-        @param f3 finger 3 angle
-        @param spread spread angle
-        @param timeout blocking execution timeout
+        """Change the hand preshape.
+        Joints that are not specified will not move. This function blocks until
+        the hand has reached the desired configuration or a timeout occurs.
+        Specifying a timeout of a finishes.  Specifying a timeout of None
+        blocks forever and a timeout of zero returns instantly.  Note that the
+        fingers are not collision-checked in simulation and may penetrate
+        objects in the environment.
+        @param f1 finger 1 angle, in radians
+        @param f2 finger 2 angle, in radians
+        @param f3 finger 3 angle, in radians
+        @param spread spread angle, in radians
+        @param timeout blocking execution timeout, in seconds
         """
         # Default any None's to the current DOF values.
         preshape = hand.GetDOFValues()
@@ -77,10 +93,14 @@ class BarrettHand(EndEffector):
         util.WaitForControllers([ hand.controller ], timeout=timeout) 
        
     def OpenHand(hand, spread=None, timeout=None):
-        """
-        Open the hand with a fixed spread.
-        @param spread hand spread
-        @param timeout blocking execution timeout
+        """Open the hand with a fixed spread.
+        This function blocks until the hand has reached the desired
+        configuration or a timeout occurs. Specifying a timeout of a finishes.
+        Specifying a timeout of None blocks forever and a timeout of zero
+        returns instantly. Each finger is individually collision-checked in
+        simulation and will stop if it collides with the environment.
+        @param spread hand spread in radians; defaults to the current spread
+        @param timeout blocking execution timeout, in seconds
         """
         if hand.simulated:
             robot = hand.manipulator.GetRobot()
@@ -96,10 +116,14 @@ class BarrettHand(EndEffector):
             hand.MoveHand(f1=0.0, f2=0.0, f3=0.0, spread=spread, timeout=timeout)
 
     def CloseHand(hand, spread=None, timeout=None):
-        """
-        Close the hand with a fixed spread.
-        @param spread hand spread
-        @param timeout blocking execution timeout
+        """Close the hand with a fixed spread.
+        This function blocks until the hand has reached the desired
+        configuration or a timeout occurs. Specifying a timeout of a finishes.
+        Specifying a timeout of None blocks forever and a timeout of zero
+        returns instantly. Each finger is individually collision-checked in
+        simulation and will stop if it collides with the environment.
+        @param spread hand spread in radians; defaults to the current spread
+        @param timeout blocking execution timeout, in seconds
         """
         if hand.simulated:
             robot = hand.manipulator.GetRobot()
@@ -115,25 +139,28 @@ class BarrettHand(EndEffector):
             hand.MoveHand(f1=3.2, f2=3.2, f3=3.2, spread=spread, timeout=timeout)
 
     def ResetHand(hand):
-        """
-        Reset the hand
+        """Reset the hand.
+        This calls a low-level service to drive the fingers open with constant
+        torque. Resetting the hand is the only method that is guaranteed to
+        clear the fingers' breakaway state. This function blocks until the
+        reset is complete.
         """
         if not hand.simulated:
             hand.controller.SendCommand('ResetHand')
 
     def GetState(hand):
-        """
-        Gets the current state of the hand
+        """Gets the current state of the hand
         """
         if hand.simulated:
             return 'done'
         else:
+            # TODO: We're missing documentation here. What is the "current
+            # state" of the hand? How do we interpret the return value?
             return hand.handstate_sensor.SendCommand('GetState')
 
     def GetStrain(hand):
-        """
-        Gets the most recent strain sensor readings.
-        @return a list of strain for each finger
+        """ Gets the most recent strain sensor readings.
+        @return list of strain gauge values for each finger
         """
         if not hand.simulated:
             # This is because we are overriding the force/torque sensor datatype
@@ -143,8 +170,7 @@ class BarrettHand(EndEffector):
             return numpy.zeros(3)
 
     def GetBreakaway(hand):
-        """
-        Gets the most recent breakaway readings for each finger
+        """Gets the most recent breakaway status of each finger.
         @return a list of breakaway flags for each finger
         """
         if not hand.simulated:
@@ -156,8 +182,10 @@ class BarrettHand(EndEffector):
             return [ False, False, False ]
 
     def GetForceTorque(hand):
-        """
-        Gets the most recent force/torque sensor reading in the hand frame.
+        """ Gets the most recent force/torque sensor reading in the hand frame.
+        Forces are specified in Newtons and torques are specified in
+        Newton-meters. All readings are relative to the last time the sensor was
+        tared using \ref TareForceTorqueSensor.
         @return force,torque force/torque in the hand frame
         """
         if not hand.ft_simulated:
@@ -167,10 +195,14 @@ class BarrettHand(EndEffector):
             return numpy.zeros(3), numpy.zeros(3)
 
     def TareForceTorqueSensor(hand):
-        """
-        Tare the force/torque sensor. This is necessary before using the sensor
-        whenever the arm configuration has changed.
+        """Tare the force/torque sensor.
+        This is necessary before using the force/torque sensor. It is generally
+        wise to tare the sensor whenever the orientation of the end-effector
+        has significantly changed. This function may take several seconds to
+        return as it blocks until the tare is complete.
+        complete.
         """
         if not hand.ft_simulated:
             hand.ft_sensor.SendCommand('Tare')
+            # TODO: Do we still need to wait this long?
             time.sleep(2)

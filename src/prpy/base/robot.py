@@ -182,7 +182,6 @@ class Robot(openravepy.Robot):
         Checks a trajectory for velocity limit violations
         @param traj input trajectory
         """
-
         # Get the limits that pertain to this trajectory
         all_velocity_limits = self.GetDOFVelocityLimits()
         traj_indices = util.GetTrajectoryIndices(traj)
@@ -235,7 +234,6 @@ class Robot(openravepy.Robot):
 
     def _PlanWrapper(self, planning_method, args, kw_args):
         # Call the planner.
-        print 'CALLING', planning_method, args, kw_args
         traj = planning_method(self, *args, **kw_args)
 
         # Strip inactive DOFs from the trajectory.

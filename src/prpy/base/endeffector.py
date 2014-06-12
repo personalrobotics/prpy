@@ -35,17 +35,36 @@ class EndEffector(openravepy.Robot.Link):
         self.manipulator = manipulator
 
     def GetIndices(self):
+        """Gets the DOF indicies associated with this end-effector.
+        @return list of DOF indices
+        """
         indices = self.manipulator.GetChildDOFIndices()
         indices.sort()
         return indices
 
     def GetDOFValues(self):
+        """Gets the current DOF values of this end-effector.
+        These DOF values correspond to the DOF indices returned by
+        \ref GetIndices.
+        @return list of DOF values
+        """
         return self.manipulator.GetRobot().GetDOFValues(self.GetIndices())
 
     def SetDOFValues(self, dof_values,
                      limits_action=openravepy.KinBody.CheckLimitsAction.CheckLimits):
+        """Sets the current DOF values of this end-effector.
+        These DOF values correspond to the DOF indices returned by
+        \ref GetIndices. Note that this method only changes the DOF values in
+        OpenRAVE: it set a position set-point on the real robot.
+        @param dof_values DOF values
+        @param limits_action whether to enforce joint limits
+        """
         self.manipulator.GetRobot().SetDOFValues(dof_values, self.GetIndices(), limits_action)
 
     def SetActive(self):
+        """Sets this end-effector as active.
+        This both: (1) sets the current manipulator as active and (2) sets the
+        active DOF values to thosse associated with this end-effector.
+        """
         self.GetRobot().SetActiveManipulator(self.manipulator)
         self.GetRobot().SetActiveDOFs(self.GetArmIndices())

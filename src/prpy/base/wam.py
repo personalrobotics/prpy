@@ -62,9 +62,9 @@ class WAM(Manipulator):
         self.__init__(True, None)
 
     def SetStiffness(manipulator, stiffness):
-        """
-        Set the WAM's stiffness. This enables or disables gravity compensation.
-        Values between 0 and 1 are experimental.
+        """Set the WAM's stiffness.
+        Stiffness 0 is gravity compensation and stiffness 1 is position
+        control. Values between 0 and 1 are experimental.
         @param stiffness value between 0.0 and 1.0
         """
         if not (0 <= stiffness <= 1):
@@ -74,13 +74,13 @@ class WAM(Manipulator):
             manipulator.controller.SendCommand('SetStiffness {0:f}'.format(stiffness))
 
     def Servo(manipulator, velocities):
-        """
-        Servo with an instantaneous vector joint velocities.
-        @param velocities instantaneous joint velocities in radians per second
+        """Servo with a vector of instantaneous joint velocities.
+        @param velocities joint velocities, in radians per second
         """
         num_dof = len(manipulator.GetArmIndices())
         if len(velocities) != num_dof:
-            raise ValueError('Incorrect number of joint velocities. Expected {0:d}; got {0:d}.'.format(
+            raise ValueError('Incorrect number of joint velocities. '
+                             'Expected {0:d}; got {0:d}.'.format(
                              num_dof, len(velocities)))
 
         if not manipulator.simulated:
@@ -89,38 +89,45 @@ class WAM(Manipulator):
             manipulator.controller.Reset(0)
             manipulator.servo_simulator.SetVelocity(velocities)
 
-    def ServoTo(manipulator, target, duration, timeStep = 0.05, collisionChecking= True):
-        """
-        Servo's the WAM to the target taking the duration passed to it
-        @param target desired joint angles
+    def ServoTo(manipulator, target, duration, timeStep=0.05, collisionChecking=True):
+        """Servo the arm towards a target configuration over some duration.
+        Servos the arm towards a target configuration with a constant joint
+        velocity. This function uses the \ref Servo command to control the arm
+        and must be called repeatidly until the arm reaches the goal. If \tt
+        collisionChecking is enabled, then the servo will terminate and return
+        False if a collision is detected with the simulation environment.
+        @param target desired configuration
         @param duration duration in seconds
-        @param timestep period of the control loop
+        @param timestep period of the control loop, in seconds
         @param collisionchecking check collisions in the simulation environment
+        @return whether the servo was successful
         """
         steps = int(math.ceil(duration/timeStep))
         original_dofs = manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices())
         velocity = numpy.array(target-manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices()))
         velocities = v/steps#[v/steps for v in velocity]
         inCollision = False 
-        if collisionChecking==True:
+        if collisionChecking:
             inCollision = manipulator.CollisionCheck(target)
-        if inCollision == False:       
+
+        if not inCollision:
             for i in range(1,steps):
                 manipulator.Servo(velocities)
                 time.sleep(timeStep)
             manipulator.Servo([0] * len(manipulator.GetArmIndices()))
             new_dofs = manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices())
             return True
-        return False
-
+        else:
+            return False
 
     def GetVelocityLimits(self, openrave=True, owd=True):
-        """
-        Get the OpenRAVE and OWD joint velocity limits. If they
-        do not match, up to some epsilon, the minimum value is taken,
-        and an error is printed.
+        """Get the OpenRAVE and OWD joint velocity limits.
+        This function checks both the OpenRAVE and OWD joint velocity limits.
+        If they do not match, a warning is printed and the minimum value is
+        returned.
         @param openrave flag to set the OpenRAVE velocity limits
         @param owd flag to set the OWD velocity limits
+        @return list of velocity limits, in radians per second
         """
         # Update the OpenRAVE limits.
         if openrave:
@@ -144,7 +151,8 @@ class WAM(Manipulator):
             diff_arr = numpy.subtract(or_velocity_limits, owd_velocity_limits)
             max_diff = max(abs(diff_arr))
 
-            if (max_diff > 0.01):
+            if max_diff > 0.01:
+                # TODO: Change this to use the logging framework.
                 print('GetVelocityLimits Error: openrave and owd limits very different')
                 print('\tOpenrave limits:\t' + str(or_velocity_limits))
                 print('\tOWD limits:\t\t' + str(owd_velocity_limits))
@@ -155,9 +163,8 @@ class WAM(Manipulator):
         
     def SetVelocityLimits(self, velocity_limits, min_accel_time,
                           openrave=True, owd=True):
-        """
-        Change the OpenRAVE and OWD joint velocity limits. Joint velocities
-        that exceed these limits will trigger a velocity fault.
+        """Change the OpenRAVE and OWD joint velocity limits.
+        Joint velocities that exceed these limits will trigger a velocity fault.
         @param velocity_limits vector of joint velocity limits in radians per second
         @param min_accel_time minimum acceleration time used to compute acceleration limits
         @param openrave flag to set the OpenRAVE velocity limits
@@ -176,9 +183,7 @@ class WAM(Manipulator):
             self.controller.SendCommand(args_str)
 
     def GetTrajectoryStatus(manipulator):
-        """
-        Gets the status of the current (or previous) trajectory executed by the
-        controller.
+        """Gets the status of the current (or previous) trajectory executed by OWD.
         @return status of the current (or previous) trajectory executed
         """
         if not manipulator.simulated:
@@ -190,28 +195,30 @@ class WAM(Manipulator):
                 return 'active'
 
     def ClearTrajectoryStatus(manipulator):
-        """
-        Clears the current trajectory execution status.
+        """Clears the current trajectory execution status.
+        This resets the output of \ref GetTrajectoryStatus.
         """
         if not manipulator.simulated:
             manipulator.controller.SendCommand('ClearStatus')
 
     def MoveUntilTouch(manipulator, direction, distance, max_distance=float('+inf'),
                        max_force=5.0, max_torque=None, ignore_collisions=None, **kw_args):
-        """
-        Execute a straight move-until-touch action. This action stops when a
-        sufficient force is is felt or the manipulator moves the maximum
-        distance. The motion is considered successful if the end-effector moves
-        at least distance.
+        """Execute a straight move-until-touch action.
+        This action stops when a sufficient force is is felt or the manipulator
+        moves the maximum distance. The motion is considered successful if the
+        end-effector moves at least distance. In simulation, a move-until-touch
+        action proceeds until the end-effector collids with the environment.
         @param direction unit vector for the direction of motion in the world frame
         @param distance minimum distance in meters
         @param max_distance maximum distance in meters
         @param max_force maximum force in Newtons
-        @param torque maximum torque in Newton-Meters
+        @param max_torque maximum torque in Newton-Meters
         @param execute optionally execute the trajectory
+        @param ignore_collisions collisions with these objects are ignored in simulation
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
+        # TODO: Is ignore_collisions a list of names or KinBody pointers?
         if max_torque is None:
             max_torque = numpy.array([100.0, 100.0, 100.0 ])
         
@@ -222,7 +229,6 @@ class WAM(Manipulator):
         for ignore_col_with in ignore_collisions:
             ignore_col_obj_oldstate.append(ignore_col_with.IsEnabled())
             ignore_col_with.Enable(False)
-
 
         with manipulator.GetRobot().GetEnv():
             manipulator.GetRobot().GetController().SimulationStep(0)

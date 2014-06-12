@@ -66,35 +66,64 @@ class Manipulator(openravepy.Robot.Manipulator):
         self.__init__(self)
 
     def GetIndices(self):
+        """Gets the DOF indicies associated with this manipulaor.
+        @return list of DOF indices
+        """
         return self.GetArmIndices()
 
     def GetDOFValues(self):
+        """Gets the current DOF values of this manipulator.
+        These DOF values correspond to the DOF indices returned by
+        \ref GetIndices.
+        @return list of DOF values
+        """
         return self.GetRobot().GetDOFValues(self.GetIndices())
 
     def SetDOFValues(self, dof_values,
                      limits_action=openravepy.KinBody.CheckLimitsAction.CheckLimits):
+        """Sets the current DOF values of this manipulator.
+        These DOF values correspond to the DOF indices returned by
+        \ref GetIndices. Note that this method only changes the DOF values in
+        OpenRAVE: it set a position set-point on the real robot.
+        @param dof_values DOF values
+        @param limits_action whether to enforce joint limits
+        """
         self.GetRobot().SetDOFValues(dof_values, self.GetIndices(), limits_action)
 
     def SetActive(self):
+        """Sets this manipulator as active.
+        This both: (1) sets the current manipulator as active and (2) sets the
+        active DOF values to thosse associated with this end-effector.
+        """
         self.GetRobot().SetActiveManipulator(self)
         self.GetRobot().SetActiveDOFs(self.GetArmIndices())
 
-
     def GetAccelerationLimits(self):
+        """Gets this manipulator's acceleration limits.
+        @return list of acceleration limits
+        """
         active_indices = self.GetIndices()
-        
         or_accel_limits = self.GetRobot().GetDOFAccelerationLimits()[active_indices]
-        
         return or_accel_limits
 
     def GetVelocityLimits(self):
+        """Gets this manipulator's velocity limits.
+        @return list of velocity limits
+        """
         active_indices = self.GetIndices()
-        
         or_velocity_limits = self.GetRobot().GetDOFVelocityLimits()[active_indices]
-        
         return or_velocity_limits
 
     def SetVelocityLimits(self, velocity_limits, min_accel_time):
+        """Sets this manipulator's velocity and acceleration limits.
+        This function sets the manipulator's velocity limits and changes the
+        acceleration limits to be a linear function of the velocity limits. The
+        scale factor \tt min_accel_time specifies the minimum time required to
+        accelerate all joints from zero velocity to their velocity limits. This
+        is used to set the corresponding acceleration limits.
+        @param velocity_limits list of joint velocity limits
+        @param min_accel_time minimum time, in seconds, to accelerate to the limits
+        """
         velocity_limits = numpy.array(velocity_limits, dtype='float')
         active_indices = self.GetIndices()
 
@@ -104,6 +133,9 @@ class Manipulator(openravepy.Robot.Manipulator):
         self.GetRobot().SetDOFVelocityLimits(or_velocity_limits)
 
         # Set the acceleration limits.
+        # TODO: Should we really be doing this here? This is only a restriction
+        # of OWD's MacTrajectory parameterization, so this logic would make more
+        # sense on the WAM class.
         or_accel_limits = self.GetRobot().GetDOFAccelerationLimits()
         or_accel_limits[active_indices] = velocity_limits / min_accel_time
         self.GetRobot().SetDOFAccelerationLimits(or_accel_limits)

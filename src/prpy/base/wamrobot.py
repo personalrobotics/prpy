@@ -56,9 +56,10 @@ class WAMRobot(Robot):
     def RetimeTrajectory(self, traj, max_jerk=30.0, synchronize=False,
                          stop_on_stall=True, stop_on_ft=False, force_direction=None,
                          force_magnitude=None, torque=None, **kw_args):
-        """
-        Retime a generic OpenRAVE trajectory into a timed MacTrajectory. If the
-        MacRetimer is not available, fall back on the OpenRAVE retimer.
+        """Retime a generic OpenRAVE trajectory into a timed for OWD.
+        First, try to retime the trajectory into a MacTrajectory using OWD's
+        MacRetimer. If MacRetimer is not available, then fall back on the
+        default OpenRAVE retimer.
         @param traj input trajectory
         @param max_jerk maximum jerk allowed during retiming
         @param synchronize enable synchronization between multiple OWD processes
@@ -126,9 +127,11 @@ class WAMRobot(Robot):
     def BlendTrajectory(self, traj, maxsmoothiter=None, resolution=None,
                         blend_radius=0.2, blend_attempts=4, blend_step_size=0.05,
                         linearity_threshold=0.1, ignore_collisions=None, **kw_args):
-        """
-        Blend a trajectory for execution in OWD. This adds the blend_radius
-        group to an existing trajectory.
+        """Blend a trajectory for execution in OWD.
+        Blending a trajectory allows the MacRetimer to smoothly accelerate
+        through waypoints. If a blend radius is not specified, it defaults to
+        zero and the controller must come to a stop at each waypoint. This adds
+        the \tt blend_radius group to the input trajectory.
         @param traj input trajectory
         @return blended trajectory
         """
@@ -140,17 +143,19 @@ class WAMRobot(Robot):
                     ignore_collisions=ignore_collisions)
 
     def ExecuteTrajectory(self, traj, timeout=None, blend=True, retime=True, limit_tolerance=1e-3, **kw_args):
-        """
-        Execute a trajectory. By default, this retimes, blends, and adds the
-        stop_on_stall flag to all trajectories. Additionally, this function blocks
-        until trajectory execution finishes. This can be changed by changing the
-        timeout parameter to a maximum number of seconds. Pass a timeout of zero to
-        return instantly.
+        """Execute a trajectory.
+        By default, this function retimes, blends, and adds the stop_on_stall
+        flag to all trajectories. This behavior can be overriden using the \tt
+        blend and \tt retime flags or by passing the appropriate \tt **kw_args
+        arguments to the blender and retimer. By default, this function blocks
+        until trajectory execution finishes. This can be changed by changing
+        the timeout parameter to a maximum number of seconds. Pass a timeout of
+        zero to return instantly.
         @param traj trajectory to execute
         @param timeout blocking execution timeout
-        @param blend compute blend radii before execution
-        @param retime retime the trajectory before execution
-        @return executed_traj
+        @param blend flag for computing blend radii before execution
+        @param retime flag for retiming the trajectory before execution
+        @return executed_traj including blending and retiming
         """
         # Query the active manipulators based on which DOF indices are
         # included in the trajectory.
@@ -159,8 +164,9 @@ class WAMRobot(Robot):
         sim_flags = [ manipulator.simulated for manipulator in active_manipulators ]
 
         if needs_synchronization and any(sim_flags) and not all(sim_flags):
-            raise exceptions.SynchronizationException('Unable to execute synchronized trajectory with'
-                                                      ' a mixture of simulated and real controllers.')
+            raise exceptions.SynchronizationException(
+                'Unable to execute synchronized trajectory with'
+                ' a mixture of simulated and real controllers.')
 
         # Disallow trajectories that include both the base and the arms when
         # not in simulation mode. We can't guarantee synchronization in this case.
