@@ -67,7 +67,8 @@ def CreateAndDiscretizeTSR(obj, manip,
                               Tw_e = numpy.eye(4),
                               start_tsr = True,
                               goal_tsr = False,
-                              ee_offset = 0.14):
+                              ee_offset = 0.14,
+                              height_offset = 0.0):
                               
     discretization = []
     
@@ -92,7 +93,7 @@ def CreateAndDiscretizeTSR(obj, manip,
         
         # We have a cylinder
         radius = obj_bb.extents()[0] + ee_offset
-        height = obj_bb.pos()[2]  # grasp in the middle
+        height = obj_bb.pos()[2] + height_offset  # grasp in the middle
         
         Bw = numpy.array([[  .0,    .0],
                       [  .0,    .0],
