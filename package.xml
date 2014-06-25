@@ -13,6 +13,7 @@
   <run_depend>openrave</run_depend>
   <run_depend>manipulation2</run_depend>
   <run_depend>python</run_depend>
+  <run_depend>python-catkin-pkg</run_depend>
   <run_depend>python-numpy</run_depend>
   <run_depend>python-scipy</run_depend>
 </package>
