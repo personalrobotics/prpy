@@ -169,10 +169,15 @@ class Robot(openravepy.Robot):
                                                                 max_accel, False)
 
         self.GetController().SetPath(traj)
+
         active_manipulators = self.GetTrajectoryManipulators(traj)
-        active_controllers = [ manipulator.controller for manipulator in active_manipulators ]
+        active_controllers = []
+        for active_manipulator in active_manipulators:
+            if hasattr(active_manipulator, 'controller'):
+                active_controllers.append(active_manipulator.controller)
+
         if needs_base:
-            active_controllers += [ self.base.controller ]
+            active_controllers.append(self.base.controller)
 
         util.WaitForControllers(active_controllers, timeout=timeout)
         return traj
