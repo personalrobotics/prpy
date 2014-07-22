@@ -47,11 +47,12 @@ class WAM(Manipulator):
         # Load the IK database.
         robot = self.GetRobot()
         if iktype is not None:
-            with robot:
-                self.SetActive()
-                self.ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot, iktype=iktype)
-                if not self.ikmodel.load():
-                    self.ikmodel.autogenerate()
+            from openravepy.databases.inversekinematics import InverseKinematicsModel
+            self.ikmodel = InverseKinematicsModel(robot=robot, manip=self, iktype=iktype)
+            if not self.ikmodel.load():
+                self.ikmodel.generate(iktype=iktype, precision=4,
+                                      freeindices=[ self.GetIndices()[2] ])
+                self.ikmodel.save()
 
         # Enable servo motions in simulation mode.
         if sim:
