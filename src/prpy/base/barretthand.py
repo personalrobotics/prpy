@@ -49,6 +49,9 @@ class BarrettHand(EndEffector):
         EndEffector.__init__(self, manipulator)
         self.simulated = sim
 
+        # Just in case the closing direction is missing.
+        manipulator.SetChuckingDirection([ 0., 1., 1., 1. ])
+
         # Hand controller
         robot = self.manipulator.GetRobot()
         env = robot.GetEnv()
