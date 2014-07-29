@@ -38,6 +38,7 @@ class OMPLPlanner(BasePlanner):
         self.algorithm = algorithm
         try:
             self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL')
+            self.simplifier = openravepy.RaveCreatePlanner(self.env, 'OMPLSimplifier')
         except openravepy.openrave_exception:
             raise UnsupportedPlanningError('Unable to create OMPL module.')
 
@@ -45,7 +46,7 @@ class OMPLPlanner(BasePlanner):
         return 'OMPL {0:s}'.format(self.algorithm)
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, **kw_args):
+    def PlanToConfiguration(self, robot, goal, timeout=25.0, shortcut_timeout=5.0, **kw_args):
         """
         Plan to a desired configuration with OMPL. This will invoke the OMPL
         planner specified in the OMPLPlanner constructor.
@@ -56,20 +57,42 @@ class OMPLPlanner(BasePlanner):
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
         params.SetGoalConfig(goal)
+        params.SetExtraParameters(
+            '<time_limit>{time_limit:f}</time_limit>'\
+            '<planner_type>{algorithm:s}</planner_type>'.format(
+                time_limit = timeout,
+                algorithm = self.algorithm
+            )
+        )
 
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
         try:
             self.env.Lock()
+
+            # Plan.
             self.planner.InitPlan(robot, params)
             status = self.planner.PlanPath(traj, releasegil=True)
+            from openravepy import PlannerStatus
+            if status not in [ PlannerStatus.HasSolution,
+                               PlannerStatus.InterruptedWithSolution ]:
+                raise PlanningError('Planner returned with status {0:s}.'.format(
+                                    str(status)))
+
+            # Shortcut.
+            params = openravepy.Planner.PlannerParameters()
+            params.SetExtraParameters(
+                '<time_limit>{:f}</time_limit>'.format(shortcut_timeout)
+            )
+            self.simplifier.InitPlan(robot, params)
+            status = self.planner.PlanPath(traj, releasegil=True)
+            if status not in [ PlannerStatus.HasSolution,
+                               PlannerStatus.InterruptedWithSolution ]:
+                raise PlanningError('Simplifier returned with status {0:s}.'.format(
+                                    str(status)))
         except Exception as e:
             raise PlanningError('Planning failed with error: {0:s}'.format(e))
         finally:
             self.env.Unlock()
-
-        from openravepy import PlannerStatus
-        if status not in [ PlannerStatus.HasSolution, PlannerStatus.InterruptedWithSolution ]:
-            raise PlanningError('Planner returned with status {0:s}.'.format(str(status)))
 
         return traj
