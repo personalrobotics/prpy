@@ -134,7 +134,7 @@ class Robot(openravepy.Robot):
         @param traj input trajectory
         @returns timed output trajectory
         """
-        openravepy.planningutils.RetimeTrajectory(traj)
+        openravepy.planningutils.SmoothTrajectory(traj, 0.99, 0.99, 'ParabolicSmoother', '')
         return traj
 
     def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):

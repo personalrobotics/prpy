@@ -85,7 +85,7 @@ class OMPLPlanner(BasePlanner):
                 '<time_limit>{:f}</time_limit>'.format(shortcut_timeout)
             )
             self.simplifier.InitPlan(robot, params)
-            status = self.planner.PlanPath(traj, releasegil=True)
+            status = self.simplifier.PlanPath(traj, releasegil=True)
             if status not in [ PlannerStatus.HasSolution,
                                PlannerStatus.InterruptedWithSolution ]:
                 raise PlanningError('Simplifier returned with status {0:s}.'.format(
