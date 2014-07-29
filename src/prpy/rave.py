@@ -139,7 +139,6 @@ def render_trajectory(env, manip, traj):
 
          # render a sphere here
          add_object(env, 'traj_sphere'+str(wid), sphere_obj_path, ee_pose)
-         
 
 # Clear out any rendered trajectories
 def clear_rendered_trajectories(env):
@@ -152,6 +151,25 @@ def clear_rendered_trajectories(env):
       if b.GetName().startswith('traj_sphere'):
          env.Remove(b)
 
+def fix_trajectory(traj):
+    """Remove duplicate waypoints that are introduced during smoothing.
+    """
+    cspec = openravepy.ConfigurationSpecification()
+    cspec.AddDeltaTimeGroup()
+
+    iwaypoint = 1
+    num_removed = 0
+    while iwaypoint < traj.GetNumWaypoints():
+        waypoint = traj.GetWaypoint(iwaypoint, cspec)
+        delta_time = cspec.ExtractDeltaTime(waypoint)
+
+        if delta_time == 0.0:
+            traj.Remove(iwaypoint, iwaypoint + 1)
+            num_removed += 1
+        else:
+            iwaypoint += 1
+
+    return num_removed
 
 # This class allows for disabling kinbodies
 class AllDisabled:
