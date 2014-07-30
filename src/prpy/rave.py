@@ -191,10 +191,14 @@ class AllDisabled:
 
        return False
 
-
 class Disabled(AllDisabled):
    def __init__(self, body, padding_only=False):      
       AllDisabled.__init__(self, 
                            env = body.GetEnv(), 
                            bodies = [body], 
                            padding_only=padding_only)
+
+def disable_padding(body, enable=False):
+    for link in body.GetLinks():
+        if link.GetName().startswith('padding_'):
+            link.Enable(enable)
