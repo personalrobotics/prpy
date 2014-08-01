@@ -40,6 +40,7 @@ class InstanceDeduplicator(object):
     USERDATA_CHILDREN = '__children__'
     USERDATA_DESTRUCTOR = '__destructor__'
     USERDATA_CANONICAL = 'canonical_instance'
+    ATTRIBUTE_CANONICAL = '_canonical_instance'
     KINBODY_TYPE, LINK_TYPE, JOINT_TYPE, MANIPULATOR_TYPE = range(4)
 
     @staticmethod
@@ -112,11 +113,22 @@ class InstanceDeduplicator(object):
 
     @classmethod
     def get_canonical(cls, instance):
-        userdata_getter, userdata_setter = cls.get_storage_methods(instance)
+        # Try looking for a cached value on the object.
         try:
-            return userdata_getter(cls.USERDATA_CANONICAL)
-        except KeyError:
-            return None
+            canonical_instance = object.__getattribute__(instance, cls.ATTRIBUTE_CANONICAL)
+        # If it's not available, fall back on doing the full lookup not
+        # available, fall back on doing the full lookup
+        except AttributeError:
+            userdata_getter, userdata_setter = cls.get_storage_methods(instance)
+            try:
+                canonical_instance = userdata_getter(cls.USERDATA_CANONICAL)
+
+                # ...and cache the value for future queries.
+                object.__setattr__(instance, cls.ATTRIBUTE_CANONICAL, canonical_instance)
+            except KeyError:
+                canonical_instance = None
+
+        return canonical_instance
 
     @classmethod
     def add_canonical(cls, instance):
