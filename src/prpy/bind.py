@@ -46,8 +46,6 @@ class InstanceDeduplicator(object):
     def intercept(self, name):
         canonical_instance = InstanceDeduplicator.get_canonical(self)
 
-        # TODO: All of this code needs to be updated to use UserData storage.
-        """
         # This object has no canonical instance. However, it may be the clone
         # of an object that does.
         if canonical_instance is None:
@@ -83,7 +81,7 @@ class InstanceDeduplicator(object):
                         raise NotCloneableException('Object {0:s} does not have a CloneBindings method.'.format(child))
 
                     # Register the child as a canonical instance.
-                    InstanceDeduplicator.instances[child] = child
+                    InstanceDeduplicator.add_canonical(child)
                     canonical_child = child
 
                     # Finally invoke the user-provided clone method.
@@ -96,7 +94,6 @@ class InstanceDeduplicator(object):
             # Update our canonical instance in case we were able to clone a
             # parent with a canonical instance.
             canonical_instance = InstanceDeduplicator.get_canonical(self)
-        """
 
         if canonical_instance is None:
             canonical_instance = self
