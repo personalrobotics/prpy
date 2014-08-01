@@ -33,7 +33,12 @@ from clone import CloneException
 class NotCloneableException(CloneException):
     pass
 
-class InstanceDeduplicator:
+class InstanceDeduplicator(object):
+    USERDATA_PREFIX = 0xDEADBEEF
+    USERDATA_TAG = 'owner'
+    USERDATA_CHILDREN = '__children__'
+    KINBODY_TYPE, LINK_TYPE, JOINT_TYPE, MANIPULATOR_TYPE = range(4)
+
     # FIXME: Canonical instances leak memory. They always have a pointer in the
     # instances dictionary.
     instances = dict()
@@ -122,6 +127,95 @@ class InstanceDeduplicator:
     def add_canonical(cls, instance):
         cls.instances[instance] = instance
         instance.__class__.__getattribute__ = cls.intercept
+
+    @classmethod
+    def get_environment_id(cls, target, recurse=False):
+        import openravepy
+        if isinstance(target, openravepy.KinBody):
+            if target.GetEnvironmentId() == 0:
+                raise ValueError('Object is not attached to an environment.')
+
+            env = target.GetEnv()
+            key = (target.GetEnvironmentId(), )
+            owner = target
+            target_type = cls.KINBODY_TYPE
+        elif isinstance(target, openravepy.KinBody.Link):
+            owner = target.GetParent()
+            env, owner, kinbody_key = cls.get_environment_id(target.GetParent(), recurse=True)
+            key = kinbody_key + (target.GetIndex(), )
+            target_type = cls.LINK_TYPE
+        elif isinstance(target, openravepy.KinBody.Joint):
+            env, owner, kinbody_key = cls.get_environment_id(target.GetParent(), recurse=True)
+            key = kinbody_key + (target.GetJointIndex(), )
+            target_type = cls.JOINT_TYPE
+        elif isinstance(target, openravepy.Robot.Manipulator):
+            env, owner, kinbody_key = cls.get_environment_id(target.GetRobot(), recurse=True)
+            key = kinbody_key + (target.GetName(), )
+            target_type = cls.MANIPULATOR_TYPE
+        else:
+            raise ValueError("Unsupported type '{:s}'.".format(str(type(target))))
+
+        # Append a unique number to minimize the chance of accidentally
+        # colliding with other UserData. Also append a type identifier
+        # to prevent cross-type conflicts.
+        if not recurse:
+            key = (cls.USERDATA_PREFIX, target_type) + key
+
+        return env, owner, key
+
+    @classmethod
+    def get_storage_methods(cls, target):
+        env, owner, target_key = cls.get_environment_id(target)
+        _, _, owner_key = cls.get_environment_id(owner)
+        user_data = env.GetUserData()
+
+        # Lazily create a dict to store the canonical instance map if it
+        # does not already exist.
+        if user_data is None:
+            user_data = dict()
+            env.SetUserData(user_data)
+
+            # TODO: Register the removal callback.
+        elif not isinstance(user_data, dict):
+            raise ValueError('Detected unknown UserData.')
+
+        # Create getter/setter methods for accessing the data.
+        def getter(key):
+            target_dict = user_data.get(target_key, dict())
+            return target_dict[key]
+
+        def setter(key, value):
+            if key == cls.USERDATA_CHILDREN:
+                raise KeyError(
+                    "The key '{:s}' is reserved for internal use.".format(
+                        cls.USERDATA_CHILDREN)
+                )
+
+            target_dict = user_data.setdefault(target_key, dict())
+            target_dict[key] = value
+
+            # Log this entry so we can easily clean it up later. Note that we
+            # add the owner itself to this list to simplify the cleanup code.
+            owner_dict = user_data.setdefault(owner_key, dict())
+            owner_children = owner_dict.setdefault(cls.USERDATA_CHILDREN, set())
+            owner_children.add(owner_key)
+            owner_children.add(target_key)
+
+        return getter, setter
+
+    @classmethod
+    def remove_storage(cls, kinbody):
+        env, owner, owner_key = cls.get_environment_id(kinbody)
+        if kinbody != owner:
+            raise ValueError('Object does not own any storage.')
+
+        user_data = kinbody.GetEnv().GetUserData()
+        if user_data is not None:
+            owner_dict = user_data.get(owner_key, dict())
+            children_set = owner_dict.get(cls.USERDATA_CHILDREN, set())
+
+            for child_key in children_set:
+                user_data.pop(child_key)
 
 def bind_subclass(instance, subclass, *args, **kw_args):
     # Deduplicate the classes associated with any of the objects that we're
