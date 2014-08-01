@@ -47,8 +47,10 @@ class InstanceDeduplicator(object):
     def intercept(self, name):
         canonical_instance = InstanceDeduplicator.get_canonical(self)
 
+        """
         # This object has no canonical instance. However, it may be the clone
         # of an object that does.
+        # TODO: All of this code needs to be updated to use UserData storage.
         if canonical_instance is None:
             # Build a list of the instance's clone parents in ascending order
             # of depth in the clone tree; i.e. the first element is the root.
@@ -95,6 +97,7 @@ class InstanceDeduplicator(object):
             # Update our canonical instance in case we were able to clone a
             # parent with a canonical instance.
             canonical_instance = InstanceDeduplicator.get_canonical(self)
+        """
 
         if canonical_instance is None:
             canonical_instance = self
@@ -111,49 +114,53 @@ class InstanceDeduplicator(object):
             else:
                 raise
 
-    @staticmethod
-    def get_canonical(self):
-        canonical_instance = None
+    @classmethod
+    def get_canonical(cls, instance):
+        userdata_getter, userdata_setter = cls.get_storage_methods(instance)
         try:
-            canonical_instance = object.__getattribute__(self, '_true_instance')
-        except AttributeError:
-            if self in InstanceDeduplicator.instances:
-                canonical_instance = InstanceDeduplicator.instances[self]
-                self._true_instance = canonical_instance
-
-        return canonical_instance
+            return userdata_getter('canonical_instance')
+        except KeyError:
+            return None
 
     @classmethod
     def add_canonical(cls, instance):
-        cls.instances[instance] = instance
+        _, userdata_setter = cls.get_storage_methods(instance)
+        userdata_setter('canonical_instance', instance)
         instance.__class__.__getattribute__ = cls.intercept
 
     @classmethod
     def get_environment_id(cls, target, recurse=False):
+        def call(self, name, *args, **kw_args):
+            return object.__getattribute__(self, name)(*args, **kw_args)
+
+        target_class = object.__getattribute__(target, '__class__')
+
         import openravepy
-        if isinstance(target, openravepy.KinBody):
-            if target.GetEnvironmentId() == 0:
+        if issubclass(target_class, openravepy.KinBody):
+            if call(target, 'GetEnvironmentId') == 0:
                 raise ValueError('Object is not attached to an environment.')
 
-            env = target.GetEnv()
-            key = (target.GetEnvironmentId(), )
+            env = call(target, 'GetEnv')
+            key = (call(target, 'GetEnvironmentId'), )
             owner = target
             target_type = cls.KINBODY_TYPE
-        elif isinstance(target, openravepy.KinBody.Link):
-            owner = target.GetParent()
-            env, owner, kinbody_key = cls.get_environment_id(target.GetParent(), recurse=True)
-            key = kinbody_key + (target.GetIndex(), )
+        elif issubclass(target_class, openravepy.KinBody.Link):
+            env, owner, kinbody_key = cls.get_environment_id(
+                    call(target, 'GetParent'), recurse=True)
+            key = kinbody_key + (call(target, 'GetIndex'), )
             target_type = cls.LINK_TYPE
-        elif isinstance(target, openravepy.KinBody.Joint):
-            env, owner, kinbody_key = cls.get_environment_id(target.GetParent(), recurse=True)
-            key = kinbody_key + (target.GetJointIndex(), )
+        elif issubclass(target_class, openravepy.KinBody.Joint):
+            env, owner, kinbody_key = cls.get_environment_id(
+                    call(target, 'GetParent'), recurse=True)
+            key = kinbody_key + (call(target, 'GetJointIndex'), )
             target_type = cls.JOINT_TYPE
-        elif isinstance(target, openravepy.Robot.Manipulator):
-            env, owner, kinbody_key = cls.get_environment_id(target.GetRobot(), recurse=True)
-            key = kinbody_key + (target.GetName(), )
+        elif issubclass(target_class, openravepy.Robot.Manipulator):
+            env, owner, kinbody_key = cls.get_environment_id(
+                    call(target, 'GetRobot'), recurse=True)
+            key = kinbody_key + (call(target, 'GetName'), )
             target_type = cls.MANIPULATOR_TYPE
         else:
-            raise ValueError("Unsupported type '{:s}'.".format(str(type(target))))
+            raise ValueError('Unsupported object type.')
 
         # Append a unique number to minimize the chance of accidentally
         # colliding with other UserData. Also append a type identifier
