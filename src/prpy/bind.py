@@ -28,29 +28,28 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import logging
 from clone import CloneException
 
 class NotCloneableException(CloneException):
     pass
 
 class InstanceDeduplicator(object):
+    logger = logging.getLogger('bind')
     USERDATA_PREFIX = 0xDEADBEEF
-    USERDATA_TAG = 'owner'
     USERDATA_CHILDREN = '__children__'
+    USERDATA_DESTRUCTOR = '__destructor__'
+    USERDATA_CANONICAL = 'canonical_instance'
     KINBODY_TYPE, LINK_TYPE, JOINT_TYPE, MANIPULATOR_TYPE = range(4)
-
-    # FIXME: Canonical instances leak memory. They always have a pointer in the
-    # instances dictionary.
-    instances = dict()
 
     @staticmethod
     def intercept(self, name):
         canonical_instance = InstanceDeduplicator.get_canonical(self)
 
+        # TODO: All of this code needs to be updated to use UserData storage.
         """
         # This object has no canonical instance. However, it may be the clone
         # of an object that does.
-        # TODO: All of this code needs to be updated to use UserData storage.
         if canonical_instance is None:
             # Build a list of the instance's clone parents in ascending order
             # of depth in the clone tree; i.e. the first element is the root.
@@ -118,14 +117,14 @@ class InstanceDeduplicator(object):
     def get_canonical(cls, instance):
         userdata_getter, userdata_setter = cls.get_storage_methods(instance)
         try:
-            return userdata_getter('canonical_instance')
+            return userdata_getter(cls.USERDATA_CANONICAL)
         except KeyError:
             return None
 
     @classmethod
     def add_canonical(cls, instance):
         _, userdata_setter = cls.get_storage_methods(instance)
-        userdata_setter('canonical_instance', instance)
+        userdata_setter(cls.USERDATA_CANONICAL, instance)
         instance.__class__.__getattribute__ = cls.intercept
 
     @classmethod
@@ -137,11 +136,8 @@ class InstanceDeduplicator(object):
 
         import openravepy
         if issubclass(target_class, openravepy.KinBody):
-            if call(target, 'GetEnvironmentId') == 0:
-                raise ValueError('Object is not attached to an environment.')
-
             env = call(target, 'GetEnv')
-            key = (call(target, 'GetEnvironmentId'), )
+            key = (call(target, 'GetName'), )
             owner = target
             target_type = cls.KINBODY_TYPE
         elif issubclass(target_class, openravepy.KinBody.Link):
@@ -182,7 +178,23 @@ class InstanceDeduplicator(object):
             user_data = dict()
             env.SetUserData(user_data)
 
-            # TODO: Register the removal callback.
+            # Cleanup the UserData owned by a KinBody when it is removed from
+            # the environment.
+            def cleanup_callback(owner, flag):
+                if flag == 0: # removed
+                    cls.remove_storage(owner)
+
+            if hasattr(env, 'RegisterBodyCallback'):
+                handle = env.RegisterBodyCallback(cleanup_callback)
+                user_data[cls.USERDATA_DESTRUCTOR] = handle
+            else:
+                cls.logger.warning(
+                    'Your version of OpenRAVE does not supply Python bindings'
+                    ' for Environment.RegisterBodyCallback. PrPy will leak'
+                    ' unless you call prpy.bind.InstanceDeduplicator.remove_storage'
+                    ' after removing an annotated KinBody from the environment.'
+                )
+
         elif not isinstance(user_data, dict):
             raise ValueError('Detected unknown UserData.')
 
