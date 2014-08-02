@@ -30,10 +30,15 @@
 
 import rospkg, os, sys, distutils.version
 
+def is_catkin():
+    distro = os.environ.get('ROS_DISTRO', '')
+    if distro:
+        # Clever hack courtesy of Chris Dellin.
+        return ord(distro[0].lower()) >= ord('g')
+    else:
+        raise ValueError('Environment variable ROS_DISTRO is not set.')
 
-ros_version = rospkg.RosStack().get_stack_version('ros')
-
-if distutils.version.LooseVersion(ros_version) >= distutils.version.LooseVersion('1.9'):
+if is_catkin():
     def append_to_env(name, new_paths):
         import os
         paths  = list(new_paths)
