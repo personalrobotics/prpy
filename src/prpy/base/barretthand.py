@@ -49,8 +49,11 @@ class BarrettHand(EndEffector):
         EndEffector.__init__(self, manipulator)
         self.simulated = sim
 
-        # Just in case the closing direction is missing.
-        manipulator.SetChuckingDirection([ 0., 1., 1., 1. ])
+        import rospkg, distutils.version
+        ros_version = rospkg.RosStack().get_stack_version('ros')
+        if distutils.version.LooseVersion(ros_version) >= distutils.version.LooseVersion('1.9'):
+            # Just in case the closing direction is missing.
+            manipulator.SetChuckingDirection([ 0., 1., 1., 1. ])
 
         # Hand controller
         robot = self.manipulator.GetRobot()
