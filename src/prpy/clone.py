@@ -47,6 +47,7 @@ class ClonedEnvironment(openravepy.Environment):
     def __exit__(self, *args):
         if self.destroy_on_exit:
             self.Destroy()
+            self.SetUserData(None)
         else:
             self.__class__.get_envs().pop()
 
