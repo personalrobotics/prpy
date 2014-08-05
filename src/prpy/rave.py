@@ -151,6 +151,15 @@ def clear_rendered_trajectories(env):
       if b.GetName().startswith('traj_sphere'):
          env.Remove(b)
 
+def load_trajectory(env, path, xmlid=''):
+    traj = openravepy.RaveCreateTrajectory(env, xmlid)
+
+    with open(path, 'rb') as traj_file:
+        traj_xml = traj_file.read()
+        traj.deserialize(traj_xml)
+
+    return traj
+
 def fix_trajectory(traj):
     """Remove duplicate waypoints that are introduced during smoothing.
     """
