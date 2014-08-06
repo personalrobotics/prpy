@@ -160,6 +160,12 @@ def load_trajectory(env, path, xmlid=''):
 
     return traj
 
+def save_trajectory(traj, path):
+    traj_xml = traj.serialize(0)
+
+    with open(path, 'wb') as traj_file:
+        traj_file.write(traj_xml)
+
 def fix_trajectory(traj):
     """Remove duplicate waypoints that are introduced during smoothing.
     """
