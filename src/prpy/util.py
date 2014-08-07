@@ -272,6 +272,39 @@ class Recorder(object):
     def stop(self):
         self.module.SendCommand('Stop')
 
+class AlignmentToken(object):
+    def __init__(self, env, child_frame, extents, pose=None, period=0.05, parent_frame='world'):
+        self.child_frame = child_frame
+        self.parent_frame = parent_frame
+
+        with env:
+            self.body = openravepy.RaveCreateKinBody(env, "")
+            aabbs = numpy.concatenate(([ 0., 0., 0. ], extents)).reshape((1, 6))
+            self.body.InitFromBoxes(aabbs, True)
+            self.body.SetName('frame:' + child_frame)
+
+            if pose is not None:
+                self.body.SetTransform(pose)
+
+            env.Add(self.body, True)
+
+        import tf, rospy
+        self.broadcaster = tf.TransformBroadcaster()
+        self.timer = rospy.Timer(rospy.Duration.from_sec(period), self.update)
+
+    def update(self, event):
+        with self.body.GetEnv():
+            or_pose = self.body.GetTransform()
+            or_quaternion = openravepy.quatFromRotationMatrix(or_pose)
+
+        position = tuple(or_pose[0:3, 3])
+        orientation = (or_quaternion[1], or_quaternion[2], or_quaternion[3], or_quaternion[0])
+        self.broadcaster.sendTransform(position, orientation, event.current_real,
+                                       self.child_frame, self.parent_frame)
+
+    def destroy(self):
+        self.body.GetEnv().Remove(self.body)
+        self.body = None
 
 class Timer(object):
     def __init__(self, message):
