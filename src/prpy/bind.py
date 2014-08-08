@@ -41,6 +41,7 @@ class InstanceDeduplicator(object):
     USERDATA_DESTRUCTOR = '__destructor__'
     USERDATA_CANONICAL = 'canonical_instance'
     ATTRIBUTE_CANONICAL = '_canonical_instance'
+    ATTRIBUTE_IS_CANONICAL = '_is_canonical_instance'
     KINBODY_TYPE, LINK_TYPE, JOINT_TYPE, MANIPULATOR_TYPE = range(4)
 
     @staticmethod
@@ -119,14 +120,21 @@ class InstanceDeduplicator(object):
         # If it's not available, fall back on doing the full lookup not
         # available, fall back on doing the full lookup
         except AttributeError:
-            userdata_getter, userdata_setter = cls.get_storage_methods(instance)
             try:
-                canonical_instance = userdata_getter(cls.USERDATA_CANONICAL)
+                is_canonical_instance = object.__getattribute__(instance, cls.ATTRIBUTE_IS_CANONICAL)
+                canonical_instance = instance
+            except AttributeError:
+                userdata_getter, userdata_setter = cls.get_storage_methods(instance)
+                try:
+                    canonical_instance = userdata_getter(cls.USERDATA_CANONICAL)
 
-                # ...and cache the value for future queries.
-                object.__setattr__(instance, cls.ATTRIBUTE_CANONICAL, canonical_instance)
-            except KeyError:
-                canonical_instance = None
+                    # ...and cache the value for future queries.
+                    if canonical_instance is instance:
+                        object.__setattr__(instance, cls.ATTRIBUTE_IS_CANONICAL, True)
+                    else:
+                        object.__setattr__(instance, cls.ATTRIBUTE_CANONICAL, canonical_instance)
+                except KeyError:
+                    canonical_instance = None
 
         return canonical_instance
 
