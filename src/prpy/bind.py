@@ -199,6 +199,15 @@ class InstanceDeduplicator(object):
             # the environment.
             def cleanup_callback(owner, flag):
                 if flag == 0: # removed
+                    # Clear any attributes that the user might have bound to
+                    # the object. This is necessary to clear cycles.
+                    canonical_instance = InstanceDeduplicator.get_canonical(owner)
+                    if canonical_instance is not None:
+                        canonical_dict = object.__getattribute__(canonical_instance, '__dict__')
+                        canonical_dict.clear()
+
+                    # Remove any storage (e.g. canonical_instance) bound to
+                    # this object.
                     cls.remove_storage(owner)
 
             if hasattr(env, 'RegisterBodyCallback'):
