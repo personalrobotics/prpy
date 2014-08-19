@@ -39,25 +39,8 @@ def is_catkin():
         raise ValueError('Environment variable ROS_DISTRO is not set.')
 
 if is_catkin():
-    def append_to_env(name, new_paths):
-        import os
-        paths  = list(new_paths)
-        paths += os.environ.get(name, '').split(os.pathsep)
-        os.environ[name] = os.pathsep.join(paths)
-    
     def export():
-        import openravepy
-        from catkin.find_in_workspaces import find_in_workspaces
-    
-        # Compute the major-minor OpenRAVE version.
-        version, _, _ = openravepy.__version__.rpartition('.')
-    
-        # Append to OPENRAVE_PLUGINS.
-        plugins_dir = 'openrave-' + version
-        lib_directories = find_in_workspaces(search_dirs=[ 'lib' ])
-        plugins_path = [ os.path.join(lib_dir, plugins_dir) \
-                         for lib_dir in lib_directories ]
-        append_to_env('OPENRAVE_PLUGINS', plugins_path)
+        pass # do nothing
 else:
     def append_to_env(variable, new_path, separator=':'):
         paths = os.environ.get(variable, '')
