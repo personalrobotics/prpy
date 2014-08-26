@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, numpy, openravepy, scipy.misc, time
+import logging, numpy, openravepy, scipy.misc, time, threading
 
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
@@ -276,9 +276,10 @@ class AlignmentToken(object):
     def __init__(self, env, child_frame, extents, pose=None, period=0.05, parent_frame='world'):
         self.child_frame = child_frame
         self.parent_frame = parent_frame
+        self.period = period
 
         with env:
-            self.body = openravepy.RaveCreateKinBody(env, "")
+            self.body = openravepy.RaveCreateKinBody(env, '')
             aabbs = numpy.concatenate(([ 0., 0., 0. ], extents)).reshape((1, 6))
             self.body.InitFromBoxes(aabbs, True)
             self.body.SetName('frame:' + child_frame)
@@ -288,19 +289,26 @@ class AlignmentToken(object):
 
             env.Add(self.body, True)
 
-        import tf, rospy
+        import tf 
         self.broadcaster = tf.TransformBroadcaster()
-        self.timer = rospy.Timer(rospy.Duration.from_sec(period), self.update)
 
-    def update(self, event):
+        self.update()
+
+    def update(self):
+        import rospy
+
         with self.body.GetEnv():
             or_pose = self.body.GetTransform()
             or_quaternion = openravepy.quatFromRotationMatrix(or_pose)
 
         position = tuple(or_pose[0:3, 3])
         orientation = (or_quaternion[1], or_quaternion[2], or_quaternion[3], or_quaternion[0])
-        self.broadcaster.sendTransform(position, orientation, event.current_real,
+        self.broadcaster.sendTransform(position, orientation, rospy.Time.now(),
                                        self.child_frame, self.parent_frame)
+
+        self.timer = threading.Timer(self.period, self.update)
+        self.timer.daemon = True
+        self.timer.start()
 
     def destroy(self):
         self.body.GetEnv().Remove(self.body)
