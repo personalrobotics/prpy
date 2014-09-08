@@ -142,7 +142,7 @@ class WAMRobot(Robot):
                     blend_step_size=blend_step_size, linearity_threshold=linearity_threshold,
                     ignore_collisions=ignore_collisions)
 
-    def ExecuteTrajectory(self, traj, timeout=None, blend=True, retime=True, limit_tolerance=1e-3, **kw_args):
+    def ExecuteTrajectory(self, traj, timeout=None, blend=True, retime=True, limit_tolerance=1e-3, synchronize=True, **kw_args):
         """Execute a trajectory.
         By default, this function retimes, blends, and adds the stop_on_stall
         flag to all trajectories. This behavior can be overriden using the \tt
@@ -160,7 +160,7 @@ class WAMRobot(Robot):
         # Query the active manipulators based on which DOF indices are
         # included in the trajectory.
         active_manipulators = self.GetTrajectoryManipulators(traj)
-        needs_synchronization = len(active_manipulators) > 1
+        needs_synchronization = synchronize and len(active_manipulators) > 1
         sim_flags = [ manipulator.simulated for manipulator in active_manipulators ]
 
         if needs_synchronization and any(sim_flags) and not all(sim_flags):
@@ -249,12 +249,15 @@ class WAMRobot(Robot):
             manipulator.ClearTrajectoryStatus()
 
         # FIXME: The IdealController attempts to sample the MacTrajectory in simulation.
-        self.GetController().SetPath(traj)
+        # self.GetController().SetPath(traj)
 
         # Wait for trajectory execution to finish.
         running_controllers = [ manipulator.controller for manipulator in running_manipulators ]
         if needs_base:
             running_controllers += [ self.base.controller ]
+
+        for controller in running_controllers:
+            controller.SetPath(traj)
 
         is_done = util.WaitForControllers(running_controllers, timeout=timeout)
             

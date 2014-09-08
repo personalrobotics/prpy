@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,6 +35,8 @@ class OMPLPlanner(BasePlanner):
     def __init__(self, algorithm='RRTConnect'):
         super(OMPLPlanner, self).__init__()
 
+        self.setup = False
+
         self.algorithm = algorithm
         try:
             self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL')
@@ -46,7 +48,7 @@ class OMPLPlanner(BasePlanner):
         return 'OMPL {0:s}'.format(self.algorithm)
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, timeout=25.0, shortcut_timeout=5.0, **kw_args):
+    def PlanToConfiguration(self, robot, goal, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
         """
         Plan to a desired configuration with OMPL. This will invoke the OMPL
         planner specified in the OMPLPlanner constructor.
@@ -54,16 +56,20 @@ class OMPLPlanner(BasePlanner):
         @param goal desired configuration
         @return traj
         """
-        params = openravepy.Planner.PlannerParameters()
-        params.SetRobotActiveJoints(robot)
-        params.SetGoalConfig(goal)
-        params.SetExtraParameters(
-            '<time_limit>{time_limit:f}</time_limit>'\
+        extraParams = '<time_limit>{time_limit:f}</time_limit>'\
             '<planner_type>{algorithm:s}</planner_type>'.format(
                 time_limit = timeout,
                 algorithm = self.algorithm
             )
-        )
+
+        if ompl_args is not None:
+            for key,value in ompl_args.iteritems():
+                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
+
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetGoalConfig(goal)
+        params.SetExtraParameters(extraParams)
 
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
@@ -71,7 +77,10 @@ class OMPLPlanner(BasePlanner):
             self.env.Lock()
 
             # Plan.
-            self.planner.InitPlan(robot, params)
+            if (not continue_planner) or not self.setup:
+                self.planner.InitPlan(robot, params)
+                self.setup = True
+
             status = self.planner.PlanPath(traj, releasegil=True)
             from openravepy import PlannerStatus
             if status not in [ PlannerStatus.HasSolution,
