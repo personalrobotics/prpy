@@ -55,6 +55,23 @@ class CHOMPPlanner(BasePlanner):
         return 'CHOMP'
 
     @PlanningMethod
+    def OptimizeTrajectory(self, robot, traj, lambda_=100.0, n_iter=50):
+        self.distance_fields.sync(robot)
+
+        cspec = traj.GetConfigurationSpecification()
+        cspec.AddDeltaTimeGroup()
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
+        for i in xrange(traj.GetNumWaypoints()):
+            waypoint = traj.GetWaypoint(i)
+            cspec.InsertDeltaTime(waypoint, .1)
+            traj.Insert(i, waypoint, True)
+        
+        run = self.module.create(robot=robot, starttraj=traj, lambda_=lambda_)
+        self.module.iterate(n_iter=n_iter, run=run)
+        self.module.destroy(run=run)
+        return traj
+
+    @PlanningMethod
     def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15, **kw_args):
         """
         Plan to a single configuration with single-goal CHOMP.
