@@ -16,4 +16,6 @@
   <run_depend>python-catkin-pkg</run_depend>
   <run_depend>python-numpy</run_depend>
   <run_depend>python-scipy</run_depend>
+  <test_depend>unittest</test_depend>
+  <test_depend>python-nose</test_depend>
 </package>

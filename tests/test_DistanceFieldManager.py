@@ -106,7 +106,40 @@ class DistanceFieldManagerTest(unittest.TestCase):
         self.assertEqual(len(self.module.removefield_args), 0)
 
     def test_Sync_IgnoresActiveRobotLinks(self):
-        self.assertTrue(False) # TODO: add a test for this.
+        self.is_processed = False
+
+        def computedistancefield(kinbody=None, cube_extent=None,
+                                 aabb_padding=None, cache_filename=None,
+                                 releasegil=False, **kw_args):
+            if kinbody.GetName() == self.robot.GetName():
+                self.assertTrue(self.robot.GetLink('segway').IsEnabled())
+                self.assertTrue(self.robot.GetLink('wam0').IsEnabled())
+                self.assertTrue(self.robot.GetLink('wam1').IsEnabled())
+                self.assertTrue(self.robot.GetLink('wam2').IsEnabled())
+                self.assertTrue(self.robot.GetLink('wam3').IsEnabled())
+                self.assertFalse(self.robot.GetLink('wam4').IsEnabled())
+                self.assertFalse(self.robot.GetLink('wam5').IsEnabled())
+                self.assertFalse(self.robot.GetLink('wam6').IsEnabled())
+                self.assertFalse(self.robot.GetLink('wam7').IsEnabled())
+                self.assertFalse(self.robot.GetLink('handbase').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger0-0').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger0-1').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger0-2').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger1-0').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger1-1').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger1-2').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger2-1').IsEnabled())
+                self.assertFalse(self.robot.GetLink('Finger2-2').IsEnabled())
+                self.is_processed = True
+
+        dof_index = self.robot.GetJoint('Elbow').GetDOFIndex()
+        self.robot.SetActiveDOFs([ dof_index ])
+        self.robot.Enable(True)
+
+        self.module.computedistancefield = computedistancefield
+        self.manager.sync(self.robot)
+
+        self.assertTrue(self.is_processed)
 
     def test_Sync_RecomputesDistanceFieldIfStateChanges(self):
         self.robot.GetKinematicsGeometryHash = lambda: 'mock_before'
