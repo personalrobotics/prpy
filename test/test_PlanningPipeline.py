@@ -1,4 +1,8 @@
-import roslib; roslib.load_manifest('prpy')
+#!/usr/bin/env python
+import os
+if os.environ.get('ROS_DISTRO', 'hydro')[0] in 'abcdef':
+    import roslib; roslib.load_manifest('prpy')
+
 import openravepy, unittest, numpy, threading
 import prpy.planning
 from planner_mocks import SuccessPlanner, FailPlanner
