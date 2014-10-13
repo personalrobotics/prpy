@@ -9,6 +9,7 @@ from prpy.planning.chomp import DistanceFieldManager
 class CHOMPModuleMock(object):
     def __init__(self, env):
         self.env = env
+        self.sequence = 0
         self.computedistancefield_args = []
         self.removefield_args = []
 
@@ -19,14 +20,18 @@ class CHOMPModuleMock(object):
                              aabb_padding=None, cache_filename=None,
                              releasegil=False, **kw_args):
         self.computedistancefield_args.append({
+            '__sequence__': self.sequence,
             'kinbody': kinbody,
             'cache_filename': cache_filename,
         })
+        self.sequence += 1
 
     def removefield(self, kinbody=None, releasegil=False):
         self.removefield_args.append({
+            '__sequence__': self.sequence,
             'kinbody': kinbody,
         })
+        self.sequence += 1
 
 class DistanceFieldManagerTest(unittest.TestCase):
     def setUp(self):
@@ -94,10 +99,31 @@ class DistanceFieldManagerTest(unittest.TestCase):
         self.manager.sync(self.robot)
         del self.module.computedistancefield_args[:]
         del self.module.removefield_args[:]
+
         self.manager.sync(self.robot)
 
         self.assertEqual(len(self.module.computedistancefield_args), 0)
         self.assertEqual(len(self.module.removefield_args), 0)
+
+    def test_Sync_IgnoresActiveRobotLinks(self):
+        self.assertTrue(False) # TODO: add a test for this.
+
+    def test_Sync_RecomputesDistanceFieldIfStateChanges(self):
+        self.robot.GetKinematicsGeometryHash = lambda: 'mock_before'
+        self.manager.sync(self.robot)
+        del self.module.computedistancefield_args[:]
+        del self.module.removefield_args[:]
+
+        self.robot.GetKinematicsGeometryHash = lambda: 'mock_after'
+        self.manager.sync(self.robot)
+
+        self.assertEqual(len(self.module.computedistancefield_args), 1)
+        self.assertEqual(self.module.computedistancefield_args[0]['kinbody'], self.robot)
+
+        self.assertEqual(len(self.module.removefield_args), 1)
+        self.assertEqual(self.module.removefield_args[0]['kinbody'], self.robot)
+        self.assertLess(self.module.removefield_args[0]['__sequence__'],
+                        self.module.computedistancefield_args[0]['__sequence__'])
 
 if __name__ == '__main__':
     unittest.main()
