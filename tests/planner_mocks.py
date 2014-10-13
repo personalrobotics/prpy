@@ -1,8 +1,9 @@
 import prpy.planning, threading, openravepy, numpy
+from prpy.planning.base import BasePlanner, PlanningMethod
 
-class MockPlanner(prpy.planning.BasePlanner):
+class MockPlanner(BasePlanner):
     def __init__(self, delay=False):
-        prpy.planning.BasePlanner.__init__(self)
+        BasePlanner.__init__(self)
         self.num_calls = 0
         self.delay = delay
         self.start_condition = threading.Condition()
@@ -47,7 +48,7 @@ class SuccessPlanner(MockPlanner):
             self.traj = openravepy.RaveCreateTrajectory(self.env, template_traj.GetXMLId())
             self.traj.Clone(template_traj, 0)
 
-    @prpy.planning.PlanningMethod
+    @PlanningMethod
     def PlanTest(self, robot):
         def Success_impl(robot):
             cspec = robot.GetActiveConfigurationSpecification()
@@ -60,7 +61,7 @@ class SuccessPlanner(MockPlanner):
         return self._PlanGeneric(Success_impl, robot)
 
 class FailPlanner(MockPlanner):
-    @prpy.planning.PlanningMethod
+    @PlanningMethod
     def PlanTest(self, robot):
         def Failure_impl(robot):
             raise prpy.planning.PlanningError('FailPlanner')
