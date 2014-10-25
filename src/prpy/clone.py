@@ -45,6 +45,7 @@ class ClonedEnvironment(openravepy.Environment):
         pass
 
     def __exit__(self, *args):
+        from prpy.bind import clear_referrers
         if self.destroy_on_exit:
             self.Destroy()
             self.SetUserData(None)

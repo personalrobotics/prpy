@@ -245,6 +245,49 @@ class InstanceDeduplicator(object):
             for child_key in children_set:
                 user_data.pop(child_key)
 
+
+def clear_referrers(obj, dbg=False):
+    import gc
+    for referrer in gc.get_referrers(obj):
+        if isinstance(referrer, dict):
+            for field, value in referrer.items():
+                if value is obj:
+                    del referrer[field]
+        elif hasattr(referrer, '__dict__'):
+            for field,value in referrer.__dict__.items():
+                if value is obj:
+                    del referrer.__dict__[field]
+        elif hasattr(referrer, 'remove'):
+            referrer.remove(obj)
+        elif type(referrer) == tuple:
+            clear_referrers(referrer, dbg=True)
+        else:
+            #import pprint
+            #pp = pprint.PrettyPrinter(indent=4)
+            #pp.pprint(referrer)
+            pass
+
+def print_referrers(obj, dbg=False):
+    import gc
+    for referrer in gc.get_referrers(obj):
+        if isinstance(referrer, dict):
+            for field, value in referrer.items():
+                if value is obj:
+                    print referrer, field
+        elif hasattr(referrer, '__dict__'):
+            for field,value in referrer.__dict__.items():
+                if value is obj:
+                    print referrer, field
+        elif hasattr(referrer, 'remove'):
+            print referrer
+        elif type(referrer) == tuple:
+            clear_referrers(referrer, dbg=True)
+        else:
+            #import pprint
+            #pp = pprint.PrettyPrinter(indent=4)
+            #pp.pprint(referrer)
+            pass
+
 def bind_subclass(instance, subclass, *args, **kw_args):
     # Deduplicate the classes associated with any of the objects that we're
     # modifying at runtime. This is necessary for the modifications to be

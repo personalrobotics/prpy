@@ -39,6 +39,13 @@ class CBiRRTPlanner(BasePlanner):
             self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
         except openravepy.openrave_exception:
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
+    
+    def setupEnv(self, env):
+        self.env = env
+        try:
+            self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
+        except openravepy.openrave_exception:
+            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
     def __str__(self):
         return 'CBiRRT'

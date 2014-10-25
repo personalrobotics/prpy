@@ -52,8 +52,8 @@ class WAMRobot(Robot):
 
         self.mac_retimer = None
         self.trajectory_module = prpy.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
-        import manipulation2.trajectory
-        manipulation2.trajectory.bind(self.trajectory_module)
+        #import manipulation2.trajectory
+        #manipulation2.trajectory.bind(self.trajectory_module)
 
     def RetimeTrajectory(self, traj, max_jerk=30.0, synchronize=False,
                          stop_on_stall=True, stop_on_ft=False, force_direction=None,
