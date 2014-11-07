@@ -55,8 +55,9 @@ class TSRList:
                 continue
 
             # Finally, add the chain
-            tsrchain = TSRChain(sample_start = ctsr_yaml['sample_start'],
-                                sample_goal = ctsr_yaml['sample_goal'],
+            tsrchain = TSRChain(sample_start = sample_start,
+                                sample_goal = sample_goal,
+                                constrain = constrain,
                                 TSRs = tsrs)
             self.tsrlist[ctsr_name] = tsrchain
 
