@@ -28,11 +28,14 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, numpy, openravepy, threading, time
+import atexit, logging, numpy, openravepy, threading, time
 
-class ServoSimulator:
+class ServoSimulator(object):
     def __init__(self, manip, rate, watchdog_timeout):
         self.manip = manip
+        self.robot = self.manip.GetRobot()
+        self.env = self.robot.GetEnv()
+
         self.indices = self.manip.GetArmIndices()
         self.num_dofs = len(self.indices)
         self.q_dot = numpy.zeros(self.num_dofs)
@@ -44,12 +47,22 @@ class ServoSimulator:
         self.period = 1.0 / rate
         self.timer = None
         self.mutex = threading.Lock()
+        self.event = threading.Event()
+
+        self.Start()
+
+    def Start(self):
         self.thread = threading.Thread(target=self.Step)
         self.thread.daemon = True
         self.thread.start()
 
+    def Stop(self):
+        self.event.set()
+        self.thread.join()
+
     def SetVelocity(self, q_dot):
-        q_dot_limits = self.manip.GetRobot().GetDOFVelocityLimits(self.indices)
+        with self.manip.GetRobot().GetEnv():
+            q_dot_limits = self.manip.GetRobot().GetDOFVelocityLimits(self.indices)
 
         if not (numpy.abs(q_dot) <= q_dot_limits).all():
             raise openravepy.openrave_exception('Desired velocity exceeds limits.')
@@ -75,13 +88,28 @@ class ServoSimulator:
                     self.q_dot = numpy.zeros(self.num_dofs)
                     self.running = False
                     logging.warning('Servo motion timed out in %.3f seconds.', now - self.watchdog)
+
             if running:
-                with self.manip.GetRobot().GetEnv():
-                    q  = self.manip.GetDOFValues()
-                    q += self.period * q_dot
+                env = self.manip.GetRobot().GetEnv()
+                with env:
+                    try:
+                        q  = self.manip.GetDOFValues()
+                        q += self.period * q_dot
+                    except openravepy.openrave_exception as e:
+                        # Otherwise, the those threads may access the OpenRAVE
+                        # environment after it has been destroyed. This can
+                        # occur if an exception is thrown elsewhere in the code
+                        # and can generate very confusing error messages. We'll
+                        # catch the exception here and cleanly exit.
+                        if e.GetCode() == openravepy.ErrorCode.NotInitialized:
+                            self.event.set()
+                            break
+                        else:
+                            raise
 
                     # Check joint limits.
-                    with self.manip.GetRobot().CreateRobotStateSaver():
+                    sp = openravepy.Robot.SaveParameters
+                    with self.manip.GetRobot().CreateRobotStateSaver(sp.ActiveDOF | sp.ActiveManipulator):
                         self.manip.SetActive()
                         q_min, q_max = self.manip.GetRobot().GetActiveDOFLimits()
 
@@ -91,4 +119,6 @@ class ServoSimulator:
                         self.running = False 
                         logging.warning('Servo motion hit a joint limit.')
 
-            time.sleep(self.period)
+            if self.event.wait(self.period):
+                break
+
