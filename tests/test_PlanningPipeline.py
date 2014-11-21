@@ -1,10 +1,16 @@
 #!/usr/bin/env python
-import os
+
+# Hack because nosetest does not run tests in the current working directory.
+# Source: http://stackoverflow.com/q/6670275/111426
+import os, sys
+sys.path = [os.path.abspath(os.path.dirname(__file__))] + sys.path
+
 if os.environ.get('ROS_DISTRO', 'hydro')[0] in 'abcdef':
     import roslib; roslib.load_manifest('prpy')
 
 import openravepy, unittest, numpy, threading
 import prpy.planning
+
 from planner_mocks import SuccessPlanner, FailPlanner
 
 class MetaPlannerTests(unittest.TestCase):

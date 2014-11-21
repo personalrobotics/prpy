@@ -28,11 +28,110 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import contextlib, logging, numpy, openravepy, rospkg
+import contextlib, collections, logging, numpy, openravepy, rospkg, warnings
 import prpy.tsr
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 logger = logging.getLogger('prpy.planning.chomp')
+
+DistanceFieldKey = collections.namedtuple('DistanceFieldKey',
+    [ 'kinematics_hash', 'enabled_mask', 'dof_values', 'dof_indices' ])
+
+class DistanceFieldManager(object):
+    def __init__(self, module):
+        self.module = module
+        self.env = self.module.GetEnv()
+        self.cache = dict()
+
+    def sync(self, robot):
+        import os.path
+
+        num_recomputed = 0
+
+        for body in self.env.GetBodies():
+            with body:
+                # Only compute the SDF for links that are stationary. Other
+                # links will be represented with spheres.
+                if body == robot:
+                    active_dof_indices = robot.GetActiveDOFIndices()
+                    active_links = self.get_affected_links(robot, active_dof_indices)
+                    for link in active_links:
+                        link.Enable(False)
+
+                body_name = body.GetName()
+                current_state = self.get_geometric_state(body)
+
+                logger.debug('Computed state for "%s": %s', body_name, current_state)
+
+                # Check if the distance field is already loaded. Clear the
+                # existing distance field if there is a key mismatch.
+                cached_state = self.cache.get(body.GetName(), None)
+                if cached_state is not None and cached_state != current_state:
+                    logger.debug('Clearing distance field for "{:s}".', body_name)
+                    self.module.removefield(body)
+                    cached_state = None
+
+                # Otherwise, compute a new distance field and save it to disk.
+                if cached_state is None:
+                    cache_path = self.get_cache_path(current_state)
+                    logger.debug('Computing distance field for "%s"; filename: %s.',
+                        body_name, os.path.basename(cache_path)
+                    )
+
+                    self.module.computedistancefield(body, cache_filename=cache_path)
+                    self.cache[body_name] = current_state
+                    num_recomputed += 1
+                else:
+                    logger.debug('Using existing distance field for "%s".', body_name)
+
+        return num_recomputed
+
+    @staticmethod
+    def get_cache_path(state):
+        import hashlib, pickle
+        state_hash = hashlib.md5(pickle.dumps(state)).hexdigest()
+        filename = 'chomp_{:s}.sdf'.format(state_hash)
+        return openravepy.RaveFindDatabaseFile(filename, False)
+
+    @staticmethod
+    def get_geometric_state(body):
+        enabled_mask = [ link.IsEnabled() for link in body.GetLinks() ]
+
+        dof_indices = []
+        dof_values = []
+        for joint in body.GetJoints():
+            for link in body.GetLinks():
+                if not link.IsEnabled():
+                    continue
+
+                if body.DoesAffect(joint.GetJointIndex(), link.GetIndex()):
+                    dof_indices += range(joint.GetDOFIndex(),
+                                         joint.GetDOFIndex() + joint.GetDOF())
+                    dof_values += joint.GetValues()
+                    break
+
+        return DistanceFieldKey(
+            kinematics_hash = body.GetKinematicsGeometryHash(),
+            enabled_mask = tuple(enabled_mask),
+            dof_indices = tuple(dof_indices),
+            dof_values = tuple(dof_values),
+        )
+
+    @staticmethod
+    def get_affected_links(body, dof_indices):
+        """Get the links that are affected by one or more active DOFs.
+        """
+        all_effected_links = set()
+
+        for active_dof_index in dof_indices:
+            joint = body.GetJointFromDOFIndex(active_dof_index)
+            effected_links = [
+                link for link in body.GetLinks() \
+                if body.DoesAffect(joint.GetJointIndex(), link.GetIndex())
+            ]
+            all_effected_links.update(effected_links)
+
+        return all_effected_links
 
 class CHOMPPlanner(BasePlanner):
     def __init__(self):
@@ -50,6 +149,7 @@ class CHOMPPlanner(BasePlanner):
 
         self.initialized = False
         orcdchomp.bind(self.module)
+        self.distance_fields = DistanceFieldManager(self.module)
 
     def __str__(self):
         return 'CHOMP'
@@ -63,8 +163,7 @@ class CHOMPPlanner(BasePlanner):
         @param lambda_ step size
         @param n_iter number of iterations
         """
-        if not self.initialized:
-            raise UnsupportedPlanningError('CHOMP requires a distance field.')
+        self.distance_fields.sync(robot)
 
         try:
             return self.module.runchomp(robot=robot, adofgoal=goal,
@@ -84,16 +183,14 @@ class CHOMPPlanner(BasePlanner):
         @param goal_tolerance tolerance in meters
         @return traj
         """
+        self.distance_fields.sync(robot)
+
         # CHOMP only supports start sets. Instead, we plan backwards from the
         # goal TSR to the starting configuration. Afterwards, we reverse the
         # trajectory.
-        # TODO: Replace this with a proper goalset CHOMP implementation.
         manipulator_index = robot.GetActiveManipulatorIndex()
         goal_tsr = prpy.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         start_config = robot.GetActiveDOFValues()
-
-        if not self.initialized:
-            raise UnsupportedPlanningError('CHOMP requires a distance field.')
 
         try:
             traj = self.module.runchomp(robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
@@ -127,8 +224,7 @@ class CHOMPPlanner(BasePlanner):
         @param tsrchains A TSR chain with a single goal tsr
         @return traj
         """
-        if not self.initialized:
-            raise UnsupportedPlanningError('CHOMP requires a distance field')
+        self.distance_fields.sync(robot)
 
         manipulator_index = robot.GetActiveManipulatorIndex()
         start_config = robot.GetActiveDOFValues()
@@ -153,56 +249,7 @@ class CHOMPPlanner(BasePlanner):
 
         return traj
 
-
     def ComputeDistanceField(self, robot):
-        # Clone the live environment into the planning environment.
-        live_robot = robot
-        live_env = live_robot.GetEnv()
-        with live_env:
-            from openravepy import CloningOptions
-            self.env.Clone(live_env, CloningOptions.Bodies)
-            robot = self.env.GetRobot(live_robot.GetName())
+        logger.warning('ComputeDistanceField is deprecated. Distance fields are'
+                       ' now implicity created by DistanceFieldManager.')
 
-        # We can't use a with statement here because it is overriden on cloned
-        # environments.
-        self.env.Lock()
-        try:
-            # Disable everything.
-            for body in self.env.GetBodies():
-                body.Enable(False)
-
-            # Compute the distance field for the non-spherized parts of HERB. This
-            # includes everything that isn't attached to an arm. Otherwise the
-            # initial arm will be incorrectly added to the distance field.
-            robot.Enable(True)
-            logging.info("Creating the robot's distance field.")
-            proximal_joints = [ manip.GetArmIndices()[0] for manip in robot.GetManipulators() ]
-            for link in robot.GetLinks():
-                for proximal_joint in proximal_joints:
-                    if robot.DoesAffect(proximal_joint, link.GetIndex()):
-                        link.Enable(False)
-
-            cache_path = self.GetCachePath(robot)
-            self.module.computedistancefield(robot, cache_filename=cache_path, releasegil=True)
-            robot.Enable(False)
-
-            # Compute separate distance fields for all other objects.
-            for body in self.env.GetBodies():
-                if body != robot:
-                    logging.info("Creating distance field for '{0:s}'.".format(body.GetName()))
-                    body.Enable(True)
-                    cache_path = self.GetCachePath(body)
-                    self.module.computedistancefield(body, cache_filename=cache_path, releasegil=True)
-                    body.Enable(False)
-
-                logging.info('done with body %s', body.GetName())
-        finally:
-            self.env.Unlock()
-
-        self.initialized = True 
-
-    def GetCachePath(self, body):
-        import os
-        cache_dir = rospkg.get_ros_home()
-        cache_name = '{0:s}.chomp'.format(body.GetKinematicsGeometryHash())
-        return os.path.join(cache_dir, cache_name)
