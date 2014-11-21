@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import contextlib, collections, logging, numpy, openravepy, rospkg
+import contextlib, collections, logging, numpy, openravepy, rospkg, warnings
 import prpy.tsr
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
@@ -61,19 +61,20 @@ class DistanceFieldManager(object):
                 body_name = body.GetName()
                 current_state = self.get_geometric_state(body)
 
-                logger.info('Computed state for "%s": %s', body_name, current_state)
+                logger.debug('Computed state for "%s": %s', body_name, current_state)
 
-                # Check if the distance field is already loaded.
+                # Check if the distance field is already loaded. Clear the
+                # existing distance field if there is a key mismatch.
                 cached_state = self.cache.get(body.GetName(), None)
                 if cached_state is not None and cached_state != current_state:
-                    logger.info('Clearing distance field for "{:s}".', body_name)
+                    logger.debug('Clearing distance field for "{:s}".', body_name)
                     self.module.removefield(body)
                     cached_state = None
 
-                # Otherwise, compute a new distance field.
+                # Otherwise, compute a new distance field and save it to disk.
                 if cached_state is None:
                     cache_path = self.get_cache_path(current_state)
-                    logger.info('Computing distance field for "%s"; filename: %s.',
+                    logger.debug('Computing distance field for "%s"; filename: %s.',
                         body_name, os.path.basename(cache_path)
                     )
 
@@ -81,7 +82,7 @@ class DistanceFieldManager(object):
                     self.cache[body_name] = current_state
                     num_recomputed += 1
                 else:
-                    logger.info('Using existing distance field for "%s".', body_name)
+                    logger.debug('Using existing distance field for "%s".', body_name)
 
         return num_recomputed
 
@@ -249,5 +250,6 @@ class CHOMPPlanner(BasePlanner):
         return traj
 
     def ComputeDistanceField(self, robot):
-        logger.warning('ComputeDistanceField is no longer required and is'
-                       ' considered deprecated.')
+        logger.warning('ComputeDistanceField is deprecated. Distance fields are'
+                       ' now implicity created by DistanceFieldManager.')
+
