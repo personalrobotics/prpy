@@ -31,6 +31,8 @@
 import logging
 from clone import CloneException
 
+logger = logging.getLogger('bind')
+
 class NotCloneableException(CloneException):
     pass
 
@@ -210,6 +212,9 @@ class InstanceDeduplicator(object):
                     # this object.
                     cls.remove_storage(owner)
 
+                    # Remove circular references that pass through Boost.Python.
+                    clear_referrers(owner)
+
             if hasattr(env, 'RegisterBodyCallback'):
                 handle = env.RegisterBodyCallback(cleanup_callback)
                 user_data[cls.USERDATA_DESTRUCTOR] = handle
@@ -263,26 +268,35 @@ class InstanceDeduplicator(object):
                 user_data.pop(child_key)
 
 
-def clear_referrers(obj, dbg=False):
+def clear_referrers(obj, debug=False):
     import gc
+
+    # TODO: We should do a topographical sort on these references.
+
     for referrer in gc.get_referrers(obj):
+        logger.warning('Clearing referrer "%s" to object "%s".', referrer, obj)
+
+        # Handle standard Python objects.
+        if hasattr(referrer, '__dict__'):
+            for field,value in referrer.__dict__.items():
+                if value is obj:
+                    del referrer.__dict__[field]
+
+        # Remove references from built-in collections.
         if isinstance(referrer, dict):
             for field, value in referrer.items():
                 if value is obj:
                     del referrer[field]
-        elif hasattr(referrer, '__dict__'):
-            for field,value in referrer.__dict__.items():
-                if value is obj:
-                    del referrer.__dict__[field]
-        elif hasattr(referrer, 'remove'):
+        elif isinstance(referrer, list) or isinstance(referrer, set):
             referrer.remove(obj)
-        elif type(referrer) == tuple:
-            clear_referrers(referrer, dbg=True)
-        else:
-            #import pprint
-            #pp = pprint.PrettyPrinter(indent=4)
-            #pp.pprint(referrer)
-            pass
+        # tuple and frozenset are immutable, so we remove the whole object.
+        elif isinstance(referrer, tuple) or isinstance(referrer, frozenset):
+            clear_referrers(referrer, debug=debug)
+
+        if debug:
+            import pprint
+            pp = pprint.PrettyPrinter(indent=4)
+            pp.pprint(referrer)
 
 def print_referrers(obj, dbg=False):
     import gc

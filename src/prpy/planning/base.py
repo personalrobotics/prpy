@@ -59,14 +59,14 @@ class PlanningMethod(object):
         try:#, clone_env=instance.env):
             instance.setupEnv(cenv)
             crobot = Cloned(robot)
+
             planning_traj = self.func(instance, crobot, *args, **kw_args)
             traj = openravepy.RaveCreateTrajectory(env, planning_traj.GetXMLId())
             traj.Clone(planning_traj, 0)
-            crobot.BoostReferenceCleanup()
         except:
             raise
         finally:
-            cenv.__exit__()
+            cenv.Destroy()
 
         return traj 
 
