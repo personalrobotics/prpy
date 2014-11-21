@@ -31,10 +31,12 @@
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, planning, util
 from prpy.clone import Clone, Cloned
+from prpy.tsr.base import TSRLibrary
 
 class Robot(openravepy.Robot):
     def __init__(self):
         self.planner = None
+        self.tsrlibrary = TSRLibrary(self)
         self.controllers = list()
         self.manipulators = list()
         self.configurations = named_config.ConfigurationLibrary()
