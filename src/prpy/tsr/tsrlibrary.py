@@ -1,4 +1,4 @@
-import functools, logging, os.path
+import collections, functools, logging, os.path
 
 logger = logging.getLogger('tsr')
 
@@ -22,7 +22,7 @@ class TSRFactory(object):
 
 
 class TSRLibrary(object):
-    all_factories = {}
+    all_factories = collections.defaultdict(lambda: collections.defaultdict(dict))
     
     def __init__(self, robot, robot_name=None):
         """
@@ -40,7 +40,8 @@ class TSRLibrary(object):
 
     def __call__(self, kinbody, action_name, *args, **kw_args):
         """
-        Calls the appropriate factory. Raise key error if no matching factory exists
+        Creates a TSR to perform an action on an object with this robot. Raises
+        KeyError if no matching factory exists.
         @param robot The robot to run the tsr on 
         @param kinbody The kinbody to act on
         @param action_name The name of the action
@@ -51,20 +52,40 @@ class TSRLibrary(object):
             kinbody_name = self.get_object_type(kinbody)
             logger.debug('Inferred KinBody name "%s" for TSR.', kinbody_name)
 
-        f = self.all_factories[self.robot_name][kinbody_name][action_name]
+        try:
+            f = self.all_factories[self.robot_name][kinbody_name][action_name]
+        except KeyError:
+            raise KeyError('There is no TSR factory registered for action "{:s}"'
+                           ' with robot "{:s}" and object "{:s}".'.format(
+                           action_name, self.robot_name, kinbody_name))
+
         return f(self.robot, kinbody, *args, **kw_args)
 
     @classmethod
-    def add_factory(cls, func, robot_name, obj_name, action_name):
-        logger.debug('Adding factory for %s, %s, %s' % (robot_name, obj_name, action_name))
-        if robot_name not in cls.all_factories:
-            cls.all_factories[robot_name] = {}
-        if obj_name not in cls.all_factories[robot_name]:
-            cls.all_factories[robot_name][obj_name] = {}
-        cls.all_factories[robot_name][obj_name][action_name] = func
+    def add_factory(cls, func, robot_name, object_name, action_name):
+        """
+        Register a TSR factory to perform an action on an object with this robot.
+        @param robot_name name of the robot
+        @param object_name name of the object
+        @param action_name name of the action
+        """
+        logger.debug('Adding TSRLibrary factory for robot "%s", object "%s", action "%s".',
+            robot_name, object_name, action_name)
+
+        if action_name in cls.all_factories[robot_name][object_name]:
+            logger.warning('Overwriting duplicate TSR factory for action "%s"'
+                           ' with robot "%s" and object "%s"',
+                action_name, robot_name, object_name)
+
+        cls.all_factories[robot_name][object_name][action_name] = func
 
     @staticmethod
     def get_object_type(body):
+        """
+        Infer the name of a KinBody by inspecting its GetXMLFilename.
+        @param body KinBody or Robot object
+        @return object string
+        """
         path = body.GetXMLFilename()
         filename = os.path.basename(path)
         name, _ = os.path.splitext(filename)
