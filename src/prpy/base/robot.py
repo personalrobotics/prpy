@@ -31,7 +31,7 @@
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, planning, util
 from prpy.clone import Clone, Cloned
-from prpy.tsr.base import TSRLibrary
+from prpy.tsr.tsrlibrary import TSRLibrary
 
 class Robot(openravepy.Robot):
     def __init__(self):

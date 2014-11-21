@@ -5,7 +5,7 @@ logger = logging.getLogger('tsr')
 class TSRFactory(object):
     
     def __init__(self, robot_name, obj_name, action_name):
-        print 'Loading %s, %s, %s' % (robot_name, obj_name, action_name)
+        logger.debug('Loading %s, %s, %s' % (robot_name, obj_name, action_name))
         self.robot_name = robot_name
         self.obj_name = obj_name
         self.action_name = action_name
@@ -42,7 +42,7 @@ class TSRLibrary(object):
 
     @classmethod
     def add_factory(cls, func, robot_name, obj_name, action_name):
-        print 'Adding factory for %s, %s, %s' % (robot_name, obj_name, action_name)
+        logger.debug('Adding factory for %s, %s, %s' % (robot_name, obj_name, action_name))
         if robot_name not in cls.all_factories:
             cls.all_factories[robot_name] = {}
         if obj_name not in cls.all_factories[robot_name]:
