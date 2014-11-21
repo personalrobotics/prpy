@@ -29,10 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, openravepy, numpy
-from .. import util
 from robot import Robot
-import manipulation2.trajectory, prpy.rave
+import prpy.rave
 from .. import exceptions
+from .. import util
 
 class MicoRobot(Robot):
     def __init__(self):
@@ -46,6 +46,7 @@ class MicoRobot(Robot):
         '''
         self.trajectory_module = prpy.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
         print 'self.trajectory_module: ', self.trajectory_module
+        import manipulation2.trajectory
         manipulation2.trajectory.bind(self.trajectory_module)
         '''        
 
@@ -55,6 +56,7 @@ class MicoRobot(Robot):
         '''
         self.mac_retimer = None
         self.trajectory_module = prpy.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
+        import manipulation2.trajectory
         manipulation2.trajectory.bind(self.trajectory_module)
         '''
     '''

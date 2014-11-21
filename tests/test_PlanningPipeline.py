@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-import os, sys
-if os.environ.get('ROS_DISTRO', 'hydro')[0] in 'abcdef':
-    import roslib; roslib.load_manifest('prpy')
 
 # Hack because nosetest does not run tests in the current working directory.
 # Source: http://stackoverflow.com/q/6670275/111426
 sys.path = [os.path.abspath(os.path.dirname(__file__))] + sys.path
+
+import os, sys
+if os.environ.get('ROS_DISTRO', 'hydro')[0] in 'abcdef':
+    import roslib; roslib.load_manifest('prpy')
 
 import openravepy, unittest, numpy, threading
 import prpy.planning

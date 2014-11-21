@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,7 @@
 import logging, openravepy, numpy
 from .. import util
 from robot import Robot
-import manipulation2.trajectory, prpy.rave
+import prpy.rave
 from .. import exceptions
 
 class WAMRobot(Robot):
@@ -44,6 +44,7 @@ class WAMRobot(Robot):
 
         # Trajectory blending.
         self.trajectory_module = prpy.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
+        import manipulation2.trajectory
         manipulation2.trajectory.bind(self.trajectory_module)
 
     def CloneBindings(self, parent):
@@ -51,6 +52,7 @@ class WAMRobot(Robot):
 
         self.mac_retimer = None
         self.trajectory_module = prpy.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
+        import manipulation2.trajectory
         manipulation2.trajectory.bind(self.trajectory_module)
 
     def RetimeTrajectory(self, traj, max_jerk=30.0, synchronize=False,
@@ -275,4 +277,3 @@ class WAMRobot(Robot):
                         manipulator.controller.Reset()
 
         return traj
-
