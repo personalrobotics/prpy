@@ -254,6 +254,19 @@ class InstanceDeduplicator(object):
         return getter, setter
 
     @classmethod
+    def get_bound_children(cls, parent):
+        env, _, parent_key = cls.get_environment_id(parent)
+        user_data = env.GetUserData()
+        child_keys = user_data[parent_key].get(cls.USERDATA_CHILDREN, set())
+
+        children = []
+        for child_key in child_keys:
+            canonical_child = user_data[child_key].get(cls.USERDATA_CANONICAL, None)
+            children.append(canonical_child)
+
+        return children
+
+    @classmethod
     def remove_storage(cls, kinbody):
         env, owner, owner_key = cls.get_environment_id(kinbody)
         if kinbody != owner:
@@ -265,6 +278,7 @@ class InstanceDeduplicator(object):
             children_set = owner_dict.get(cls.USERDATA_CHILDREN, set())
 
             for child_key in children_set:
+                print 'CHILD_KEY =', child_key
                 user_data.pop(child_key)
 
 
