@@ -185,6 +185,37 @@ class InstanceDeduplicator(object):
 
         return env, owner, key
 
+    # Cleanup the UserData owned by a KinBody when it is removed from
+    # the environment.
+    @staticmethod
+    def cleanup_callback(owner, flag):
+        if flag == 0: # removed
+            # Clear any attributes that the user might have bound to
+            # the object. This is necessary to clear cycles.
+            canonical_instance = InstanceDeduplicator.get_canonical(owner)
+            if canonical_instance is not None:
+                canonical_dict = object.__getattribute__(canonical_instance, '__dict__')
+                canonical_dict.clear()
+
+
+            # Remove any storage (e.g. canonical_instance) bound to
+            # this object.
+            children, canonical_instance = InstanceDeduplicator.get_bound_children(owner)
+            InstanceDeduplicator.remove_storage(owner)
+
+            # Remove circular references that pass through Boost.Python.
+            # A normal iterator can't be used here because clear_referrers
+            # will delete the child from children causing elements to be
+            # skipped
+            while children:
+                child = children.pop()
+                InstanceDeduplicator.logger.info(child)
+                clear_referrers(child)
+                # NOTE: this is also an acceptable body for the loop :)
+                # clear_referrers(children[0])
+            InstanceDeduplicator.logger.info(owner)
+            clear_referrers(canonical_instance)
+
     @classmethod
     def get_storage_methods(cls, target):
         env, owner, target_key = cls.get_environment_id(target)
@@ -197,26 +228,8 @@ class InstanceDeduplicator(object):
             user_data = dict()
             env.SetUserData(user_data)
 
-            # Cleanup the UserData owned by a KinBody when it is removed from
-            # the environment.
-            def cleanup_callback(owner, flag):
-                if flag == 0: # removed
-                    # Clear any attributes that the user might have bound to
-                    # the object. This is necessary to clear cycles.
-                    canonical_instance = InstanceDeduplicator.get_canonical(owner)
-                    if canonical_instance is not None:
-                        canonical_dict = object.__getattribute__(canonical_instance, '__dict__')
-                        canonical_dict.clear()
-
-                    # Remove any storage (e.g. canonical_instance) bound to
-                    # this object.
-                    cls.remove_storage(owner)
-
-                    # Remove circular references that pass through Boost.Python.
-                    clear_referrers(owner)
-
             if hasattr(env, 'RegisterBodyCallback'):
-                handle = env.RegisterBodyCallback(cleanup_callback)
+                handle = env.RegisterBodyCallback(InstanceDeduplicator.cleanup_callback)
                 user_data[cls.USERDATA_DESTRUCTOR] = handle
             else:
                 cls.logger.warning(
@@ -266,11 +279,14 @@ class InstanceDeduplicator(object):
 
         # Resolve the key to an instance.
         children = []
+        canonical_instance = None
         for child_key in child_keys:
             canonical_child = user_data[child_key].get(cls.USERDATA_CANONICAL, None)
-            children.append(canonical_child)
-
-        return children
+            if canonical_child != parent:
+                children.append(canonical_child)
+            else:
+                canonical_instance = canonical_child
+        return children, canonical_instance
 
     @classmethod
     def remove_storage(cls, kinbody):

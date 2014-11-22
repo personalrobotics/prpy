@@ -48,7 +48,6 @@ class ClonedEnvironment(openravepy.Environment):
         from prpy.bind import clear_referrers
         if self.destroy_on_exit:
             self.Destroy()
-            self.SetUserData(None)
         else:
             self.__class__.get_envs().pop()
 
@@ -62,9 +61,11 @@ class ClonedEnvironment(openravepy.Environment):
         # references.
         # TODO: Make this the default behavior in OpenRAVE.
         for body in self.GetBodies():
-            self.Remove(body)
+            import prpy.bind
+            prpy.bind.InstanceDeduplicator.cleanup_callback(body, flag=0)
 
         openravepy.Environment.Destroy(self)
+        self.SetUserData(None)
 
     @classmethod
     def get_env(cls):

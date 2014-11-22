@@ -79,8 +79,8 @@ class Robot(openravepy.Robot):
         self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
         self.SetController(self.multicontroller)
 
-        self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
-        self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+        #self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
+        #self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
