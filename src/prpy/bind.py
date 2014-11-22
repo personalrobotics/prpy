@@ -209,11 +209,11 @@ class InstanceDeduplicator(object):
             # skipped
             while children:
                 child = children.pop()
-                InstanceDeduplicator.logger.info(child)
+                InstanceDeduplicator.logger.debug(child)
                 clear_referrers(child)
                 # NOTE: this is also an acceptable body for the loop :)
                 # clear_referrers(children[0])
-            InstanceDeduplicator.logger.info(owner)
+            InstanceDeduplicator.logger.debug(owner)
             if canonical_instance != None:
                 clear_referrers(canonical_instance)
 
@@ -310,7 +310,8 @@ def clear_referrers(obj, debug=False):
     # TODO: We should do a topographical sort on these references.
 
     for referrer in gc.get_referrers(obj):
-        logger.warning('Clearing referrer "%s" to object "%s".', referrer, obj)
+        #TODO print if deleting from user defined referrer
+        logger.debug('Clearing referrer "%s" to object "%s".', referrer, obj)
 
         # Handle standard Python objects.
         if hasattr(referrer, '__dict__'):
