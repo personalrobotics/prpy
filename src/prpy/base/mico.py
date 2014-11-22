@@ -28,13 +28,47 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy
+import numpy, openravepy, rospy
 from manipulator import Manipulator
 from prpy.clone import Clone, Cloned
+from controller_manager_msgs.srv import SwitchController, ListControllers
 from .. import util
 from .. import exceptions
+from IPython import embed
 
 class Mico(Manipulator):
+    def _load_controllers(self, controllers, timeout=10):
+        """Load a list of ros_control controllers by name."""
+
+        rospy.wait_for_service('controller_manager/switch_controller', timeout=10)
+        rospy.wait_for_service('controller_manager/list_controllers', timeout=10)
+
+        switch_controllers = rospy.ServiceProxy(
+                'controller_manager/switch_controller', SwitchController)
+        list_controllers = rospy.ServiceProxy(
+                'controller_manager/list_controllers', ListControllers)
+
+        running = set([c.name for c in list_controllers().controller  if c.state == "running"])
+        controllers = set(controllers)
+        switch_controllers(list(controllers - running), list(running - controllers), 2)
+    
+    def _unload_controllers(self, controllers):
+        """Unload a list of ros_control controllers by name"""
+
+        rospy.wait_for_service('controller_manager/switch_controller')
+        rospy.wait_for_service('controller_manager/list_controllers')
+
+        switch_controllers = rospy.ServiceProxy(
+                'controller_manager/switch_controller', SwitchController)
+        list_controllers = rospy.ServiceProxy(
+                'controller_manager/list_controllers', ListControllers)
+
+        running = set([c.name for c in list_controllers().controller
+            if c.state == "running"])
+        controllers = set(controllers)
+        switch_controllers([], list(controllers & running), 2)
+
+
     def __init__(self, sim, controller_namespace,
                  iktype=openravepy.IkParameterization.Type.Transform6D):
         Manipulator.__init__(self)
@@ -44,17 +78,40 @@ class Mico(Manipulator):
         #self.controller = self.GetRobot().AttachController(name=self.GetName(),
             #args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
             #dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
-        self.controller = self.GetRobot().AttachController(name=self.GetName(),
-            args='MicoController {0:s} {1:s}'.format('prpy', controller_namespace),
-            dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
-            
+       # self.controller = self.GetRobot().AttachController(name=self.GetName(),
+       #     args='MicoController {0:s} {1:s}'.format('prpy', controller_namespace),
+       #     dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
+     # Load the IK database.
+        robot = self.GetRobot()
+        if (sim == True):
+            self.controller = self.GetRobot().AttachController(name=self.GetName(),
+            args='idealcontroller'.format('prpy', controller_namespace),
+            dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)        
+        else:
+            #self.controller = self.GetRobot().AttachController(name=self.GetName(),
+            #args='roscontroller openrave {0} 1'.format(rospy.get_namespace()),
+            #dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)    
+            self.or_physical_controller = ('roscontroller openrave {0} 1'.format(rospy.get_namespace()))
+            self.ros_controllers = [
+                "traj_controller",
+                "joint_state_controller",
+            ]
+            or_controller_string = self.or_physical_controller
+            self._load_controllers(self.ros_controllers)
+            env = robot.GetEnv()
+            with env:
+                self.controller = openravepy.RaveCreateController(env,
+                    or_controller_string)
+            m = robot.GetActiveDOFIndices()
+            c = self.controller
+            robot.SetController(c, m, 0)
+
 	#self.hand_controller = self.GetRobot().AttachController(name=self.GetRobot().GetName(),
             #args='MicoHandController {0:s} {1:s}'.format('prpy', '/mico_hand_controller'),
             #dof_indices=self.GetGripperIndices(), affine_dofs=0, simulated=sim)
 
-        # Load the IK database.
-        robot = self.GetRobot()
-        
+   
+
         '''
         if iktype is not None:
             with robot:
