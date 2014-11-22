@@ -51,9 +51,22 @@ class WAMRobot(Robot):
         Robot.CloneBindings(self, parent)
 
         self.mac_retimer = None
-        self.trajectory_module = prpy.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
+        trajectory_module = prpy.rave.load_module(self.GetEnv(), 'Trajectory', self.GetName())
         import manipulation2.trajectory
-        manipulation2.trajectory.bind(self.trajectory_module)
+        #manipulation2.trajectory.bind(self.trajectory_module)
+
+        def myFun(x):
+            pass
+        import types
+
+        class Object():
+            pass
+
+        self.trajectory_module = Object()
+        self.trajectory_module.module = trajectory_module
+        self.trajectory_module.blendtrajectory = types.MethodType(manipulation2.trajectory.blendtrajectory, trajectory_module)
+        self.trajectory_module.executeblendedtrajectory = types.MethodType(manipulation2.trajectory.executeblendedtrajectory, trajectory_module)
+
 
     def RetimeTrajectory(self, traj, max_jerk=30.0, synchronize=False,
                          stop_on_stall=True, stop_on_ft=False, force_direction=None,

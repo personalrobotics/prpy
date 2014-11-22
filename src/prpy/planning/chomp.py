@@ -136,19 +136,41 @@ class DistanceFieldManager(object):
 class CHOMPPlanner(BasePlanner):
     def __init__(self):
         super(CHOMPPlanner, self).__init__()
+        self.setupEnv(self.env)
+
+    def setupEnv(self, env):
+        self.env = env
         try:
             from orcdchomp import orcdchomp
-            self.module = openravepy.RaveCreateModule(self.env, 'orcdchomp')
+            module = openravepy.RaveCreateModule(self.env, 'orcdchomp')
         except ImportError:
             raise UnsupportedPlanningError('Unable to import orcdchomp.')
         except openravepy.openrave_exception as e:
             raise UnsupportedPlanningError('Unable to create orcdchomp module: %s' % e)
 
-        if self.module is None:
+        if module is None:
             raise UnsupportedPlanningError('Failed loading module.')
-
         self.initialized = False
-        orcdchomp.bind(self.module)
+        #orcdchomp.bind(self.module)
+
+        class Object():
+            pass
+
+        import types
+
+        self.module = Object()
+        self.module.module = module
+        self.module.viewspheres = types.MethodType(orcdchomp.viewspheres,module)
+        self.module.computedistancefield = types.MethodType(orcdchomp.computedistancefield,module)
+        self.module.addfield_fromobsarray = types.MethodType(orcdchomp.addfield_fromobsarray,module)
+        self.module.removefield = types.MethodType(orcdchomp.removefield,module)
+        self.module.create = types.MethodType(orcdchomp.create,module)
+        self.module.iterate = types.MethodType(orcdchomp.iterate,module)
+        self.module.gettraj = types.MethodType(orcdchomp.gettraj,module)
+        self.module.destroy = types.MethodType(orcdchomp.destroy,module)
+        self.module.runchomp = types.MethodType(orcdchomp.runchomp,module)
+        self.module.GetEnv = self.module.module.GetEnv
+
         self.distance_fields = DistanceFieldManager(self.module)
 
     def __str__(self):
