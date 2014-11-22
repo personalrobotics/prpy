@@ -255,10 +255,16 @@ class InstanceDeduplicator(object):
 
     @classmethod
     def get_bound_children(cls, parent):
+        # Lookup the key for all bound children.
         env, _, parent_key = cls.get_environment_id(parent)
         user_data = env.GetUserData()
-        child_keys = user_data[parent_key].get(cls.USERDATA_CHILDREN, set())
+        try:
+            child_keys = user_data[parent_key][cls.USERDATA_CHILDREN]
+        except KeyError:
+            # There are no bound children.
+            return []
 
+        # Resolve the key to an instance.
         children = []
         for child_key in child_keys:
             canonical_child = user_data[child_key].get(cls.USERDATA_CANONICAL, None)
@@ -278,7 +284,6 @@ class InstanceDeduplicator(object):
             children_set = owner_dict.get(cls.USERDATA_CHILDREN, set())
 
             for child_key in children_set:
-                print 'CHILD_KEY =', child_key
                 user_data.pop(child_key)
 
 
