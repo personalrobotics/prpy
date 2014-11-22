@@ -33,8 +33,11 @@ import atexit, logging, numpy, openravepy, threading, time
 class ServoSimulator(object):
     def __init__(self, manip, rate, watchdog_timeout):
         self.manip = manip
-        self.robot = self.manip.GetRobot()
-        self.env = self.robot.GetEnv()
+        # enabling threading and the following lines causes robot (and hence 
+        # the environment) to not be garbage collected. It seems that threading
+        # somehow blocks self.robot from being garbage collected
+        #self.robot = self.manip.GetRobot()
+        #self.env = self.robot.GetEnv()
 
         self.indices = self.manip.GetArmIndices()
         self.num_dofs = len(self.indices)

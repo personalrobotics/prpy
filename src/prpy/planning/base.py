@@ -55,10 +55,18 @@ class PlanningMethod(object):
     def __call__(self, instance, robot, *args, **kw_args):
         env = robot.GetEnv()
 
-        with Clone(env, clone_env=instance.env):
-            planning_traj = self.func(instance, Cloned(robot), *args, **kw_args)
+        cenv = Clone(env)
+        try:#, clone_env=instance.env):
+            instance.setupEnv(cenv)
+            crobot = Cloned(robot)
+
+            planning_traj = self.func(instance, crobot, *args, **kw_args)
             traj = openravepy.RaveCreateTrajectory(env, planning_traj.GetXMLId())
             traj.Clone(planning_traj, 0)
+        except:
+            raise
+        finally:
+            cenv.Destroy()
 
         return traj 
 

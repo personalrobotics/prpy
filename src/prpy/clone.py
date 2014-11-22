@@ -45,15 +45,27 @@ class ClonedEnvironment(openravepy.Environment):
         pass
 
     def __exit__(self, *args):
+        from prpy.bind import clear_referrers
         if self.destroy_on_exit:
             self.Destroy()
-            self.SetUserData(None)
         else:
             self.__class__.get_envs().pop()
 
     def Destroy(self):
         self.__class__.get_envs().pop()
+
+        # Manually Remove() all objects from the environment. This forces
+        # OpenRAVE to call functions registered to RegisterBodyCallback.
+        # Otherwise, these functions are only called when the environment is
+        # destructed. This is too late for prpy.bind to cleanup circular
+        # references.
+        # TODO: Make this the default behavior in OpenRAVE.
+        for body in self.GetBodies():
+            import prpy.bind
+            prpy.bind.InstanceDeduplicator.cleanup_callback(body, flag=0)
+
         openravepy.Environment.Destroy(self)
+        self.SetUserData(None)
 
     @classmethod
     def get_env(cls):

@@ -31,6 +31,8 @@
 import logging
 from clone import CloneException
 
+logger = logging.getLogger('bind')
+
 class NotCloneableException(CloneException):
     pass
 
@@ -41,6 +43,7 @@ class InstanceDeduplicator(object):
     USERDATA_DESTRUCTOR = '__destructor__'
     USERDATA_CANONICAL = 'canonical_instance'
     ATTRIBUTE_CANONICAL = '_canonical_instance'
+    ATTRIBUTE_IS_CANONICAL = '_is_canonical_instance'
     KINBODY_TYPE, LINK_TYPE, JOINT_TYPE, MANIPULATOR_TYPE = range(4)
 
     @staticmethod
@@ -119,14 +122,21 @@ class InstanceDeduplicator(object):
         # If it's not available, fall back on doing the full lookup not
         # available, fall back on doing the full lookup
         except AttributeError:
-            userdata_getter, userdata_setter = cls.get_storage_methods(instance)
             try:
-                canonical_instance = userdata_getter(cls.USERDATA_CANONICAL)
+                is_canonical_instance = object.__getattribute__(instance, cls.ATTRIBUTE_IS_CANONICAL)
+                canonical_instance = instance
+            except AttributeError:
+                userdata_getter, userdata_setter = cls.get_storage_methods(instance)
+                try:
+                    canonical_instance = userdata_getter(cls.USERDATA_CANONICAL)
 
-                # ...and cache the value for future queries.
-                object.__setattr__(instance, cls.ATTRIBUTE_CANONICAL, canonical_instance)
-            except KeyError:
-                canonical_instance = None
+                    # ...and cache the value for future queries.
+                    if canonical_instance is instance:
+                        object.__setattr__(instance, cls.ATTRIBUTE_IS_CANONICAL, True)
+                    else:
+                        object.__setattr__(instance, cls.ATTRIBUTE_CANONICAL, canonical_instance)
+                except KeyError:
+                    canonical_instance = None
 
         return canonical_instance
 
@@ -175,6 +185,38 @@ class InstanceDeduplicator(object):
 
         return env, owner, key
 
+    # Cleanup the UserData owned by a KinBody when it is removed from
+    # the environment.
+    @staticmethod
+    def cleanup_callback(owner, flag):
+        if flag == 0: # removed
+            # Clear any attributes that the user might have bound to
+            # the object. This is necessary to clear cycles.
+            canonical_instance = InstanceDeduplicator.get_canonical(owner)
+            if canonical_instance is not None:
+                canonical_dict = object.__getattribute__(canonical_instance, '__dict__')
+                canonical_dict.clear()
+
+
+            # Remove any storage (e.g. canonical_instance) bound to
+            # this object.
+            children, canonical_instance = InstanceDeduplicator.get_bound_children(owner)
+            InstanceDeduplicator.remove_storage(owner)
+
+            # Remove circular references that pass through Boost.Python.
+            # A normal iterator can't be used here because clear_referrers
+            # will delete the child from children causing elements to be
+            # skipped
+            while children:
+                child = children.pop()
+                InstanceDeduplicator.logger.debug(child)
+                clear_referrers(child)
+                # NOTE: this is also an acceptable body for the loop :)
+                # clear_referrers(children[0])
+            InstanceDeduplicator.logger.debug(owner)
+            if canonical_instance != None:
+                clear_referrers(canonical_instance)
+
     @classmethod
     def get_storage_methods(cls, target):
         env, owner, target_key = cls.get_environment_id(target)
@@ -187,14 +229,8 @@ class InstanceDeduplicator(object):
             user_data = dict()
             env.SetUserData(user_data)
 
-            # Cleanup the UserData owned by a KinBody when it is removed from
-            # the environment.
-            def cleanup_callback(owner, flag):
-                if flag == 0: # removed
-                    cls.remove_storage(owner)
-
             if hasattr(env, 'RegisterBodyCallback'):
-                handle = env.RegisterBodyCallback(cleanup_callback)
+                handle = env.RegisterBodyCallback(InstanceDeduplicator.cleanup_callback)
                 user_data[cls.USERDATA_DESTRUCTOR] = handle
             else:
                 cls.logger.warning(
@@ -232,6 +268,28 @@ class InstanceDeduplicator(object):
         return getter, setter
 
     @classmethod
+    def get_bound_children(cls, parent):
+        # Lookup the key for all bound children.
+        env, _, parent_key = cls.get_environment_id(parent)
+        user_data = env.GetUserData()
+        try:
+            child_keys = user_data[parent_key][cls.USERDATA_CHILDREN]
+        except KeyError:
+            # There are no bound children.
+            return [], None
+
+        # Resolve the key to an instance.
+        children = []
+        canonical_instance = None
+        for child_key in child_keys:
+            canonical_child = user_data[child_key].get(cls.USERDATA_CANONICAL, None)
+            if canonical_child != parent:
+                children.append(canonical_child)
+            else:
+                canonical_instance = canonical_child
+        return children, canonical_instance
+
+    @classmethod
     def remove_storage(cls, kinbody):
         env, owner, owner_key = cls.get_environment_id(kinbody)
         if kinbody != owner:
@@ -244,6 +302,59 @@ class InstanceDeduplicator(object):
 
             for child_key in children_set:
                 user_data.pop(child_key)
+
+
+def clear_referrers(obj, debug=False):
+    import gc
+
+    # TODO: We should do a topographical sort on these references.
+
+    for referrer in gc.get_referrers(obj):
+        #TODO print if deleting from user defined referrer
+        logger.debug('Clearing referrer "%s" to object "%s".', referrer, obj)
+
+        # Handle standard Python objects.
+        if hasattr(referrer, '__dict__'):
+            for field,value in referrer.__dict__.items():
+                if value is obj:
+                    del referrer.__dict__[field]
+
+        # Remove references from built-in collections.
+        if isinstance(referrer, dict):
+            for field, value in referrer.items():
+                if value is obj:
+                    del referrer[field]
+        elif isinstance(referrer, list) or isinstance(referrer, set):
+            referrer.remove(obj)
+        # tuple and frozenset are immutable, so we remove the whole object.
+        elif isinstance(referrer, tuple) or isinstance(referrer, frozenset):
+            clear_referrers(referrer, debug=debug)
+
+        if debug:
+            import pprint
+            pp = pprint.PrettyPrinter(indent=4)
+            pp.pprint(referrer)
+
+def print_referrers(obj, dbg=False):
+    import gc
+    for referrer in gc.get_referrers(obj):
+        if isinstance(referrer, dict):
+            for field, value in referrer.items():
+                if value is obj:
+                    print referrer, field
+        elif hasattr(referrer, '__dict__'):
+            for field,value in referrer.__dict__.items():
+                if value is obj:
+                    print referrer, field
+        elif hasattr(referrer, 'remove'):
+            print referrer
+        elif type(referrer) == tuple:
+            clear_referrers(referrer, dbg=True)
+        else:
+            #import pprint
+            #pp = pprint.PrettyPrinter(indent=4)
+            #pp.pprint(referrer)
+            pass
 
 def bind_subclass(instance, subclass, *args, **kw_args):
     # Deduplicate the classes associated with any of the objects that we're

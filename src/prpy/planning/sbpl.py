@@ -40,6 +40,13 @@ class SBPLPlanner(BasePlanner):
         except openravepy.openrave_exception:
             raise UnsupportedPlanningError('Unable to create SBPL module')
 
+    def setupEnv(self, env):
+        self.env = env
+        try:
+            self.problem = openravepy.RaveCreateProblem(self.env, 'SBPL')
+        except openravepy.openrave_exception:
+            raise UnsupportedPlanningError('Unable to create SBPL module.')
+
     def __str__(self):
         return 'SBPL'
 
