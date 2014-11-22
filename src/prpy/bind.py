@@ -214,7 +214,8 @@ class InstanceDeduplicator(object):
                 # NOTE: this is also an acceptable body for the loop :)
                 # clear_referrers(children[0])
             InstanceDeduplicator.logger.info(owner)
-            clear_referrers(canonical_instance)
+            if canonical_instance != None:
+                clear_referrers(canonical_instance)
 
     @classmethod
     def get_storage_methods(cls, target):
@@ -275,7 +276,7 @@ class InstanceDeduplicator(object):
             child_keys = user_data[parent_key][cls.USERDATA_CHILDREN]
         except KeyError:
             # There are no bound children.
-            return []
+            return [], None
 
         # Resolve the key to an instance.
         children = []
