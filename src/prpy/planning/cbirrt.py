@@ -85,22 +85,35 @@ class CBiRRTPlanner(BasePlanner):
         return traj
 
     @PlanningMethod
+    def PlanToConfigurations(self, robot, goals, **kw_args):
+        """
+        Plan to a configuraiton wtih multi-goal CBiRRT. This adds each goal in goals
+        as a goal for the planner and returns path that achieves one of the goals.
+        @param robot
+        @param goals A list of goal configurations
+        """
+        extra_args = list()
+        for goal in goals:
+            goal_array = numpy.array(goal)
+            
+            if len(goal_array) != robot.GetActiveDOF():
+                logging.error('Incorrect number of DOFs in goal configuration; expected {0:d}, got {1:d}'.format(
+                        robot.GetActiveDOF(), len(goal_array)))
+                raise PlanningError('Incorrect number of DOFs in goal configuration.')
+            
+
+            extra_args += [ 'jointgoals',  str(len(goal_array)), ' '.join([ str(x) for x in goal_array ]) ]
+
+        return self.Plan(robot, extra_args=extra_args, **kw_args)
+
+    @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a single configuration with single-goal CBiRRT.
         @param robot
         @param goal goal configuration
         """
-        goal_array = numpy.array(goal)
-
-        if len(goal_array) != robot.GetActiveDOF():
-            logging.error('Incorrect number of DOFs in goal configuration; expected {0:d}, got {1:d}'.format(
-                          robot.GetActiveDOF(), len(goal_array)))
-            raise PlanningError('Incorrect number of DOFs in goal configuration.')
-
-        extra_args = list()
-        extra_args += [ 'jointgoals',  str(len(goal_array)), ' '.join([ str(x) for x in goal_array ]) ]
-        return self.Plan(robot, extra_args=extra_args, **kw_args)
+        return self.PlanToConfigurations(robot, [goal], **kw_args)
 
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, psample=0.1, **kw_args):
