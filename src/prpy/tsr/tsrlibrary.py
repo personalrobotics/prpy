@@ -1,4 +1,4 @@
-import collections, functools, logging, os.path
+import collections, functools, logging, numpy, os.path
 
 logger = logging.getLogger('tsr')
 
@@ -61,6 +61,65 @@ class TSRLibrary(object):
 
         return f(self.robot, kinbody, *args, **kw_args)
 
+    def load_yaml(self, yaml_file):
+        """
+        Load a set of TSR chains from a given yaml file and generate factories
+        @param yaml_file The yaml file to load from
+        """
+        import yaml
+        from prpy.tsr.tsr import TSR, TSRChain
+
+        with open(yaml_file, 'r') as f:
+            yaml_data = yaml.load(f)
+
+        for chain in yaml_data:
+            try:
+                robot_name = chain['robot']
+                kinbody_name = chain['kinbody']
+                action_name = chain['action']
+
+                sample_start = False
+                if 'sample_start' in chain:
+                    sample_start = bool(chain['sample_start'])
+                    
+                sample_goal = False
+                if 'sample_goal' in chain:
+                    sample_goal = bool(chain['sample_goal'])
+                        
+                constrain = False
+                if 'constrain' in chain:
+                    constrain = bool(chain['constrain'])
+
+
+                @TSRFactory(robot_name, kinbody_name, action_name)
+                def func(robot, obj):
+                    manip_idx = robot.GetActiveManipulatorIndex()
+
+                    all_tsrs = []
+                    for tsr in chain['TSRs']:
+                        T0_w = obj.GetTransform()
+                        Tw_e = numpy.array(tsr['Tw_e'])
+                        Bw = numpy.array(tsr['Bw'])
+                    
+                        yaml_tsr = TSR(T0_w = T0_w, 
+                                       Tw_e = Tw_e, 
+                                       Bw = Bw, 
+                                       manip = manip_idx)
+                        all_tsrs.append(yaml_tsr)
+
+                    yaml_chain = TSRChain(sample_start=sample_start,
+                                          sample_goal = sample_goal, 
+                                          constrain = constrain, 
+                                          TSRs = all_tsrs)
+
+                    return [yaml_chain]
+                TSRLibrary.add_factory(func, robot_name, kinbody_name, action_name) 
+
+            except Exception, e:
+                logger.error('Failed to load TSRChain: %s - (Chain: %s)' % (str(e), chain))
+                raise IOError('Failed to load TSRChain: %s - (Chain: %s)' % (str(e), chain))
+        
+
     @classmethod
     def add_factory(cls, func, robot_name, object_name, action_name):
         """
@@ -69,7 +128,7 @@ class TSRLibrary(object):
         @param object_name name of the object
         @param action_name name of the action
         """
-        logger.debug('Adding TSRLibrary factory for robot "%s", object "%s", action "%s".',
+        logger.info('Adding TSRLibrary factory for robot "%s", object "%s", action "%s".',
             robot_name, object_name, action_name)
 
         if action_name in cls.all_factories[robot_name][object_name]:
