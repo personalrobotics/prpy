@@ -116,6 +116,7 @@ class TSR(object): # force new-style class
       #print 'Bwvals[5]:', Bwvals[5]
       xyzypr = [Bwvals[0], Bwvals[1], Bwvals[2], Bwvals[5], Bwvals[4], Bwvals[3]]
       Tw = kin.pose_to_H(kin.pose_from_xyzypr(xyzypr))
+      
       trans = numpy.dot(numpy.dot(self.T0_w,Tw), self.Tw_e)
       return trans
       
@@ -149,5 +150,19 @@ class TSRChain(object): # force new-style class
       if len(self.mimicbodyjoints) > 0:
          outstring += ' %d %s'%(len(self.mimicbodyjoints),SerializeArray(self.mimicbodyjoints))
       return outstring
+
+   def sample(self):
+
+      if len(self.TSRs) == 0:
+         return None
+
+      T0_w = self.TSRs[0].T0_w
+      for idx in range(len(self.TSRs)):
+         tsr_current = self.TSRs[idx]
+         tsr_current.T0_w = T0_w
+         T0_w = tsr_current.sample()
+
+      return T0_w
+      
 
 
