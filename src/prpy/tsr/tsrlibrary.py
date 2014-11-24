@@ -32,10 +32,10 @@ class TSRLibrary(object):
         """
         self.robot = robot
 
-        if self.robot_name is not None:
+        if robot_name is not None:
             self.robot_name = robot_name
         else:
-            self.robot_name = self.get_object_type(self.robot_name)
+            self.robot_name = self.get_object_type(robot)
             logger.debug('Inferred robot name "%s" for TSRLibrary.', self.robot_name)
 
     def __call__(self, kinbody, action_name, *args, **kw_args):
@@ -88,7 +88,8 @@ class TSRLibrary(object):
         """
         path = body.GetXMLFilename()
         filename = os.path.basename(path)
-        name, _ = os.path.splitext(filename)
+        name, _ = os.path.splitext(filename) # remove xml
+        name, _ = os.path.splitext(name) # remove kinbody, robot, etc
 
         if name:
             return name
