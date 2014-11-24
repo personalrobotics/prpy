@@ -84,12 +84,11 @@ class CBiRRTPlanner(BasePlanner):
 
         return traj
 
-    @PlanningMethod
-    def PlanToConfigurations(self, robot, goals, **kw_args):
+    def PlanToGoals(self, robot, goals, **kw_args):
         """
-        Plan to a configuraiton wtih multi-goal CBiRRT. This adds each goal in goals
-        as a goal for the planner and returns path that achieves one of the goals.
-        @param robot
+        Helper method to allow PlanToConfiguration and PlanToConfigurations to use same code
+        without going back through PlanWrapper logic.
+        @param robot 
         @param goals A list of goal configurations
         """
         extra_args = list()
@@ -103,8 +102,18 @@ class CBiRRTPlanner(BasePlanner):
             
 
             extra_args += [ 'jointgoals',  str(len(goal_array)), ' '.join([ str(x) for x in goal_array ]) ]
-
         return self.Plan(robot, extra_args=extra_args, **kw_args)
+
+    @PlanningMethod
+    def PlanToConfigurations(self, robot, goals, **kw_args):
+        """
+        Plan to a configuraiton wtih multi-goal CBiRRT. This adds each goal in goals
+        as a goal for the planner and returns path that achieves one of the goals.
+        @param robot
+        @param goals A list of goal configurations
+        """
+        return self.PlanToGoals(robot, goals, **kw_args)
+
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
@@ -113,7 +122,7 @@ class CBiRRTPlanner(BasePlanner):
         @param robot
         @param goal goal configuration
         """
-        return self.PlanToConfigurations(robot, [goal], **kw_args)
+        return self.PlanToGoals(robot, [goal], **kw_args)
 
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, psample=0.1, **kw_args):
