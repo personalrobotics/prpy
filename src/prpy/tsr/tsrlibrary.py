@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-
 # Copyright (c) 2013, Carnegie Mellon University
 # All rights reserved.
-# Authors: Michael Koval <mkoval@cs.cmu.edu>
+# Authors: Jennifer King <jeking@cs.cmu.edu>
+#          Michael Koval <mkoval@cs.cmu.edu>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,338 +27,165 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import collections, functools, logging, numpy, os.path
 
-from prpy.tsr import *
-from prpy.tsr.rodrigues import *
-from prpy.tsr.tsr import *
-def GetCylinderTSR(radius, height, manip, T0_w = numpy.eye(4), Tw_e = numpy.eye(4), lateral_tolerance = 0.02):
-    """
-    Generates a tsr that is appropriate for grasping a cylinder.
-        
-    @param radius - The radius of the cylinder
-    @param height - The height along the cylinder for performing the grasp
-    @param manip - The manipulator to use for the grasp
-    @param T0_w - A transform from the cylinder frame to the world frame
-    @param lateral_tolerance - The tolerance for the height at which to grab the cylinder
-    """
+logger = logging.getLogger('tsr')
 
-    with manip.GetRobot():
-        manip.SetActive()
-        manipidx= manip.GetRobot().GetActiveManipulatorIndex()
-
-    Bw = numpy.array([[  .0,    .0],
-                      [  .0,    .0],
-                      [-lateral_tolerance,lateral_tolerance],
-                      [  .0,    .0],   
-                      [  .0,    .0],   
-                      [ -numpy.pi,    numpy.pi]])
-    Tw_ee = Tw_e.copy()
-    Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
-    Tw_ee[:3,3] = [0, radius, height/2]
-    cylinderTSR = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-
-    return cylinderTSR
-
-
-def CreateAndDiscretizeTSR(obj, manip, 
-                              T0_w = numpy.eye(4),
-                              Tw_e = numpy.eye(4),
-                              start_tsr = True,
-                              goal_tsr = False,
-                              ee_offset = 0.14,
-                              height_offset = 0.0):
-                              
-    discretization = []
+class TSRFactory(object):
     
-    # First grab the manipulator index, this is needed in the tsr specification
-    with manip.GetRobot().GetEnv():
-        with manip.GetRobot():
-            manip.SetActive()
-            manipidx = manip.GetRobot().GetActiveManipulatorIndex()
+    def __init__(self, robot_name, obj_name, action_name):
+        logger.debug('Loading %s, %s, %s' % (robot_name, obj_name, action_name))
+        self.robot_name = robot_name
+        self.obj_name = obj_name
+        self.action_name = action_name
 
-    # We will use the bounding box to attempt to infer the shape of the object
-    with manip.GetRobot().GetEnv():
-        with obj:
-            # Assumption: the coordinate frame of the object is axis aligned
-            identity_transform = numpy.eye(4)
-            obj.SetTransform(identity_transform)
-            obj_bb = obj.ComputeAABB()
+    def __call__(self, func):
+        TSRLibrary.add_factory(func, self.robot_name, self.obj_name, self.action_name)
 
+        #functools.wrap
+        from functools import wraps
+        @wraps(func)
+        def wrapped_func(robot, kinbody, *args, **kw_args):
+            return func( robot, kinbody, *args, **kw_args)
+        return wrapped_func
+
+
+class TSRLibrary(object):
+    all_factories = collections.defaultdict(lambda: collections.defaultdict(dict))
     
-    # first check if we have a cylinder
-    # Assumption: Anything with approximately matching x and y dimensions is a cylinder
-    if numpy.abs(obj_bb.extents()[0] - obj_bb.extents()[1]) < 0.001:
-        
-        # We have a cylinder
-        radius = obj_bb.extents()[0] + ee_offset
-        height = obj_bb.pos()[2] + height_offset  # grasp in the middle
-        
-        Bw = numpy.array([[  .0,    .0],
-                      [  .0,    .0],
-                      [.0,.0],
-                      [  .0,    .0],   
-                      [  .0,    .0],   
-                      [ -numpy.pi,    numpy.pi]])
-        Tw_ee = Tw_e.copy()
-        Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
-        Tw_ee[:3,3] = [0, radius, height/2]
-        cylinderTSR = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-        
-        #now sample from the cylinder
-        for r in numpy.arange(-numpy.pi,numpy.pi,1.2):
-            trans = cylinderTSR.sample([0,0,0,0,0,r])
-            sols = None
-            sols = manip.FindIKSolutions(trans,True)
-            if sols is not None:
-                for sol in sols:
-                    discretization.append(sol)
-    else:
-        Bw = numpy.array([[  .0,    .0],
-                          [  .0,    .0],
-                          [-0.0, 0.0],
-                          [  .0,    .0],   
-                          [  .0,    .0],   
-                          [  .0,    .0]]) 
-        max_spread = 0.2
+    def __init__(self, robot, robot_name=None):
+        """
+        Create a TSRLibrary for a robot.
+        @param robot the robot to store TSRs for
+        @param robot_name optional robot name, inferred from robot by default
+        """
+        self.robot = robot
 
-        # z points up, y to the right, x out of the plane
-        if 2.0*obj_bb.extents()[0] < max_spread: # grasp from left or right
-            # left
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([-numpy.pi/2, 0, 0]))
-            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
-            boxTSR1 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            trans = boxTSR1.sample([0,0,0,0,0,0])
-            sols = None
-            sols = manip.FindIKSolutions(trans,True)
-            if sols is not None:
-                for sol in sols:
-                    discretization.append(sol)
-                
-            # right
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],rodrigues([numpy.pi/2, 0, 0]))
-            Tw_ee[:3, 3] += [0, obj_bb.extents()[1] + ee_offset, 0.]
-            boxTSR3 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)        
-            trans = boxTSR3.sample([0,0,0,0,0,0])
-            sols = None
-            sols = manip.FindIKSolutions(trans,True)
-            if sols is not None:
-                for sol in sols:
-                    discretization.append(sol)  
+        if robot_name is not None:
+            self.robot_name = robot_name
+        else:
+            self.robot_name = self.get_object_type(robot)
+            logger.debug('Inferred robot name "%s" for TSRLibrary.', self.robot_name)
 
-        if 2.0*obj_bb.extents()[1] < max_spread: #grasp from front or behind
-            #behind
-            Tw_ee = Tw_e.copy() 
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], numpy.dot(rodrigues([0,0, -numpy.pi/2]), rodrigues([-numpy.pi/2,0,0])))
-            Tw_ee[:3,3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-            boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            trans = boxTSR2.sample([0,0,0,0,0,0])
-            sols = None
-            sols = manip.FindIKSolutions(trans,True)
-            if sols is not None:
-                for sol in sols:
-                    discretization.append(sol)
-            
-            #front   
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([-numpy.pi/2, 0, 0]), rodrigues([0, -numpy.pi/2, 0])))
-            Tw_ee[:3, 3] += [obj_bb.extents()[0] + ee_offset, 0., 0.]
-            boxTSR7 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)  
-            trans = boxTSR7.sample([0,0,0,0,0,0])
-            sols = None
-            sols = manip.FindIKSolutions(trans,True)
-            if sols is not None:
-              for sol in sols:
-                discretization.append(sol)    
-                
-                
-            # Tw_ee = Tw_e.copy()
-            # Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2])))
-            # Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-            # boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            # trans = boxTSR8.sample([0,0,0,0,0,r])
-            # sols = None
-            # sols = manip.FindIKSolutions(trans,True)
-            # if sols is not None:
-            #     for sol in sols:
-            #         discretization.append(sol)    
-                
-    return discretization                
-                
-                
-def GetTSRChainsForObjectGrab(obj, manip,
-                              T0_w = numpy.eye(4),
-                              Tw_e = numpy.eye(4),
-                              start_tsr = True,
-                              goal_tsr = False,
-                              ee_offset = 0.14): #TODO: we don't want to have to pass this, find a better way to compute distance from ee to palm
-    """
-    Returns a list of tsr chains that desribe valid grasps
-    for the object.
-    
-    @param obj - The object to be grasped.
-    @param manip - The manipulator to perform the grasping
-    @param T0_w - The transform from world to object frame
-    @param Tw_e - The initial transform from end effector to object
-    @param start_tsr - A flag indicating the tsr should be sampled
-    for the start of the trajectory
-    @param goal_tsr - A flag indicating the tsr should be sampled 
-    for the end of the trajectory
-    """
+    def __call__(self, kinbody, action_name, *args, **kw_args):
+        """
+        Return a list of TSRChains to perform an action on an object with this
+        robot. Raises KeyError if no matching TSRFactory exists.
+        @param robot the robot to run the tsr on 
+        @param kinbody the KinBody to act on
+        @param action_name the name of the action
+        @return list of TSRChains
+        """
+        kinbody_name = kw_args.get('kinbody_name', None)
+        if kinbody_name is None:
+            kinbody_name = self.get_object_type(kinbody)
+            logger.debug('Inferred KinBody name "%s" for TSR.', kinbody_name)
 
-    # First grab the manipulator index, this is needed in the tsr specification
-    with manip.GetRobot().GetEnv():
-        with manip.GetRobot():
-            manip.SetActive()
-            manipidx = manip.GetRobot().GetActiveManipulatorIndex()
+        try:
+            f = self.all_factories[self.robot_name][kinbody_name][action_name]
+        except KeyError:
+            raise KeyError('There is no TSR factory registered for action "{:s}"'
+                           ' with robot "{:s}" and object "{:s}".'.format(
+                           action_name, self.robot_name, kinbody_name))
 
-    # We will use the bounding box to attempt to infer the shape of the object
-    with manip.GetRobot().GetEnv():
-        with obj:
-            # Assumption: the coordinate frame of the object is axis aligned
-            identity_transform = numpy.eye(4)
-            obj.SetTransform(identity_transform)
-            obj_bb = obj.ComputeAABB()
+        return f(self.robot, kinbody, *args, **kw_args)
 
-    
-    # first check if we have a cylinder
-    # Assumption: Anything with approximately matching x and y dimensions is a cylinder
-    if numpy.abs(obj_bb.extents()[0] - obj_bb.extents()[1]) < 0.001:
-        
-        # We have a cylinder
-        radius = obj_bb.extents()[0] + ee_offset
-        height = obj_bb.pos()[2]  # grasp in the middle
-        cylinderTSR = GetCylinderTSR(radius = radius,
-                                     height = height,
-                                     manip = manip,
-                                     T0_w = T0_w,
-                                     Tw_e = Tw_e)
+    def load_yaml(self, yaml_file):
+        """
+        Load a set of simple TSRFactory's from a YAML file. Each TSRFactory
+        contains exactly one TSRChain.
+        @param yaml_file path to the input YAML file
+        """
+        import yaml
+        from prpy.tsr.tsr import TSR, TSRChain
 
-        cylinderTSRChain = TSRChain(sample_start = start_tsr,
-                                    sample_goal = goal_tsr,
-                                    TSR = cylinderTSR)
-        return [cylinderTSRChain]
+        with open(yaml_file, 'r') as f:
+            yaml_data = yaml.load(f)
 
-    else:
+        for chain in yaml_data:
+            try:
+                robot_name = chain['robot']
+                kinbody_name = chain['kinbody']
+                action_name = chain['action']
 
-        # We have a box. Define a TSR for each side of the box. 
-        #  Also, for each side define a TSR for two opposing end-effector orientations
-
-        # This parameter defines the largest an edge can be for it to be graspable
-        #   if one side is larger than this dimension, we won't add the associated
-        #   TSRs to the chain list.
-        max_spread = 0.2
-
-        chains = []
-
-        if 2.0*obj_bb.extents()[1] < max_spread:
-            # negative y
-            Bw = numpy.array([[  .0,    .0],
-                              [  .0,    .0],
-                              [-0.02, 0.02],
-                              [  .0,    .0],   
-                              [  .0,    .0],   
-                              [  .0,    .0]])
-
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([-numpy.pi/2, 0, 0]))
-            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
-            boxTSR1 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR1))
-
-            Bw = numpy.array([[  .0,    .0],
-                              [  .0,   .0],
-                              [-0.02, 0.02],
-                              [  .0,    .0],   
-                              [  .0,    .0],   
-                              [  .0,    .0]])
-
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([-numpy.pi/2, 0, 0]), rodrigues([0, 0, numpy.pi])))
-            Tw_ee[:3,3] += [0, -obj_bb.extents()[1] - ee_offset, 0.]
-            boxTSR2 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR2))
+                sample_start = False
+                if 'sample_start' in chain:
+                    sample_start = bool(chain['sample_start'])
+                    
+                sample_goal = False
+                if 'sample_goal' in chain:
+                    sample_goal = bool(chain['sample_goal'])
+                        
+                constrain = False
+                if 'constrain' in chain:
+                    constrain = bool(chain['constrain'])
 
 
-            # positive y
-            Bw = numpy.array([[  .0,    .0],
-                              [  .0,    .0],
-                              [-0.02, 0.02],
-                              [  .0,    .0],   
-                              [  .0,    .0],   
-                              [  .0,    .0]])
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3], rodrigues([numpy.pi/2, 0, 0]))
-            Tw_ee[:3, 3] += [0, obj_bb.extents()[1] + ee_offset, 0.]
-            boxTSR3 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR3))
+                @TSRFactory(robot_name, kinbody_name, action_name)
+                def func(robot, obj):
+                    manip_idx = robot.GetActiveManipulatorIndex()
 
-            Bw = numpy.array([[  .0,    .0],
-                              [  .0,    .0],
-                              [-0.02, 0.02],
-                              [  .0,    .0],   
-                              [  .0,    .0],   
-                              [  .0,    .0]])
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, numpy.pi/2])))
-            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-            boxTSR7 = TSR(T0_w=T0_w,Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR7))
+                    all_tsrs = []
+                    for tsr in chain['TSRs']:
+                        T0_w = obj.GetTransform()
+                        Tw_e = numpy.array(tsr['Tw_e'])
+                        Bw = numpy.array(tsr['Bw'])
+                    
+                        yaml_tsr = TSR(T0_w = T0_w, 
+                                       Tw_e = Tw_e, 
+                                       Bw = Bw, 
+                                       manip = manip_idx)
+                        all_tsrs.append(yaml_tsr)
 
-            Bw = numpy.array([[  .0,    .0],
-                              [  .0,    .0],
-                              [-0.02,  0.02],
-                              [  .0,    .0],   
-                              [  .0,    .0],   
-                              [  .0,    .0]])  
-            Tw_ee = Tw_e.copy()
-            Tw_ee[:3,:3] = numpy.dot(Tw_ee[:3,:3],numpy.dot(rodrigues([0, numpy.pi/2, 0]), rodrigues([0, 0, -numpy.pi/2])))
-            Tw_ee[:3, 3] += [-obj_bb.extents()[0] - ee_offset, 0., 0.]
-            boxTSR8 = TSR(T0_w=T0_w, Tw_e=Tw_ee, Bw=Bw, manip=manipidx)
-            chains.append(TSRChain(sample_start=start_tsr, sample_goal=goal_tsr, TSR=boxTSR8))
+                    yaml_chain = TSRChain(sample_start=sample_start,
+                                          sample_goal = sample_goal, 
+                                          constrain = constrain, 
+                                          TSRs = all_tsrs)
 
+                    return [yaml_chain]
+                TSRLibrary.add_factory(func, robot_name, kinbody_name, action_name) 
 
-        return chains
-
-def GetNoTiltTSRChain(manip, axis = [0., 0., 1.]):
-    """
-    Returns the no tilting tsr string for the end-effector. No-tilting
-    here means that the end-effector is allowed to rotate only along the
-    end-effecttor axis that is closest to the given axis (world +z by default).
-    it.  
-    
-    @param manip - The manipulator
-    @param axis - The axis to hold steady
-    """
-    
-    # Grab the tranform for the ee on this manip
-    T0_w = manip.GetEndEffectorTransform()
-    
-    # Get the index - this is necessary for the tsr definition
-    maninumpy.pindex = manip.GetActiveManipulatorIndex()
-    
-
-    # Find which axis of end-effector is aligned with the +z in world
-    projections = []
-    for idx in range(3):
-        projections.append(numpy.abs(numpy.dot(T0_w[:3,idx], numpy.array(axis))))
+            except Exception, e:
+                logger.error('Failed to load TSRChain: %s - (Chain: %s)' % (str(e), chain))
+                raise IOError('Failed to load TSRChain: %s - (Chain: %s)' % (str(e), chain))
         
 
-    axis_idx = max( (v,i) for i,v in enumerate(projections) )[1]
+    @classmethod
+    def add_factory(cls, func, robot_name, object_name, action_name):
+        """
+        Register a TSR factory function for a particular robot, object, and
+        action. The function must take a robot and a KinBody and return a list
+        of TSRChains. Optionaly, it may take arbitrary positional and keyword
+        arguments. This method is used internally by the TSRFactory decorator.
+        @param func function that returns a list of TSRChains
+        @param robot_name name of the robot
+        @param object_name name of the object
+        @param action_name name of the action
+        """
+        logger.info('Adding TSRLibrary factory for robot "%s", object "%s", action "%s".',
+            robot_name, object_name, action_name)
 
-    Tw_e = numpy.eye(4)
-    Bw = numpy.array([-100., 100.,
-                      -100., 100.,
-                      -100., 100.,
-                         0.,   0.,
-                         0.,   0.,
-                         0.,   0.])
-    Bw[(3+axis_idx)*2.] = -numpy.numpy.pi
-    Bw[(3+axis_idx)*2. + 1] = numpy.numpy.pi
-    
-    constraintTSR = TSR(T0_w=T0_w, Tw_e=Tw_e, Bw=Bw, manip=manipidx)
-    constraintTSRChain = TSRChain(constrain=True, TSR=constraintTSR)
+        if action_name in cls.all_factories[robot_name][object_name]:
+            logger.warning('Overwriting duplicate TSR factory for action "%s"'
+                           ' with robot "%s" and object "%s"',
+                action_name, robot_name, object_name)
 
-    return constraintTSRChain
+        cls.all_factories[robot_name][object_name][action_name] = func
+
+    @staticmethod
+    def get_object_type(body):
+        """
+        Infer the name of a KinBody by inspecting its GetXMLFilename.
+        @param body KinBody or Robot object
+        @return object name
+        """
+        path = body.GetXMLFilename()
+        filename = os.path.basename(path)
+        name, _, _ = filename.partition('.') # remove extension
+
+        if name:
+            return name
+        else:
+            raise ValueError('Failed inferring object name from path: {:s}'.format(path))
