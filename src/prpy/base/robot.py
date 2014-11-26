@@ -34,9 +34,9 @@ from prpy.clone import Clone, Cloned
 from prpy.tsr.tsrlibrary import TSRLibrary
 
 class Robot(openravepy.Robot):
-    def __init__(self):
+    def __init__(self, robot_name=None):
         self.planner = None
-        self.tsrlibrary = TSRLibrary(self)
+        self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
         self.controllers = list()
         self.manipulators = list()
         self.configurations = named_config.ConfigurationLibrary()
