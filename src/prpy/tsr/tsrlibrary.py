@@ -147,8 +147,7 @@ class TSRLibrary(object):
         """
         path = body.GetXMLFilename()
         filename = os.path.basename(path)
-        name, _ = os.path.splitext(filename) # remove xml
-        name, _ = os.path.splitext(name) # remove kinbody, robot, etc
+        name, _, _ = filename.partition('.') # remove extension
 
         if name:
             return name
