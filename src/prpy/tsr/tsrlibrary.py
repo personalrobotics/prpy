@@ -26,7 +26,7 @@ class TSRLibrary(object):
     
     def __init__(self, robot, robot_name=None):
         """
-        Create a TSRFactory for a robot.
+        Create a TSRLibrary for a robot.
         @param robot the robot to store TSRs for
         @param robot_name optional robot name, inferred from robot by default
         """
@@ -40,11 +40,11 @@ class TSRLibrary(object):
 
     def __call__(self, kinbody, action_name, *args, **kw_args):
         """
-        Creates a TSR to perform an action on an object with this robot. Raises
-        KeyError if no matching factory exists.
-        @param robot The robot to run the tsr on 
-        @param kinbody The kinbody to act on
-        @param action_name The name of the action
+        Return a list of TSRChains to perform an action on an object with this
+        robot. Raises KeyError if no matching TSRFactory exists.
+        @param robot the robot to run the tsr on 
+        @param kinbody the KinBody to act on
+        @param action_name the name of the action
         @return list of TSRChains
         """
         kinbody_name = kw_args.get('kinbody_name', None)
@@ -63,8 +63,9 @@ class TSRLibrary(object):
 
     def load_yaml(self, yaml_file):
         """
-        Load a set of TSR chains from a given yaml file and generate factories
-        @param yaml_file The yaml file to load from
+        Load a set of simple TSRFactory's from a YAML file. Each TSRFactory
+        contains exactly one TSRChain.
+        @param yaml_file path to the input YAML file
         """
         import yaml
         from prpy.tsr.tsr import TSR, TSRChain
@@ -123,7 +124,11 @@ class TSRLibrary(object):
     @classmethod
     def add_factory(cls, func, robot_name, object_name, action_name):
         """
-        Register a TSR factory to perform an action on an object with this robot.
+        Register a TSR factory function for a particular robot, object, and
+        action. The function must take a robot and a KinBody and return a list
+        of TSRChains. Optionaly, it may take arbitrary positional and keyword
+        arguments. This method is used internally by the TSRFactory decorator.
+        @param func function that returns a list of TSRChains
         @param robot_name name of the robot
         @param object_name name of the object
         @param action_name name of the action
@@ -143,7 +148,7 @@ class TSRLibrary(object):
         """
         Infer the name of a KinBody by inspecting its GetXMLFilename.
         @param body KinBody or Robot object
-        @return object string
+        @return object name
         """
         path = body.GetXMLFilename()
         filename = os.path.basename(path)
