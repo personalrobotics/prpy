@@ -31,13 +31,13 @@
 import numpy, openravepy, rospy
 from manipulator import Manipulator
 from prpy.clone import Clone, Cloned
-from controller_manager_msgs.srv import SwitchController, ListControllers
 from .. import util
 from .. import exceptions
 from IPython import embed
 
 class Mico(Manipulator):
     def _load_controllers(self, controllers, timeout=10):
+        from controller_manager_msgs.srv import SwitchController, ListControllers
         """Load a list of ros_control controllers by name."""
 
         rospy.wait_for_service('controller_manager/switch_controller', timeout=10)
@@ -53,6 +53,7 @@ class Mico(Manipulator):
         switch_controllers(list(controllers - running), list(running - controllers), 2)
     
     def _unload_controllers(self, controllers):
+        from controller_manager_msgs.srv import SwitchController, ListControllers
         """Unload a list of ros_control controllers by name"""
 
         rospy.wait_for_service('controller_manager/switch_controller')
