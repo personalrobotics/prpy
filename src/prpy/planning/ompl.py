@@ -47,30 +47,10 @@ class OMPLPlanner(BasePlanner):
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
 
-    @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
-        """
-        Plan to a desired configuration with OMPL. This will invoke the OMPL
-        planner specified in the OMPLPlanner constructor.
-        @param robot
-        @param goal desired configuration
-        @return traj
-        """
-        extraParams = '<time_limit>{time_limit:f}</time_limit>'\
-            '<planner_type>{algorithm:s}</planner_type>'.format(
-                time_limit = timeout,
-                algorithm = self.algorithm
-            )
-
-        if ompl_args is not None:
-            for key,value in ompl_args.iteritems():
-                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
-
-        params = openravepy.Planner.PlannerParameters()
-        params.SetRobotActiveJoints(robot)
-        params.SetGoalConfig(goal)
-        params.SetExtraParameters(extraParams)
-
+    def Plan(self, robot, params, shortcut_timeout=5.0, continue_planner=False):
+        '''
+        Helper function for running planner
+        '''
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
         try:
@@ -105,3 +85,59 @@ class OMPLPlanner(BasePlanner):
             self.env.Unlock()
 
         return traj
+
+
+    @PlanningMethod
+    def PlanToConfiguration(self, robot, goal, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
+        """
+        Plan to a desired configuration with OMPL. This will invoke the OMPL
+        planner specified in the OMPLPlanner constructor.
+        @param robot
+        @param goal desired configuration
+        @return traj
+        """
+        extraParams = '<time_limit>{time_limit:f}</time_limit>'\
+            '<planner_type>{algorithm:s}</planner_type>'.format(
+                time_limit = timeout,
+                algorithm = self.algorithm
+            )
+
+        if ompl_args is not None:
+            for key,value in ompl_args.iteritems():
+                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
+
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetGoalConfig(goal)
+        params.SetExtraParameters(extraParams)
+
+        return self.Plan(robot, params, continue_planner=continue_planner, shortcut_timeout=shortcut_timeout)
+        
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
+        """
+        Plan to a desired configuration with OMPL. This will invoke the OMPL
+        planner specified in the OMPLPlanner constructor.
+        @param robot
+        @param goal desired configuration
+        @return traj
+        """
+        extraParams = '<time_limit>{time_limit:f}</time_limit>'\
+            '<planner_type>{algorithm:s}</planner_type>'.format(
+                time_limit = timeout,
+                algorithm = self.algorithm
+            )
+
+        for chain in tsrchains:
+            extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k='tsr_chain', v=chain.serialize())
+
+        if ompl_args is not None:
+            for key,value in ompl_args.iteritems():
+                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
+                
+
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetExtraParameters(extraParams)
+
+        return self.Plan(robot, params, continue_planner=continue_planner, shortcut_timeout=shortcut_timeout)
