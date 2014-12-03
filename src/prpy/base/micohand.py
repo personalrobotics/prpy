@@ -54,6 +54,12 @@ class MicoHand(EndEffector):
         robot = self.manipulator.GetRobot()
         env = robot.GetEnv()
         self.controller  = self.manipulator.controller;
+        if (sim == True):
+           controller_namespace='/mico_controller'
+           hand_namespace='/mico_hand'
+           self.controller = robot.AttachController(name=self.GetName(),
+           args='MicoHandController {0:s} {1:s}'.format('prpy', hand_namespace),
+           dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
 
     def MoveHand(hand, f1=None, f2=None, spread=None, timeout=None):
         """
