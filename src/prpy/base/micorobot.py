@@ -48,7 +48,71 @@ class MicoRobot(Robot):
         print 'self.trajectory_module: ', self.trajectory_module
         import manipulation2.trajectory
         manipulation2.trajectory.bind(self.trajectory_module)
-        '''        
+        '''      
+
+    def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
+        """
+        Executes a trajectory and optionally waits for it to finish.
+        @param traj input trajectory
+        @param retime optionally retime the trajectory before executing it
+        @param timeout duration to wait for execution
+        @returns final executed trajectory
+        """
+        # Check if this is a base trajectory.
+        has_base = hasattr(self, 'base')
+        needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
+        if needs_base and not has_base:
+            raise ValueError('Unable to execute affine DOF trajectory; robot does'\
+                             ' not have a MobileBase.')
+
+        # TODO: Throw an error if the trajectory contains both normal DOFs and
+        # affine DOFs.
+        #from IPython import embed
+        #mbed()
+        #numOfWaypoints = 48
+        new_traj = openravepy.RaveCreateTrajectory(self.GetEnv(), '')
+        activedofs = [i for i in range(8)]
+        self.SetActiveDOFs(activedofs)
+        values = self.GetActiveDOFValues()
+        new_traj.Init(self.GetActiveConfigurationSpecification())
+        activedofs = [i for i in range(6)]
+        self.SetActiveDOFs(activedofs)
+        #while new_traj.GetNumWaypoints()>0:
+        #from IPython import embed
+        #embed()
+        numOfWaypoints = traj.GetNumWaypoints()
+        #new_traj.Remove(0,numOfWaypoints)
+        for i in range(numOfWaypoints):
+            waypoint = traj.GetWaypoint(i)
+            waypoint = numpy.append(waypoint, [values[6],values[7]])
+            new_traj.Insert(i,waypoint)
+
+        if retime:
+            # Retime a manipulator trajectory.
+            if not needs_base:
+                new_traj = self.RetimeTrajectory(new_traj)
+            # Retime a base trajectory.
+            else:
+                max_vel = [ self.GetAffineTranslationMaxVels()[0],
+                            self.GetAffineTranslationMaxVels()[1],
+                            self.GetAffineRotationAxisMaxVels()[2] ]
+                max_accel = [3.*v for v in max_vel]
+                openravepy.planningutils.RetimeAffineTrajectory(new_traj, max_vel,
+                                                                max_accel, False)
+
+        self.GetController().SetPath(new_traj)
+
+        active_manipulators = self.GetTrajectoryManipulators(new_traj)
+        active_controllers = []
+        for active_manipulator in active_manipulators:
+            if hasattr(active_manipulator, 'controller'):
+                active_controllers.append(active_manipulator.controller)
+
+        if needs_base:
+            active_controllers.append(self.base.controller)
+
+        util.WaitForControllers(active_controllers, timeout=timeout)
+        return new_traj  
 
     def CloneBindings(self, parent):
         Robot.CloneBindings(self, parent)

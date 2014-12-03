@@ -55,6 +55,7 @@ class CBiRRTPlanner(BasePlanner):
         # Take a snapshot of the source environment for planning.
         self.env.LoadProblem(self.problem, robot.GetName())
 
+
         args = [ 'RunCBiRRT' ]
         if extra_args is not None:
             args += extra_args
@@ -76,6 +77,7 @@ class CBiRRTPlanner(BasePlanner):
         response = self.problem.SendCommand(args_str, True)
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response)
+         
 
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
