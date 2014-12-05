@@ -33,10 +33,20 @@ from .. import bind, named_config, planning, util
 from prpy.clone import Clone, Cloned
 from prpy.tsr.tsrlibrary import TSRLibrary
 
+logger = logging.getLogger('robot')
+
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
         self.planner = None
-        self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
+
+        try:
+            self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
+        except ValueError as e:
+            self.tsrlibrary = None
+            logger.warning('Failed creating TSRLibrary for robot "%s": %s',
+                self.GetName(), e.message
+            )
+
         self.controllers = list()
         self.manipulators = list()
         self.configurations = named_config.ConfigurationLibrary()
