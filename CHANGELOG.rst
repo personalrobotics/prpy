@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.0 (2014-12-11)
+------------------
 * Fixed tab completion on MobileBase.
 * Added pitcher TSRs.
 * Added proper license information.
