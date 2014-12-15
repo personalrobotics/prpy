@@ -120,8 +120,24 @@ class TSR(object): # force new-style class
    def serialize(self):
       return '%d %s %s %s %s'%(self.manipindex, self.bodyandlink, SerializeTransform12Col(self.T0_w), SerializeTransform12Col(self.Tw_e), SerializeArray(self.Bw))
 
-class TSRChain(object): # force new-style class
+class TSRChain(object):
    def __init__(self, sample_start=False, sample_goal=False, constrain=False, TSR=None, TSRs=None, mimicbodyname='NULL', mimicbodyjoints=None):
+      """
+      A TSR chain is a combination of TSRs representing a motion constraint.
+
+      TSR chains compose multiple TSRs and the conditions under which they
+      must hold.  This class provides support for start, goal, and/or
+      trajectory-wide constraints.  They can be constructed from one or more
+      TSRs which must be applied together.
+
+      @param sample_start apply the constraint to start configuration sampling
+      @param sample_goal apply the constraint to goal configuration sampling
+      @param constrain apply the constraint over the whole trajectory
+      @param TSR a single TSR to use in this TSR chain
+      @param TSRs a list of TSRs to use in this TSR chain
+      @param mimicbodyname no idea, don't mess with this
+      @param mimicbodyjoints no idea, don't mess with this
+      """
       self.sample_start = sample_start
       self.sample_goal = sample_goal
       self.constrain = constrain
@@ -160,6 +176,3 @@ class TSRChain(object): # force new-style class
          T0_w = tsr_current.sample()
 
       return T0_w
-      
-
-
