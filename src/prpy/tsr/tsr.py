@@ -37,34 +37,50 @@ import numpy.random
 import kin
 #import copy
 
-'''Functions for Serializing TSRs and TSR Chains
+"""
+Functions for Serializing TSRs and TSR Chains
 
 SerializeTSR(manipindex,bodyandlink,T0_w,Tw_e,Bw)
 
 Input:
 manipindex (int): the 0-indexed index of the robot's manipulator
-bodyandlink (str): body and link which is used as the 0 frame. Format 'body_name link_name'. To use world frame, specify 'NULL'
-T0_w (double 4x4): transform matrix of the TSR's reference frame relative to the 0 frame
-Tw_e (double 4x4): transform matrix of the TSR's offset frame relative the w frame
-Bw (double 1x12): bounds in x y z roll pitch yaw. Format: [x_min x_max y_min y_max...]
+bodyandlink (str): body and link which is used as the 0 frame. Format
+                   'body_name link_name'. To use world frame, specify 'NULL'
+T0_w (double 4x4): transform matrix of the TSR's reference frame relative to
+                   the 0 frame
+Tw_e (double 4x4): transform matrix of the TSR's offset frame relative to the
+                   w frame
+Bw (double 1x12): bounds in x y z roll pitch yaw.
+                  Format: [x_min, x_max, y_min, y_max ...]
 
 Output:
 outstring (str): string to use for SerializeTSRChain function
 
-
-SerializeTSRChain(bSampleFromChain,bConstrainToChain,numTSRs,allTSRstring,mimicbodyname,mimicbodyjoints)
+SerializeTSRChain(bSampleFromChain,
+                  bConstrainToChain,
+                  numTSRs,
+                  allTSRstring,
+                  mimicbodyname,
+                  mimicbodyjoints)
 
 Input:
-bSampleStartFromChain (0/1): 1: Use this chain for sampling start configurations   0:Ignore for sampling starts
-bSampleGoalFromChain (0/1): 1: Use this chain for sampling goal configurations   0:Ignore for sampling goals
-bConstrainToChain (0/1): 1: Use this chain for constraining configurations   0:Ignore for constraining
+bSampleStartFromChain (0/1): 1: Use this chain for sampling start configs
+                             0: Ignore for sampling starts
+bSampleGoalFromChain (0/1): 1: Use this chain for sampling goal configs
+                            0: Ignore for sampling goals
+bConstrainToChain (0/1): 1: Use this chain for constraining configs
+                         0: Ignore for constraining
 numTSRs (int): Number of TSRs in this chain (must be > 0)
-allTSRstring (str): string of concetenated TSRs generated using SerializeTSR. Should be like [TSRstring 1 ' ' TSRstring2 ...]
-mimicbodyname (str): name of associated mimicbody for this chain (NULL if none associated)
-mimicbodyjoints (int [1xn]): 0-indexed indices of the mimicbody's joints that are mimiced (MUST BE INCREASING AND CONSECUTIVE [FOR NOW])
+allTSRstring (str): string of concetenated TSRs generated using SerializeTSR.
+                    Should be like [TSRstring 1 ' ' TSRstring2 ...]
+mimicbodyname (str): name of associated mimicbody for this chain
+                     (NULL if none associated)
+mimicbodyjoints (int [1xn]): 0-indexed indices of the mimicbody's joints that
+                             are mimiced (MUST BE INCREASING AND CONSECUTIVE)
 
 Output:
-outstring (str): string to include in call to cbirrt planner'''
+outstring (str): string to include in call to cbirrt planner
+"""
 
 
 def SerializeTransform12Col(tm,format='%.5f'):
@@ -135,8 +151,9 @@ class TSRChain(object):
       @param constrain apply the constraint over the whole trajectory
       @param TSR a single TSR to use in this TSR chain
       @param TSRs a list of TSRs to use in this TSR chain
-      @param mimicbodyname no idea, don't mess with this
-      @param mimicbodyjoints no idea, don't mess with this
+      @param mimicbodyname name of associated mimicbody for this chain
+      @param mimicbodyjoints 0-indexed indices of the mimicbody's joints that
+                             are mimicked (MUST BE INCREASING AND CONSECUTIVE)
       """
       self.sample_start = sample_start
       self.sample_goal = sample_goal
