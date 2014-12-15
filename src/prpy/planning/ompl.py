@@ -116,10 +116,12 @@ class OMPLPlanner(BasePlanner):
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
         """
-        Plan to a desired configuration with OMPL. This will invoke the OMPL
-        planner specified in the OMPLPlanner constructor.
+        Plan to a desired TSR set with OMPL. This will invoke the OMPL planner
+        specified in the OMPLPlanner constructor and pass a list of TSR chains
+        as the planning goal.
+
         @param robot
-        @param goal desired configuration
+        @param tsrchains a list of TSR chains that define a goal set
         @return traj
         """
         extraParams = '<time_limit>{time_limit:f}</time_limit>'\
