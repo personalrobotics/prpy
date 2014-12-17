@@ -32,11 +32,3 @@ from robot import Robot
 from manipulator import Manipulator
 from endeffector import EndEffector
 from mobilebase import MobileBase
-
-from wam import WAM
-from wamrobot import WAMRobot
-from barretthand import BarrettHand
-
-from mico import Mico
-from micorobot import MicoRobot
-from micohand import MicoHand
