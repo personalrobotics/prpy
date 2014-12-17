@@ -166,13 +166,13 @@ class OMPLPlanner(BasePlanner):
         @return traj
         """
         manipulator_index = robot.GetActiveManipulatorIndex()
-        from prpy.tsr.tsr import *
+        from prpy.tsr.tsr import TSR, TSRChain
         goal_tsr = TSR(T0_w = goal_pose, manip = manipulator_index)
         tsr_chain = TSRChain(sample_goal = True, TSR = goal_tsr)
         return self.TSRPlan(robot, [tsr_chain], 
                             timeout=timelimit, ompl_args=ompl_args, 
                             **kw_args)
-        
+    '''        
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, timelimit=5.0,
                                 ompl_args=None, **kw_args):
@@ -224,4 +224,4 @@ class OMPLPlanner(BasePlanner):
         return self.TSRPlan(robot, [goal_tsr_chain, traj_tsr_chain], 
                             timeout=timelimit, ompl_args=ompl_args, **kw_args)
         
-
+     '''
