@@ -60,11 +60,14 @@ class SnapPlanner(BasePlanner):
         @param goal_pose desired end-effector pose
         @return traj
         """
+        ikp = openravepy.IkParameterizationType
+        ikfo = openravepy.IkFilterOptions
+
         # Find an IK solution.
         manipulator = robot.GetActiveManipulator()
         current_config = robot.GetDOFValues(manipulator.GetArmIndices())
-        ik_param = openravepy.IkParameterization(goal_pose, openravepy.IkParameterizationType.Transform6D)
-        ik_solutions = manipulator.FindIKSolutions(ik_param, openravepy.IkFilterOptions.CheckEnvCollisions)
+        ik_param = openravepy.IkParameterization(goal_pose, ikp.Transform6D)
+        ik_solutions = manipulator.FindIKSolutions(ik_param, ikfo.CheckEnvCollisions)
 
         if ik_solutions.shape[0] == 0:
             raise PlanningError('There is no IK solution at the goal pose.')
@@ -111,9 +114,12 @@ class SnapPlanner(BasePlanner):
         config_spec = robot.GetActiveConfigurationSpecification()
         active_indices = robot.GetActiveDOFIndices()
 
-        waypoint1, waypoint2 = numpy.zeros(config_spec.GetDOF()), numpy.zeros(config_spec.GetDOF())
-        config_spec.InsertJointValues(waypoint1, current_dof_values, robot, active_indices, False)
-        config_spec.InsertJointValues(waypoint2, current_dof_values, robot, active_indices, False)
+        waypoint1 = numpy.zeros(config_spec.GetDOF())
+        waypoint2 = numpy.zeros(config_spec.GetDOF())
+        config_spec.InsertJointValues(waypoint1, current_dof_values,
+                                      robot, active_indices, False)
+        config_spec.InsertJointValues(waypoint2, current_dof_values,
+                                      robot, active_indices, False)
 
         traj.Init(config_spec)
         traj.Insert(0, waypoint1)
