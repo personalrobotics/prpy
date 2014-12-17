@@ -63,28 +63,18 @@ class SnapPlanner(BasePlanner):
         ikp = openravepy.IkParameterizationType
         ikfo = openravepy.IkFilterOptions
 
-        # Find an IK solution.
+        # Find an IK solution. OpenRAVE tries to return a solution that is
+        # close to the configuration of the arm, so we don't need to do any
+        # custom IK ranking.
         manipulator = robot.GetActiveManipulator()
         current_config = robot.GetDOFValues(manipulator.GetArmIndices())
         ik_param = openravepy.IkParameterization(goal_pose, ikp.Transform6D)
-        ik_solutions = manipulator.FindIKSolutions(ik_param, ikfo.CheckEnvCollisions)
+        ik_solution = manipulator.FindIKSolution(ik_param, ikfo.CheckEnvCollisions)
 
-        if ik_solutions.shape[0] == 0:
+        if ik_solution is None:
             raise PlanningError('There is no IK solution at the goal pose.')
 
-        # Sort the IK solutions in ascending order by the costs returned by the
-        # ranker. Lower cost solutions are better and infinite cost solutions are
-        # assumed to be infeasible.
-        scores = numpy.zeros(ik_solutions.shape[0])
-        for i in xrange(scores.shape[0]):
-            scores[i] = numpy.abs(ik_solutions[i] - current_config).max()
-
-        sorted_indices = numpy.argsort(scores)
-        sorted_indices = sorted_indices[~numpy.isposinf(scores)]
-        sorted_ik_solutions = ik_solutions[sorted_indices, :]
-
-        # Try snapping to the closest IK solution.
-        return self._Snap(robot, sorted_ik_solutions[0, :], **kw_args)
+        return self._Snap(robot, ik_solution, **kw_args)
 
     def _Snap(self, robot, goal, **kw_args):
         active_indices = robot.GetActiveDOFIndices()
