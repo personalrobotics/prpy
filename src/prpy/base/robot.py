@@ -139,15 +139,44 @@ class Robot(openravepy.Robot):
         return active_manipulators
 
     def RetimeTrajectory(self, traj, **kw_args):
-        """
-        Compute timing information for a trajectory, populating the
-        trajectory's deltatime group. Timing information is necessary for
+        """Compute timing information for a trajectory.
+
+        This function computes timing information for a trajectory, populating
+        the trajectory's deltatime group. Timing information is necessary for
         successful execution in simulation.
+
+        Note that this method does NOT modify the trajectory in-place, but
+        instead returns a timed version of the trajectory.
+
         @param traj input trajectory
-        @returns timed output trajectory
+        @return timed output trajectory
         """
-        openravepy.planningutils.SmoothTrajectory(traj, 0.99, 0.99, 'ParabolicSmoother', '')
-        return traj
+        from openravepy import PlannerStatus
+        from prpy.exceptions import PrPyException
+        from prpy.util import CopyTrajectory
+
+        # Attempt smoothing with the Parabolic Retimer first.
+        smooth_traj = CopyTrajectory(traj)
+        status = openravepy.planningutils.SmoothTrajectory(
+            smooth_traj, 0.99, 0.99, 'ParabolicSmoother', '')
+        if status in [PlannerStatus.HasSolution,
+                      PlannerStatus.InterruptedWithSolution]:
+            return smooth_traj
+
+        # If this fails, fall back on the Linear Retimer.
+        # (Linear retiming should always work, but will produce a
+        # slower path where the robot stops at each waypoint.)
+        logger.warning(
+            "SmoothTrajectory failed, using LinearTrajectoryRetimer. "
+            "Robot will stop at each waypoint.")
+        retimed_traj = CopyTrajectory(traj)
+        status = openravepy.planningutils.RetimeTrajectory(
+            retimed_traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
+        if status in [PlannerStatus.HasSolution,
+                      PlannerStatus.InterruptedWithSolution]:
+            return retimed_traj
+        raise PrPyException("Path retimer failed with status '{:s}'"
+                            .format(status))
 
     def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
         """
