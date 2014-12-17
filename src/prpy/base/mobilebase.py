@@ -51,19 +51,12 @@ class MobileBase(object):
         self.robot = robot
 
     def __dir__(self):
-        # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
-        self = bind.InstanceDeduplicator.get_canonical(self)
-
         # Add planning methods to the tab-completion list.
         method_names = set(self.__dict__.keys())
         method_names.update(self.robot.base_planner.get_planning_method_names())
         return list(method_names)
 
     def __getattr__(self, name):
-        # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
-        self = bind.InstanceDeduplicator.get_canonical(self)
         delegate_method = getattr(self.robot.base_planner, name)
 
         # Resolve planner calls through the robot.planner field.

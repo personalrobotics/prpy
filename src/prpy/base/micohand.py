@@ -33,7 +33,19 @@ from .. import util
 from endeffector import EndEffector
 
 class MicoHand(EndEffector):
-    def __init__(self, sim, manipulator, controller_namespace, hand_namespace):
+    # def __init__(self, sim, manipulator, controller_namespace, hand_namespace):
+    #     EndEffector.__init__(self, manipulator)
+
+    #     self.simulated = sim
+
+    #     # Hand controller
+    #     robot = self.manipulator.GetRobot()
+    #     env = robot.GetEnv()
+    #     self.controller = robot.AttachController(name=self.GetName(),
+    #         args='MicoHandController {0:s} {1:s}'.format('prpy', hand_namespace),
+    #         dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
+
+    def __init__(self, sim, manipulator):
         EndEffector.__init__(self, manipulator)
 
         self.simulated = sim
@@ -41,9 +53,13 @@ class MicoHand(EndEffector):
         # Hand controller
         robot = self.manipulator.GetRobot()
         env = robot.GetEnv()
-        self.controller = robot.AttachController(name=self.GetName(),
-            args='MicoHandController {0:s} {1:s}'.format('prpy', hand_namespace),
-            dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
+        self.controller  = self.manipulator.controller;
+        if (sim == True):
+           controller_namespace='/mico_controller'
+           hand_namespace='/mico_hand'
+           self.controller = robot.AttachController(name=self.GetName(),
+           args='MicoHandController {0:s} {1:s}'.format('prpy', hand_namespace),
+           dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
 
     def MoveHand(hand, f1=None, f2=None, spread=None, timeout=None):
         """
@@ -61,8 +77,35 @@ class MicoHand(EndEffector):
         if f2     is not None: preshape[1] = f2
         if spread is not None: preshape[2] = spread
 
-        hand.controller.SetDesired(preshape)
+
+        #hand.controller.SetDesired(preshape)
+        robot = hand.GetParent()
+        activedofs = [i for i in range(8)]
+        robot.SetActiveDOFs(activedofs)
+        traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), '')
+        traj.Init(robot.GetActiveConfigurationSpecification())
+        dof_values = robot.GetActiveDOFValues()
+        traj.Insert(0, dof_values)
+        dof_values[6] = 0.1
+        dof_values[7] = 0.1
+        traj.Insert(1,dof_values)
+        dof_values[6] = 0.8
+        dof_values[7] = 0.8
+        traj.Insert(2,dof_values)
+        openravepy.planningutils.RetimeActiveDOFTrajectory(traj, robot)
+        hand.controller.SetPath(traj)
         util.WaitForControllers([ hand.controller ], timeout=timeout) 
+       
+        activedofs = [i for i in range(6)]
+        robot.SetActiveDOFs(activedofs)
+        
+
+
+        #from IPython import embed
+        #embed()
+
+        # hand.controller.SetDesired(preshape)
+        # util.WaitForControllers([ hand.controller ], timeout=timeout) 
        
     def OpenHand(hand, spread=None, timeout=None):
         """

@@ -33,10 +33,20 @@ from .. import bind, named_config, planning, util
 from prpy.clone import Clone, Cloned
 from prpy.tsr.tsrlibrary import TSRLibrary
 
+logger = logging.getLogger('robot')
+
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
         self.planner = None
-        self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
+
+        try:
+            self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
+        except ValueError as e:
+            self.tsrlibrary = None
+            logger.warning('Failed creating TSRLibrary for robot "%s": %s',
+                self.GetName(), e.message
+            )
+
         self.controllers = list()
         self.manipulators = list()
         self.configurations = named_config.ConfigurationLibrary()
@@ -136,8 +146,32 @@ class Robot(openravepy.Robot):
         @param traj input trajectory
         @returns timed output trajectory
         """
-        openravepy.planningutils.SmoothTrajectory(traj, 0.99, 0.99, 'ParabolicSmoother', '')
-        return traj
+        from openravepy import PlannerStatus
+        from prpy.exceptions import PrPyException
+        from prpy.util import CopyTrajectory
+
+        # Attempt smoothing with the Parabolic Retimer first.
+        smooth_traj = CopyTrajectory(traj)
+        status = openravepy.planningutils.SmoothTrajectory(
+            traj, 0.99, 0.99, 'ParabolicSmoother', '')
+        if status in [PlannerStatus.HasSolution,
+                      PlannerStatus.InterruptedWithSolution]:
+            return smooth_traj
+
+        # If this fails, fall back on the Linear Retimer.
+        # (Linear retiming should always work, but will produce a
+        # slower path where the robot stops at each waypoint.)
+        logger.warning(
+            "SmoothTrajectory failed, using LinearTrajectoryRetimer. "
+            "Robot will stop at each waypoint.")
+        retimed_traj = CopyTrajectory(traj)
+        status = openravepy.planningutils.RetimeTrajectory(
+            traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
+        if status in [PlannerStatus.HasSolution,
+                      PlannerStatus.InterruptedWithSolution]:
+            return retimed_traj
+        raise PrPyException("Path retimer failed with status '{:s}'"
+                            .format(status))
 
     def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
         """
