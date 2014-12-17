@@ -38,20 +38,19 @@ class SnapPlanner(BasePlanner):
         return 'SnapPlanner'
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, snap_tolerance=0.1, **kw_args):
+    def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's current
         configuration to the goal configuration. This will fail if the
-        configurations differ by more than the tolerance.
+        configurations differ by more than the the DOF resolution.
         @param robot
         @param goal desired configuration
-        @param snap_tolerance maximum Euclidean C-space distance in radians
         @return traj
         """
-        return self._Snap(robot, goal, snap_tolerance=snap_tolerance, **kw_args)
+        return self._Snap(robot, goal, **kw_args)
 
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, snap_tolerance=0.1, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's current
         configuration to a desired end-effector pose. This happens by finding
@@ -59,7 +58,6 @@ class SnapPlanner(BasePlanner):
         attempts to snap there if possible.
         @param robot
         @param goal_pose desired end-effector pose
-        @param snap_tolerance maximum Euclidean C-space distance in radians
         @return traj
         """
         # Find an IK solution.
@@ -83,15 +81,18 @@ class SnapPlanner(BasePlanner):
         sorted_ik_solutions = ik_solutions[sorted_indices, :]
 
         # Try snapping to the closest IK solution.
-        return self._Snap(robot, sorted_ik_solutions[0, :], snap_tolerance=snap_tolerance, **kw_args)
+        return self._Snap(robot, sorted_ik_solutions[0, :], **kw_args)
 
-    def _Snap(self, robot, goal, snap_tolerance, **kw_args):
+    def _Snap(self, robot, goal, **kw_args):
         active_indices = robot.GetActiveDOFIndices()
         current_dof_values = robot.GetActiveDOFValues()
 
         # Only snap if we're close to the goal configuration.
-        if (goal - current_dof_values).max() > snap_tolerance:
-            raise PlanningError('Distance from goal larger than snap tolerance.')
+        dof_resolutions = robot.GetActiveDOFResolutions()
+        dof_errors = numpy.abs(goal - current_dof_values)
+
+        if (dof_errors > dof_resolutions).any():
+            raise PlanningError('Distance from goal greater than DOF resolution.')
 
         # Check the start state for collision.
         if env.CheckCollision() or robot.CheckSelfCollision():
