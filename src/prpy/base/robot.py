@@ -153,7 +153,7 @@ class Robot(openravepy.Robot):
         # Attempt smoothing with the Parabolic Retimer first.
         smooth_traj = CopyTrajectory(traj)
         status = openravepy.planningutils.SmoothTrajectory(
-            traj, 0.99, 0.99, 'ParabolicSmoother', '')
+            smooth_traj, 0.99, 0.99, 'ParabolicSmoother', '')
         if status in [PlannerStatus.HasSolution,
                       PlannerStatus.InterruptedWithSolution]:
             return smooth_traj
@@ -166,7 +166,7 @@ class Robot(openravepy.Robot):
             "Robot will stop at each waypoint.")
         retimed_traj = CopyTrajectory(traj)
         status = openravepy.planningutils.RetimeTrajectory(
-            traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
+            retimed_traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
         if status in [PlannerStatus.HasSolution,
                       PlannerStatus.InterruptedWithSolution]:
             return retimed_traj
