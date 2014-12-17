@@ -139,12 +139,17 @@ class Robot(openravepy.Robot):
         return active_manipulators
 
     def RetimeTrajectory(self, traj, **kw_args):
-        """
-        Compute timing information for a trajectory, populating the
-        trajectory's deltatime group. Timing information is necessary for
+        """Compute timing information for a trajectory.
+
+        This function computes timing information for a trajectory, populating
+        the trajectory's deltatime group. Timing information is necessary for
         successful execution in simulation.
+
+        Note that this method does NOT modify the trajectory in-place, but
+        instead returns a timed version of the trajectory.
+
         @param traj input trajectory
-        @returns timed output trajectory
+        @return timed output trajectory
         """
         from openravepy import PlannerStatus
         from prpy.exceptions import PrPyException
