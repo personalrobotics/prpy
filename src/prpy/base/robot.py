@@ -146,7 +146,23 @@ class Robot(openravepy.Robot):
         @param traj input trajectory
         @returns timed output trajectory
         """
-        openravepy.planningutils.SmoothTrajectory(traj, 0.99, 0.99, 'ParabolicSmoother', '')
+        from openravepy import PlannerStatus
+
+        # Attempt smoothing with the Parabolic Retimer first.
+        status = openravepy.planningutils.SmoothTrajectory(
+            traj, 0.99, 0.99, 'ParabolicSmoother', '')
+        if status not in [PlannerStatus.HasSolution,
+                          PlannerStatus.InterruptedWithSolution]:
+            return traj
+
+        # If this fails, fall back on the Linear Retimer.
+        # (Linear retiming should always work, but will produce a
+        # slower path where the robot stops at each waypoint.)
+        logger.warning(
+            "SmoothTrajectory failed, using LinearTrajectoryRetimer. "
+            "Robot will stop at each waypoint.")
+        openravepy.planningutils.RetimeTrajectory(
+            traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
         return traj
 
     def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
