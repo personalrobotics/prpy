@@ -139,12 +139,17 @@ class Robot(openravepy.Robot):
         return active_manipulators
 
     def RetimeTrajectory(self, traj, **kw_args):
-        """
-        Compute timing information for a trajectory, populating the
-        trajectory's deltatime group. Timing information is necessary for
+        """Compute timing information for a trajectory.
+
+        This function computes timing information for a trajectory, populating
+        the trajectory's deltatime group. Timing information is necessary for
         successful execution in simulation.
+
+        Note that this method does NOT modify the trajectory in-place, but
+        instead returns a timed version of the trajectory.
+
         @param traj input trajectory
-        @returns timed output trajectory
+        @return timed output trajectory
         """
         from openravepy import PlannerStatus
         from prpy.exceptions import PrPyException
@@ -153,7 +158,7 @@ class Robot(openravepy.Robot):
         # Attempt smoothing with the Parabolic Retimer first.
         smooth_traj = CopyTrajectory(traj)
         status = openravepy.planningutils.SmoothTrajectory(
-            traj, 0.99, 0.99, 'ParabolicSmoother', '')
+            smooth_traj, 0.99, 0.99, 'ParabolicSmoother', '')
         if status in [PlannerStatus.HasSolution,
                       PlannerStatus.InterruptedWithSolution]:
             return smooth_traj
@@ -166,7 +171,7 @@ class Robot(openravepy.Robot):
             "Robot will stop at each waypoint.")
         retimed_traj = CopyTrajectory(traj)
         status = openravepy.planningutils.RetimeTrajectory(
-            traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
+            retimed_traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
         if status in [PlannerStatus.HasSolution,
                       PlannerStatus.InterruptedWithSolution]:
             return retimed_traj
