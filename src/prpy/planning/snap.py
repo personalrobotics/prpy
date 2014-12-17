@@ -93,6 +93,17 @@ class SnapPlanner(BasePlanner):
         if (goal - current_dof_values).max() > snap_tolerance:
             raise PlanningError('Distance from goal larger than snap tolerance.')
 
+        # Check the start state for collision.
+        if env.CheckCollision() or robot.CheckSelfCollision():
+            raise PlanningError('Start configuration is in collision.')
+
+        # Check the end state for collision.
+        sp = openravepy.Robot.SaveParameters
+        with robot.CreateRobotStateSaver(sp.LinkTransformation):
+            robot.SetActiveDOFValues(goal)
+            if env.CheckCollision() or robot.CheckSelfCollision():
+                raise PlanningError('Goal configuration is in collision.')
+
         # Create a two-point trajectory that starts at our current
         # configuration and takes us to the goal.
         traj = openravepy.RaveCreateTrajectory(self.env, '')
