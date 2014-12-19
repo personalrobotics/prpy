@@ -139,7 +139,7 @@ class OMPLPlanner(BasePlanner):
         return self.Plan(robot, params, continue_planner=continue_planner, shortcut_timeout=shortcut_timeout)
         
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, timelimit=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
+    def PlanToTSR(self, robot, tsrchains, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
         """
         Plan to a desired TSR set with OMPL. This will invoke the OMPL planner
         specified in the OMPLPlanner constructor and pass a list of TSR chains
@@ -150,13 +150,13 @@ class OMPLPlanner(BasePlanner):
         @return traj
         """
         return self.TSRPlan(robot, tsrchains, 
-                            timeout=timelimit, ompl_args=ompl_args, 
+                            timeout=timeout, ompl_args=ompl_args, 
                             shortcut_timeout=shortcut_timeout, 
                             continue_planner=continue_planner, 
                             **kw_args)
 
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=25.0, ompl_args = None, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, timeout=25.0, ompl_args = None, **kw_args):
         """
         Plan to desired end-effector pose.
         @param robot 
@@ -170,7 +170,7 @@ class OMPLPlanner(BasePlanner):
         goal_tsr = TSR(T0_w = goal_pose, manip = manipulator_index)
         tsr_chain = TSRChain(sample_goal = True, TSR = goal_tsr)
         return self.TSRPlan(robot, [tsr_chain], 
-                            timeout=timelimit, ompl_args=ompl_args, 
+                            timeout=timeout, ompl_args=ompl_args, 
                             **kw_args)
     '''        
     @PlanningMethod
