@@ -80,19 +80,26 @@ class MicoRobot(Robot):
         #while new_traj.GetNumWaypoints()>0:
         #from IPython import embed
         #embed()
+        values[6] = max(0, values[6]) #check for non-negative
+        values[7] = max(0, values[7])
         numOfWaypoints = traj.GetNumWaypoints()
         #new_traj.Remove(0,numOfWaypoints)
         for i in range(numOfWaypoints):
             waypoint = traj.GetWaypoint(i)
             waypoint = numpy.append(waypoint, [values[6],values[7]])
             new_traj.Insert(i,waypoint)
-
+     
         if retime:
             # Retime a manipulator trajectory.
             if not needs_base:
-                new_traj = self.RetimeTrajectory(new_traj)
+                #print "smoothing"
+                res =  openravepy.planningutils.SmoothTrajectory(new_traj,1, 1, 'ParabolicSmoother', '')
+                #res =  openravepy.planningutils.SmoothTrajectory(new_traj,1, 1, 'ParabolicSmoother', '')
+
+               # new_traj = self.RetimeTrajectory(new_traj)
             # Retime a base trajectory.
             else:
+                print "base needed!! "
                 max_vel = [ self.GetAffineTranslationMaxVels()[0],
                             self.GetAffineTranslationMaxVels()[1],
                             self.GetAffineRotationAxisMaxVels()[2] ]
@@ -100,6 +107,10 @@ class MicoRobot(Robot):
                 openravepy.planningutils.RetimeAffineTrajectory(new_traj, max_vel,
                                                                 max_accel, False)
 
+        #openravepy.planningutils.RetimeAffineTrajectory(new_traj, 2, 3, False)
+        #from IPython import embed
+        #embed()
+      
         self.GetController().SetPath(new_traj)
 
         active_manipulators = self.GetTrajectoryManipulators(new_traj)
