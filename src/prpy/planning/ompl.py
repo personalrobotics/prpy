@@ -47,7 +47,7 @@ class OMPLPlanner(BasePlanner):
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
 
-    def Plan(self, robot, params, shortcut_timeout=5.0, continue_planner=False):
+    def Plan(self, robot, params, shortcut_timeout=5.0, continue_planner=False, **kw_args):
         '''
         Helper function for running planner
         '''
@@ -86,6 +86,31 @@ class OMPLPlanner(BasePlanner):
 
         return traj
 
+    def TSRPlan(self, robot, tsrchains, timelimit=25.0, ompl_args = None, *args, **kw_args):
+        """
+        Helper function for planning with TSRs
+        """
+        extraParams = '<time_limit>{time_limit:f}</time_limit>'\
+            '<planner_type>{algorithm:s}</planner_type>'.format(
+                time_limit = timelimit,
+                algorithm = self.algorithm
+            )
+
+        for chain in tsrchains:
+            extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k='tsr_chain', v=chain.serialize())
+
+        if ompl_args is not None:
+            for key,value in ompl_args.iteritems():
+                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
+                
+
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetExtraParameters(extraParams)
+
+        return self.Plan(robot, params, *args, **kw_args)
+
+        
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
@@ -114,7 +139,7 @@ class OMPLPlanner(BasePlanner):
         return self.Plan(robot, params, continue_planner=continue_planner, shortcut_timeout=shortcut_timeout)
         
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
+    def PlanToTSR(self, robot, tsrchains, timelimit=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
         """
         Plan to a desired TSR set with OMPL. This will invoke the OMPL planner
         specified in the OMPLPlanner constructor and pass a list of TSR chains
@@ -124,22 +149,79 @@ class OMPLPlanner(BasePlanner):
         @param tsrchains a list of TSR chains that define a goal set
         @return traj
         """
-        extraParams = '<time_limit>{time_limit:f}</time_limit>'\
-            '<planner_type>{algorithm:s}</planner_type>'.format(
-                time_limit = timeout,
-                algorithm = self.algorithm
-            )
+        return self.TSRPlan(robot, tsrchains, 
+                            timeout=timelimit, ompl_args=ompl_args, 
+                            shortcut_timeout=shortcut_timeout, 
+                            continue_planner=continue_planner, 
+                            **kw_args)
 
-        for chain in tsrchains:
-            extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k='tsr_chain', v=chain.serialize())
+    @PlanningMethod
+    def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=25.0, ompl_args = None, **kw_args):
+        """
+        Plan to desired end-effector pose.
+        @param robot 
+        @param goal_pose desired end-effector pose
+        @param timeout The maximum time to allow the plan to search for a solution
+        @param ompl_args A dictionary of extra arguments to be passed to the ompl planner
+        @return traj
+        """
+        manipulator_index = robot.GetActiveManipulatorIndex()
+        from prpy.tsr.tsr import TSR, TSRChain
+        goal_tsr = TSR(T0_w = goal_pose, manip = manipulator_index)
+        tsr_chain = TSRChain(sample_goal = True, TSR = goal_tsr)
+        return self.TSRPlan(robot, [tsr_chain], 
+                            timeout=timelimit, ompl_args=ompl_args, 
+                            **kw_args)
+    '''        
+    @PlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance, timelimit=5.0,
+                                ompl_args=None, **kw_args):
+        """
+        Plan to a desired end-effector offset.
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum distance in meters
+        @param timelimit timeout in seconds
+        @param ompl_args A dictionary of extra arguments to be passed to the ompl planner
+        @return traj
+        """
+        with robot:
+            manip = robot.GetActiveManipulator()
+            H_world_ee = manip.GetEndEffectorTransform()
 
-        if ompl_args is not None:
-            for key,value in ompl_args.iteritems():
-                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
-                
+            # 'object frame w' is at ee, z pointed along direction to move
+            import prpy.kin
+            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
+            H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
+        
+            # Serialize TSR string (goal)
+            Hw_end = numpy.eye(4)
+            Hw_end[2,3] = distance
 
-        params = openravepy.Planner.PlannerParameters()
-        params.SetRobotActiveJoints(robot)
-        params.SetExtraParameters(extraParams)
+            from prpy.tsr.tsr import *
+            goaltsr = TSR(T0_w = numpy.dot(H_world_w,Hw_end), 
+                          Tw_e = H_w_ee, 
+                          Bw = numpy.zeros((6,2)), 
+                          manip = robot.GetActiveManipulatorIndex())
+            goal_tsr_chain = TSRChain(sample_goal = True,
+                                      TSRs = [goaltsr])
+            # Serialize TSR string (whole-trajectory constraint)
+            Bw = numpy.zeros((6,2))
+            epsilon = 0.001
+            Bw = numpy.array([[-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [min(0.0, distance),  max(0.0, distance)],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon]])
 
-        return self.Plan(robot, params, continue_planner=continue_planner, shortcut_timeout=shortcut_timeout)
+            trajtsr = TSR(T0_w = H_world_w, 
+                          Tw_e = H_w_ee, 
+                          Bw = Bw, 
+                          manip = robot.GetActiveManipulatorIndex())
+            traj_tsr_chain = TSRChain(constrain=True, TSRs=[ trajtsr ])
+
+        return self.TSRPlan(robot, [goal_tsr_chain, traj_tsr_chain], 
+                            timeout=timelimit, ompl_args=ompl_args, **kw_args)
+        
+     '''
