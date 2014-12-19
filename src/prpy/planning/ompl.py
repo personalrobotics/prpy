@@ -86,13 +86,13 @@ class OMPLPlanner(BasePlanner):
 
         return traj
 
-    def TSRPlan(self, robot, tsrchains, timelimit=25.0, ompl_args = None, *args, **kw_args):
+    def TSRPlan(self, robot, tsrchains, timeout=25.0, ompl_args = None, *args, **kw_args):
         """
         Helper function for planning with TSRs
         """
         extraParams = '<time_limit>{time_limit:f}</time_limit>'\
             '<planner_type>{algorithm:s}</planner_type>'.format(
-                time_limit = timelimit,
+                time_limit = timeout,
                 algorithm = self.algorithm
             )
 
