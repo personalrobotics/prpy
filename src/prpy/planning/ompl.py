@@ -47,7 +47,7 @@ class OMPLPlanner(BasePlanner):
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
 
-    def Plan(self, robot, params, shortcut_timeout=5.0, continue_planner=False, **kw_args):
+    def Plan(self, robot, params, shortcut_timelimit=5.0, continue_planner=False, **kw_args):
         '''
         Helper function for running planner
         '''
@@ -71,7 +71,7 @@ class OMPLPlanner(BasePlanner):
             # Shortcut.
             params = openravepy.Planner.PlannerParameters()
             params.SetExtraParameters(
-                '<time_limit>{:f}</time_limit>'.format(shortcut_timeout)
+                '<time_limit>{:f}</time_limit>'.format(shortcut_timelimit)
             )
             self.simplifier.InitPlan(robot, params)
             status = self.simplifier.PlanPath(traj, releasegil=True)
@@ -86,13 +86,13 @@ class OMPLPlanner(BasePlanner):
 
         return traj
 
-    def TSRPlan(self, robot, tsrchains, timeout=25.0, ompl_args = None, *args, **kw_args):
+    def TSRPlan(self, robot, tsrchains, timelimit=25.0, ompl_args = None, *args, **kw_args):
         """
         Helper function for planning with TSRs
         """
         extraParams = '<time_limit>{time_limit:f}</time_limit>'\
             '<planner_type>{algorithm:s}</planner_type>'.format(
-                time_limit = timeout,
+                time_limit = timelimit,
                 algorithm = self.algorithm
             )
 
@@ -113,7 +113,7 @@ class OMPLPlanner(BasePlanner):
         
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
+    def PlanToConfiguration(self, robot, goal, timelimit=25.0, shortcut_timelimit=5.0, continue_planner=False, ompl_args = None, **kw_args):
         """
         Plan to a desired configuration with OMPL. This will invoke the OMPL
         planner specified in the OMPLPlanner constructor.
@@ -123,7 +123,7 @@ class OMPLPlanner(BasePlanner):
         """
         extraParams = '<time_limit>{time_limit:f}</time_limit>'\
             '<planner_type>{algorithm:s}</planner_type>'.format(
-                time_limit = timeout,
+                time_limit = timelimit,
                 algorithm = self.algorithm
             )
 
@@ -136,10 +136,10 @@ class OMPLPlanner(BasePlanner):
         params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
 
-        return self.Plan(robot, params, continue_planner=continue_planner, shortcut_timeout=shortcut_timeout)
+        return self.Plan(robot, params, continue_planner=continue_planner, shortcut_timelimit=shortcut_timelimit)
         
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, timeout=25.0, shortcut_timeout=5.0, continue_planner=False, ompl_args = None, **kw_args):
+    def PlanToTSR(self, robot, tsrchains, timelimit=25.0, shortcut_timelimit=5.0, continue_planner=False, ompl_args = None, **kw_args):
         """
         Plan to a desired TSR set with OMPL. This will invoke the OMPL planner
         specified in the OMPLPlanner constructor and pass a list of TSR chains
@@ -150,18 +150,18 @@ class OMPLPlanner(BasePlanner):
         @return traj
         """
         return self.TSRPlan(robot, tsrchains, 
-                            timeout=timeout, ompl_args=ompl_args, 
-                            shortcut_timeout=shortcut_timeout, 
+                            timelimit=timelimit, ompl_args=ompl_args, 
+                            shortcut_timelimit=shortcut_timelimit, 
                             continue_planner=continue_planner, 
                             **kw_args)
 
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, timeout=25.0, ompl_args = None, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=25.0, ompl_args = None, **kw_args):
         """
         Plan to desired end-effector pose.
         @param robot 
         @param goal_pose desired end-effector pose
-        @param timeout The maximum time to allow the plan to search for a solution
+        @param timelimit The maximum time to allow the plan to search for a solution
         @param ompl_args A dictionary of extra arguments to be passed to the ompl planner
         @return traj
         """
@@ -170,7 +170,7 @@ class OMPLPlanner(BasePlanner):
         goal_tsr = TSR(T0_w = goal_pose, manip = manipulator_index)
         tsr_chain = TSRChain(sample_goal = True, TSR = goal_tsr)
         return self.TSRPlan(robot, [tsr_chain], 
-                            timeout=timeout, ompl_args=ompl_args, 
+                            timelimit=timelimit, ompl_args=ompl_args, 
                             **kw_args)
     '''        
     @PlanningMethod
@@ -181,7 +181,7 @@ class OMPLPlanner(BasePlanner):
         @param robot
         @param direction unit vector in the direction of motion
         @param distance minimum distance in meters
-        @param timelimit timeout in seconds
+        @param timelimit timelimit in seconds
         @param ompl_args A dictionary of extra arguments to be passed to the ompl planner
         @return traj
         """
@@ -222,6 +222,6 @@ class OMPLPlanner(BasePlanner):
             traj_tsr_chain = TSRChain(constrain=True, TSRs=[ trajtsr ])
 
         return self.TSRPlan(robot, [goal_tsr_chain, traj_tsr_chain], 
-                            timeout=timelimit, ompl_args=ompl_args, **kw_args)
+                            timelimit=timelimit, ompl_args=ompl_args, **kw_args)
         
      '''
