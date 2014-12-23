@@ -61,7 +61,7 @@ class MicoHand(EndEffector):
            args='MicoHandController {0:s} {1:s}'.format('prpy', hand_namespace),
            dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
 
-    def MoveHand(hand, f1=None, f2=None, spread=None, timeout=None):
+    def MoveHand(hand, f1=0.8, f2=0.8, spread=None, timeout=None):
         """
         Change the hand preshape. This function blocks until trajectory execution
         finishes. This can be changed by changing the timeout parameter to a
@@ -85,13 +85,16 @@ class MicoHand(EndEffector):
         traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), '')
         traj.Init(robot.GetActiveConfigurationSpecification())
         dof_values = robot.GetActiveDOFValues()
-        traj.Insert(0, dof_values)
-        dof_values[6] = 0.1
-        dof_values[7] = 0.1
+        #traj.Insert(0, dof_values)
+        #dof_values[6] = 0.3
+        #dof_values[7] = 0.3
+        #traj.Insert(0,dof_values)
+        dof_values[6] = 0.5
+        dof_values[7] = 0.5
+        traj.Insert(0,dof_values)
+        dof_values[6] = f1
+        dof_values[7] = f2
         traj.Insert(1,dof_values)
-        dof_values[6] = 0.8
-        dof_values[7] = 0.8
-        traj.Insert(2,dof_values)
         openravepy.planningutils.RetimeActiveDOFTrajectory(traj, robot)
         hand.controller.SetPath(traj)
         util.WaitForControllers([ hand.controller ], timeout=timeout) 
@@ -143,7 +146,29 @@ class MicoHand(EndEffector):
             util.WaitForControllers([ hand.controller ], timeout=timeout)
         else:
             # TODO: Load this angle from somewhere.
-            hand.MoveHand(f1=3.2, f2=3.2, spread=spread, timeout=timeout)
+            hand.MoveHand(f1=0.8, f2=0.8, spread=spread, timeout=timeout)
+    
+
+    def CloseHandTight(hand, spread=None, timeout=None):
+        """
+        Close the hand with a fixed spread.
+        @param spread hand spread
+        @param timeout blocking execution timeout
+        """
+        if hand.simulated:
+            robot = hand.manipulator.GetRobot()
+            p = openravepy.KinBody.SaveParameters
+
+            with robot.CreateRobotStateSaver(p.ActiveDOF | p.ActiveManipulator):
+                hand.manipulator.SetActive()
+                robot.task_manipulation.CloseFingers()
+
+            util.WaitForControllers([ hand.controller ], timeout=timeout)
+        else:
+            # TODO: Load this angle from somewhere.
+            hand.MoveHand(f1=1.20, f2=1.20, spread=spread, timeout=timeout)
+
+
 
     def ResetHand(hand):
         """
