@@ -55,12 +55,12 @@ class DistanceFieldManager(object):
                 if body == robot:
                     active_dof_indices = robot.GetActiveDOFIndices()
                     active_links = self.get_affected_links(robot, active_dof_indices)
+
                     for link in active_links:
                         link.Enable(False)
 
                 body_name = body.GetName()
                 current_state = self.get_geometric_state(body)
-
                 logger.debug('Computed state for "%s": %s', body_name, current_state)
 
                 # Check if the distance field is already loaded. Clear the
@@ -109,13 +109,11 @@ class DistanceFieldManager(object):
                                          joint.GetDOFIndex() + joint.GetDOF())
                     break
 
-        dof_values = body.GetDOFValues(dof_indices)
-
         return DistanceFieldKey(
             kinematics_hash = body.GetKinematicsGeometryHash(),
             enabled_mask = tuple(enabled_mask),
             dof_indices = tuple(dof_indices),
-            dof_values = tuple(dof_values),
+            dof_values = tuple(body.GetDOFValues(dof_indices)),
         )
 
     @staticmethod
