@@ -98,8 +98,8 @@ class DistanceFieldManager(object):
         enabled_mask = [ link.IsEnabled() for link in body.GetLinks() ]
 
         dof_indices = []
-        dof_values = []
         for joint in body.GetJoints():
+
             for link in body.GetLinks():
                 if not link.IsEnabled():
                     continue
@@ -107,8 +107,9 @@ class DistanceFieldManager(object):
                 if body.DoesAffect(joint.GetJointIndex(), link.GetIndex()):
                     dof_indices += range(joint.GetDOFIndex(),
                                          joint.GetDOFIndex() + joint.GetDOF())
-                    dof_values += joint.GetValues()
                     break
+
+        dof_values = body.GetDOFValues(dof_indices)
 
         return DistanceFieldKey(
             kinematics_hash = body.GetKinematicsGeometryHash(),
