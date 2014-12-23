@@ -32,6 +32,19 @@ import openravepy
 from base import BasePlanner, PlanningError, PlanningMethod
 
 class SnapPlanner(BasePlanner):
+    """Planner that checks the straight-line trajectory to the goal.
+
+    SnapPlanner is a utility planner class that collision checks the
+    straight-line trajectory to the goal. If that trajectory is invalid, i.e..
+    due to an environment or self collision, the planner immediately returns
+    failure by raising a PlanningError. Collision checking is performed using
+    the standard CheckPathAllConstraints method.
+    
+    SnapPlanner is intended to be used only as a "short circuit" to speed up
+    planning between nearby configurations. This planner is most commonly used
+    as the first item in a Sequence meta-planner to avoid calling a motion
+    planner when the trivial solution is valid.
+    """
     def __init__(self):
         super(SnapPlanner, self).__init__()
  
@@ -43,7 +56,8 @@ class SnapPlanner(BasePlanner):
         """
         Attempt to plan a straight line trajectory from the robot's current
         configuration to the goal configuration. This will fail if the
-        configurations differ by more than the the DOF resolution.
+        straight-line path is not collision free.
+
         @param robot
         @param goal desired configuration
         @return traj
@@ -55,8 +69,11 @@ class SnapPlanner(BasePlanner):
         """
         Attempt to plan a straight line trajectory from the robot's current
         configuration to a desired end-effector pose. This happens by finding
-        the nearest IK solution to the robot's current configuration and
-        attempts to snap there if possible.
+        the closest IK solution to the robot's current configuration and
+        attempts to snap there (using PlanToConfiguration) if possible. In the
+        case of a redundant manipulator, no attempt is made to check other IK
+        solutions.
+
         @param robot
         @param goal_pose desired end-effector pose
         @return traj
