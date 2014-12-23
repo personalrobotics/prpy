@@ -78,41 +78,37 @@ class SnapPlanner(BasePlanner):
         return self._Snap(robot, ik_solution, **kw_args)
 
     def _Snap(self, robot, goal, **kw_args):
+        Closed = openravepy.Interval.Closed
+
+        curr = robot.GetActiveDOFValues()
         active_indices = robot.GetActiveDOFIndices()
-        current_dof_values = robot.GetActiveDOFValues()
 
-        # Only snap if we're close to the goal configuration.
-        dof_resolutions = robot.GetActiveDOFResolutions()
-        dof_errors = numpy.abs(goal - current_dof_values)
+        # Use the CheckPathAllConstraints helper function to collision check
+        # the straight-line trajectory. We pass dummy values for dq0, dq1,
+        # and timeelapsed since this is a purely geometric check.
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetGoalConfig(goal)
+        check = params.CheckPathAllConstraints(curr, goal, [], [], 0., Closed)
 
-        if (dof_errors > dof_resolutions).any():
-            raise PlanningError('Distance from goal greater than DOF resolution.')
-
-        # Check the start state for collision.
-        if env.CheckCollision() or robot.CheckSelfCollision():
-            raise PlanningError('Start configuration is in collision.')
-
-        # Check the end state for collision.
-        sp = openravepy.Robot.SaveParameters
-        with robot.CreateRobotStateSaver(sp.LinkTransformation):
-            robot.SetActiveDOFValues(goal)
-            if env.CheckCollision() or robot.CheckSelfCollision():
-                raise PlanningError('Goal configuration is in collision.')
+        # The function returns a bitmask of ConstraintFilterOptions flags,
+        # indicating which constraints are violated. We'll abort if any
+        # constraints are violated.
+        if check != 0:
+            raise PlanningError('Straight line trajectory is not valid.')
 
         # Create a two-point trajectory that starts at our current
         # configuration and takes us to the goal.
         traj = openravepy.RaveCreateTrajectory(self.env, '')
-        config_spec = robot.GetActiveConfigurationSpecification()
+        cspec = robot.GetActiveConfigurationSpecification()
         active_indices = robot.GetActiveDOFIndices()
 
-        waypoint1 = numpy.zeros(config_spec.GetDOF())
-        waypoint2 = numpy.zeros(config_spec.GetDOF())
-        config_spec.InsertJointValues(waypoint1, current_dof_values,
-                                      robot, active_indices, False)
-        config_spec.InsertJointValues(waypoint2, current_dof_values,
-                                      robot, active_indices, False)
+        waypoints = numpy.zeros((2, cspec.GetDOF()))
+        cspec.InsertJointValues(waypoints[0, :], curr, robot,
+                                active_indices, False)
+        cspec.InsertJointValues(waypoints[1, :], goal, robot,
+                                active_indices, False)
 
-        traj.Init(config_spec)
-        traj.Insert(0, waypoint1)
-        traj.Insert(1, waypoint2)
+        traj.Init(cspec)
+        traj.Insert(0, waypoints.ravel())
         return traj
