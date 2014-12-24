@@ -92,7 +92,7 @@ class Mico(Manipulator):
             #self.controller = self.GetRobot().AttachController(name=self.GetName(),
             #args='roscontroller openrave {0} 1'.format(rospy.get_namespace()),
 
-            self.or_physical_controller = ('roscontroller openrave {0} 1'.format(rospy.get_namespace()))
+            self.or_physical_controller = ('roscontroller openrave {0}'.format(rospy.get_namespace()))
             self.ros_controllers = [
                 "traj_controller",
                 "joint_state_controller",

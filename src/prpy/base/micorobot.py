@@ -65,39 +65,31 @@ class MicoRobot(Robot):
             raise ValueError('Unable to execute affine DOF trajectory; robot does'\
                              ' not have a MobileBase.')
 
-        # TODO: Throw an error if the trajectory contains both normal DOFs and
-        # affine DOFs.
-        #from IPython import embed
-        #mbed()
-        #numOfWaypoints = 48
         new_traj = openravepy.RaveCreateTrajectory(self.GetEnv(), '')
         activedofs = [i for i in range(8)]
         self.SetActiveDOFs(activedofs)
-        values = self.GetActiveDOFValues()
         new_traj.Init(self.GetActiveConfigurationSpecification())
         activedofs = [i for i in range(6)]
         self.SetActiveDOFs(activedofs)
-        #while new_traj.GetNumWaypoints()>0:
+
+     
         #from IPython import embed
         #embed()
-        values[6] = max(0, values[6]) #check for non-negative
-        values[7] = max(0, values[7])
-        numOfWaypoints = traj.GetNumWaypoints()
-        #new_traj.Remove(0,numOfWaypoints)
-        for i in range(numOfWaypoints):
-            waypoint = traj.GetWaypoint(i)
-            waypoint = numpy.append(waypoint, [values[6],values[7]])
-            new_traj.Insert(i,waypoint)
+
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, new_traj.GetConfigurationSpecification())
+
      
+        #from IPython import embed
+        #embed()
+        
         if retime:
             # Retime a manipulator trajectory.
             if not needs_base:
-                #print "smoothing"
-                res =  openravepy.planningutils.SmoothTrajectory(new_traj,1, 1, 'ParabolicSmoother', '')
-                #res =  openravepy.planningutils.SmoothTrajectory(new_traj,1, 1, 'ParabolicSmoother', '')
+                print "smoothing"
+                #res =  openravepy.planningutils.SmoothTrajectory(traj,1, 1, 'ParabolicSmoother', '')
+                traj = self.RetimeTrajectory(traj)
 
-               # new_traj = self.RetimeTrajectory(new_traj)
-            # Retime a base trajectory.
+
             else:
                 print "base needed!! "
                 max_vel = [ self.GetAffineTranslationMaxVels()[0],
@@ -107,13 +99,11 @@ class MicoRobot(Robot):
                 openravepy.planningutils.RetimeAffineTrajectory(new_traj, max_vel,
                                                                 max_accel, False)
 
-        #openravepy.planningutils.RetimeAffineTrajectory(new_traj, 2, 3, False)
-        #from IPython import embed
-        #embed()
-      
-        self.GetController().SetPath(new_traj)
 
-        active_manipulators = self.GetTrajectoryManipulators(new_traj)
+       # openravepy.planningutils.RetimeTrajectory(traj)
+        self.GetController().SetPath(traj)
+
+        active_manipulators = self.GetTrajectoryManipulators(traj)
         active_controllers = []
         for active_manipulator in active_manipulators:
             if hasattr(active_manipulator, 'controller'):
@@ -123,7 +113,7 @@ class MicoRobot(Robot):
             active_controllers.append(self.base.controller)
 
         util.WaitForControllers(active_controllers, timeout=timeout)
-        return new_traj  
+        return traj  
 
     def CloneBindings(self, parent):
         Robot.CloneBindings(self, parent)
