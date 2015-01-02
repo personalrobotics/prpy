@@ -143,7 +143,7 @@ class SnapPlannerTest(unittest.TestCase):
         with self.assertRaises(PlanningError):
             self.planner.PlanToConfiguration(self.robot, self.config_segment2)
 
-    def test_CloneExample(self):
+    def test_CloneBroken(self):
         self.robot.SetActiveDOFValues(self.config_self_collision)
         self.assertTrue(self.robot.CheckSelfCollision())
 
@@ -153,6 +153,15 @@ class SnapPlannerTest(unittest.TestCase):
         cloned_robot = cloned_env.GetRobot(self.robot.GetName())
         self.assertTrue(cloned_robot.CheckSelfCollision())
 
+    def test_CloneWorking(self):
+        self.robot.SetActiveDOFValues(self.config_env_collision)
+
+        cloned_env = openravepy.Environment()
+        cloned_env.Clone(self.env, openravepy.CloningOptions.Bodies)
+
+        cloned_robot = cloned_env.GetRobot(self.robot.GetName())
+        cloned_robot.SetActiveDOFValues(self.config_self_collision)
+        self.assertTrue(cloned_robot.CheckSelfCollision())
 
 if __name__ == '__main__':
     unittest.main()
