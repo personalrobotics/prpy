@@ -114,13 +114,21 @@ class PlanToConfigurationTests(object):
 # method-specific test classes (e.g. PlanToConfigurationTests), and the
 # unittest.TestCase class. The unittest.TestCase class MUST APPEAR LAST in the
 # list of base classes.
+"""
 class OMPLPlannerTests(BasePlannerTest, PlanToConfigurationTests,
                       unittest.TestCase): 
     planner_factory = OMPLPlanner
+"""
 
 class CBiRRTPlannerTests(BasePlannerTest, PlanToConfigurationTests,
                          unittest.TestCase): 
     planner_factory = CBiRRTPlanner
 
 if __name__ == '__main__':
+    openravepy.RaveInitialize(True)
+
+    import openravepy
+    openravepy.misc.InitOpenRAVELogging()
+    openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Verbose)
+
     unittest.main()

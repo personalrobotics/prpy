@@ -125,6 +125,7 @@ class CBiRRTPlanner(BasePlanner):
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response)
          
+        # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
             traj = openravepy.RaveCreateTrajectory(self.env, '')
