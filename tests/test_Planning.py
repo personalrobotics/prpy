@@ -4,6 +4,7 @@ from openravepy import (Environment, IkFilterOptions, IkParameterization,
                         IkParameterizationType)
 from prpy.planning.cbirrt import CBiRRTPlanner
 from prpy.planning.ompl import OMPLPlanner
+from prpy.planning.base import PlanningError
 
 
 # Generic test setup
@@ -14,14 +15,33 @@ class BasePlannerTest(object):
     """Generic environment setup.
     """
     active_dof_indices = range(7)
-    start_config = numpy.array([
+
+    # Feasible start/goal pair.
+    config_feasible_start = numpy.array([
          2.35061574,  0.61043555,  0.85      ,  1.80684444, -0.08639935,
         -0.69750474,  1.31656172
     ])
-    goal_config = numpy.array([
+    config_feasible_goal = numpy.array([
         -0.84085883,  1.44573701,  0.2       ,  1.72620231, -0.81124757,
         -1.39363597,  1.29233111
     ])
+
+    # This configuration is in collision with the environment, but is not in
+    # self-collision.
+    config_env_collision = numpy.array([
+        3.63026273e-01,  -1.54688036e+00,  -1.30000000e+00,
+        2.34703418e+00,   3.28152338e-01,  -1.10662864e+00,
+       -2.07807269e-01
+    ])
+
+    # This configuration is in self-collision, but is not in collision with the
+    # environment.
+    config_self_collision = numpy.array([
+        2.60643264e+00,   1.97222205e+00,  -8.24298541e-16,
+        2.79154009e+00,   1.30899694e+00,  -4.71027738e-16,
+        0.00000000e+00
+    ])
+
 
     def setUp(self):
         self.env = openravepy.Environment()
@@ -37,10 +57,8 @@ class BasePlannerTest(object):
             self.robot.SetActiveManipulator(self.manipulator)
             self.robot.SetActiveDOFs(self.active_dof_indices)
 
-            self.robot.SetActiveDOFValues(self.goal_config)
+            self.robot.SetActiveDOFValues(self.config_feasible_goal)
             self.goal_ik = self.manipulator.GetEndEffectorTransform()
-
-            self.robot.SetActiveDOFValues(self.start_config)
 
         self.planner = self.planner_factory()
 
@@ -82,9 +100,12 @@ class BasePlannerTest(object):
 # Methods from BasePlannerTest are also available in these classes. However,
 # they should NOT inherit from BasePlannerTest.
 class PlanToConfigurationTests(object):
-    def test_PlanToConfiguration_FindsSolution(self):
+    def test_PlanToConfiguration_GoalIsFeasible_FindsSolution(self):
         with self.env:
-            path = self.planner.PlanToConfiguration(self.robot, self.goal_config)
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+            path = self.planner.PlanToConfiguration(
+                self.robot, self.config_feasible_goal)
 
         # pathectory should be in the input environment, not the cloned
         # planning environment.
@@ -101,11 +122,43 @@ class PlanToConfigurationTests(object):
         first_waypoint = path.GetWaypoint(0)
         last_waypoint = path.GetWaypoint(path.GetNumWaypoints() - 1)
 
-        numpy.testing.assert_allclose(first_waypoint, self.start_config)
-        numpy.testing.assert_allclose(last_waypoint, self.goal_config)
+        numpy.testing.assert_allclose(first_waypoint, self.config_feasible_start)
+        numpy.testing.assert_allclose(last_waypoint, self.config_feasible_goal)
 
         # Path must be collision-free.
         self.assertFalse(self._CollisionCheckPath(path))
+
+    def test_PlanToConfiguration_StartInCollision_ThrowsPlanningError(self):
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_env_collision)
+
+            with self.assertRaises(PlanningError):
+                path = self.planner.PlanToConfiguration(
+                    self.robot, self.config_feasible_goal)
+
+    def test_PlanToConfiguration_StartInSelfCollision_ThrowsPlanningError(self):
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_self_collision)
+
+            with self.assertRaises(PlanningError):
+                path = self.planner.PlanToConfiguration(
+                    self.robot, self.config_feasible_goal)
+
+    def test_PlanToConfiguration_GoalInCollision_ThrowsPlanningError(self):
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+            with self.assertRaises(PlanningError):
+                path = self.planner.PlanToConfiguration(
+                    self.robot, self.config_env_collision)
+
+    def test_PlanToConfiguration_GoalInSelfCollision_ThrowsPlanningError(self):
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+            with self.assertRaises(PlanningError):
+                path = self.planner.PlanToConfiguration(
+                    self.robot, self.config_self_collision)
 
 
 # Planner-specific tests
@@ -126,9 +179,7 @@ class CBiRRTPlannerTests(BasePlannerTest, PlanToConfigurationTests,
 
 if __name__ == '__main__':
     openravepy.RaveInitialize(True)
-
-    import openravepy
     openravepy.misc.InitOpenRAVELogging()
-    openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Verbose)
+    #openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Verbose)
 
     unittest.main()
