@@ -42,7 +42,6 @@ class BasePlannerTest(object):
         0.00000000e+00
     ])
 
-
     def setUp(self):
         self.env = openravepy.Environment()
         self.env.Load('data/wamtest2.env.xml')
@@ -57,13 +56,16 @@ class BasePlannerTest(object):
             self.robot.SetActiveManipulator(self.manipulator)
             self.robot.SetActiveDOFs(self.active_dof_indices)
 
-            self.robot.SetActiveDOFValues(self.config_feasible_goal)
-            self.goal_ik = self.manipulator.GetEndEffectorTransform()
-
         self.planner = self.planner_factory()
 
     def tearDown(self):
         self.env.Destroy()
+
+    def _ValidatePath(self, path):
+        self.assertEquals(path.GetEnv(), self.env)
+        self.assertEquals(self.robot.GetActiveConfigurationSpecification(),
+                          path.GetConfigurationSpecification())
+        self.assertGreaterEqual(path.GetNumWaypoints(), 1)
 
     def _CollisionCheckPath(self, traj):
         # NOTE: This assumes that the trajectory only contains joint_values.
@@ -94,6 +96,15 @@ class BasePlannerTest(object):
 
         return False
 
+    def assertTransformClose(self, actual_pose, expected_pose,
+                             linear_tol=1e-3, angular_tol=1e-3):
+        rel_pose = numpy.dot(numpy.linalg.inv(actual_pose), expected_pose)
+        distance = numpy.linalg.norm(rel_pose[0:3, 3])
+        angle = numpy.arccos((numpy.trace(rel_pose[0:3, 0:3]) - 1.) / 2.)
+
+        self.assertLessEqual(distance, linear_tol)
+        self.assertLessEqual(angle, angular_tol)
+
 
 # Method-specific tests
 #
@@ -101,64 +112,141 @@ class BasePlannerTest(object):
 # they should NOT inherit from BasePlannerTest.
 class PlanToConfigurationTests(object):
     def test_PlanToConfiguration_GoalIsFeasible_FindsSolution(self):
+        # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_feasible_start)
 
-            path = self.planner.PlanToConfiguration(
-                self.robot, self.config_feasible_goal)
+        # Test
+        path = self.planner.PlanToConfiguration(
+            self.robot, self.config_feasible_goal)
 
-        # pathectory should be in the input environment, not the cloned
-        # planning environment.
+        # Assert.
         self.assertEquals(path.GetEnv(), self.env)
-
-        # Output must be a geometric path. This means that it should not have
-        # timing information, velocities, or accelerations.
         self.assertEquals(self.robot.GetActiveConfigurationSpecification(),
                           path.GetConfigurationSpecification())
-
-        # Output must start in the start configuration and end in the goal
-        # configuration.
         self.assertGreaterEqual(path.GetNumWaypoints(), 1)
         first_waypoint = path.GetWaypoint(0)
         last_waypoint = path.GetWaypoint(path.GetNumWaypoints() - 1)
 
+        self._ValidatePath(path)
         numpy.testing.assert_allclose(first_waypoint, self.config_feasible_start)
         numpy.testing.assert_allclose(last_waypoint, self.config_feasible_goal)
-
-        # Path must be collision-free.
         self.assertFalse(self._CollisionCheckPath(path))
 
     def test_PlanToConfiguration_StartInCollision_ThrowsPlanningError(self):
+        # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_env_collision)
 
-            with self.assertRaises(PlanningError):
-                path = self.planner.PlanToConfiguration(
-                    self.robot, self.config_feasible_goal)
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            path = self.planner.PlanToConfiguration(
+                self.robot, self.config_feasible_goal)
 
     def test_PlanToConfiguration_StartInSelfCollision_ThrowsPlanningError(self):
+        # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_self_collision)
 
-            with self.assertRaises(PlanningError):
-                path = self.planner.PlanToConfiguration(
-                    self.robot, self.config_feasible_goal)
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            path = self.planner.PlanToConfiguration(
+                self.robot, self.config_feasible_goal)
 
     def test_PlanToConfiguration_GoalInCollision_ThrowsPlanningError(self):
+        # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_feasible_start)
 
-            with self.assertRaises(PlanningError):
-                path = self.planner.PlanToConfiguration(
-                    self.robot, self.config_env_collision)
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            path = self.planner.PlanToConfiguration(
+                self.robot, self.config_env_collision)
 
     def test_PlanToConfiguration_GoalInSelfCollision_ThrowsPlanningError(self):
+        # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_feasible_start)
 
-            with self.assertRaises(PlanningError):
-                path = self.planner.PlanToConfiguration(
-                    self.robot, self.config_self_collision)
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            path = self.planner.PlanToConfiguration(
+                self.robot, self.config_self_collision)
+
+
+class PlanToEndEffectorPose(object):
+    def test_PlanToEndEffectorPose_GoalIsFeasible_FindsSolution(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_goal)
+            goal_ik = self.manipulator.GetEndEffectorTransform()
+
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+        # Test
+        path = self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
+
+        # Assert
+        self._ValidatePath(path)
+
+        first_waypoint = path.GetWaypoint(0)
+        numpy.testing.assert_allclose(first_waypoint, self.config_feasible_start)
+
+        with self.env:
+            last_waypoint = path.GetWaypoint(path.GetNumWaypoints() - 1)
+            self.robot.SetActiveDOFValues(last_waypoint)
+            last_ik = self.manipulator.GetEndEffectorTransform()
+
+        self.assertTransformClose(last_ik, goal_ik)
+        self.assertFalse(self._CollisionCheckPath(path))
+
+    def test_PlanToEndEffectorPose_StartInCollision_ThrowsPlanningError(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_goal)
+            goal_ik = self.manipulator.GetEndEffectorTransform()
+
+            self.robot.SetActiveDOFValues(self.config_env_collision)
+
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
+
+    def test_PlanToEndEffectorPose_StartInSelfCollision_ThrowsPlanningError(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_goal)
+            goal_ik = self.manipulator.GetEndEffectorTransform()
+
+            self.robot.SetActiveDOFValues(self.config_self_collision)
+
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
+
+    def test_PlanToEndEffectorPose_GoalInCollision_ThrowsPlanningError(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_env_collision)
+            goal_ik = self.manipulator.GetEndEffectorTransform()
+
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
+
+    def test_PlanToEndEffectorPose_GoalInSelfCollision_ThrowsPlanningError(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_self_collision)
+            goal_ik = self.manipulator.GetEndEffectorTransform()
+
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+        # Test/Assert
+        with self.assertRaises(PlanningError):
+            self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
 
 
 # Planner-specific tests
@@ -173,13 +261,15 @@ class OMPLPlannerTests(BasePlannerTest, PlanToConfigurationTests,
     planner_factory = OMPLPlanner
 """
 
-class CBiRRTPlannerTests(BasePlannerTest, PlanToConfigurationTests,
+class CBiRRTPlannerTests(BasePlannerTest,
+                         PlanToConfigurationTests,
+                         PlanToEndEffectorPose,
                          unittest.TestCase): 
     planner_factory = CBiRRTPlanner
 
 if __name__ == '__main__':
     openravepy.RaveInitialize(True)
     openravepy.misc.InitOpenRAVELogging()
-    #openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Verbose)
+    openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Warn)
 
     unittest.main()
