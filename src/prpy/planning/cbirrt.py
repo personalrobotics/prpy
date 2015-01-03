@@ -63,9 +63,10 @@ class CBiRRTPlanner(BasePlanner):
             args += extra_args
 
         if smoothingitrs is not None:
-            if not (smoothingitrs > 0):
-                raise ValueError('Time limit must be non-negative; got {:f}.'\
-                                 .format(timelimit))
+            if smoothingitrs < 0:
+                raise ValueError('Invalid number of smoothing iterations. Value'
+                                 'must be non-negative; got  {:d}.'.format(
+                                    smoothingitrs))
 
             args += [ 'smoothingitrs', str(smoothingitrs) ]
 
@@ -157,8 +158,7 @@ class CBiRRTPlanner(BasePlanner):
         @param goal goal configuration
         @return traj output path
         """
-        return self.PlanToGoals(robot, jointgoals=[goal], smoothingitrs=0,
-                                **kw_args)
+        return self.Plan(robot, jointgoals=[goal], smoothingitrs=0, **kw_args)
 
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):

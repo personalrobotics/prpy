@@ -5,6 +5,7 @@ from openravepy import (Environment, IkFilterOptions, IkParameterization,
 from prpy.planning.cbirrt import CBiRRTPlanner
 from prpy.planning.ompl import OMPLPlanner
 
+
 # Generic test setup
 #
 # This class is the base class of all planner tests. It is responsible for
@@ -75,14 +76,13 @@ class BasePlannerTest(object):
 
         return False
 
+
 # Method-specific tests
 #
 # Methods from BasePlannerTest are also available in these classes. However,
 # they should NOT inherit from BasePlannerTest.
 class PlanToConfigurationTests(object):
     def test_PlanToConfiguration_FindsSolution(self):
-        print 'self =', self
-
         with self.env:
             path = self.planner.PlanToConfiguration(self.robot, self.goal_config)
 
