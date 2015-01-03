@@ -53,7 +53,6 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
-
         # Take a snapshot of the source environment for planning.
         self.env.LoadProblem(self.problem, robot.GetName())
 
@@ -128,8 +127,13 @@ class CBiRRTPlanner(BasePlanner):
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
-            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
+
+        # Strip extraneous groups from the output trajectory.
+        # TODO: Where are these groups coming from!?
+        cspec = robot.GetActiveConfigurationSpecification()
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
 
         return traj
 
