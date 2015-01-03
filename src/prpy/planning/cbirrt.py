@@ -43,98 +43,6 @@ class CBiRRTPlanner(BasePlanner):
     def __str__(self):
         return 'CBiRRT'
 
-    def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
-             jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
-             extra_args=None, **kw_args):
-        # Take a snapshot of the source environment for planning.
-        self.env.LoadProblem(self.problem, robot.GetName())
-
-        args = [ 'RunCBiRRT' ]
-
-        if extra_args is not None:
-            args += extra_args
-
-        if smoothingitrs is not None:
-            if smoothingitrs < 0:
-                raise ValueError('Invalid number of smoothing iterations. Value'
-                                 'must be non-negative; got  {:d}.'.format(
-                                    smoothingitrs))
-
-            args += [ 'smoothingitrs', str(smoothingitrs) ]
-
-        if timelimit is not None:
-            if not (timelimit > 0):
-                raise ValueError('Invalid value for "timelimit". Limit must be'
-                                 ' non-negative; got {:f}.'.format(timelimit))
-
-            args += [ 'timelimit', str(timelimit) ]
-
-        if allowlimadj is not None:
-            args += [ 'allowlimadj', str(int(allowlimadj)) ]
-
-        if psample is not None:
-            if not (0 <= psample <= 1):
-                raise ValueError('Invalid value for "psample". Value must be in'
-                                 ' the range [0, 1]; got {:f}.'.format(psample))
-
-            args += [ 'psample', str(psample) ]
-
-        if jointstarts is not None:
-            for start_config in jointstarts:
-                if len(start_config) != robot.GetActiveDOF():
-                    raise ValueError(
-                        'Incorrect number of DOFs in start configuration;'
-                        ' expected {:d}, got {:d}'.format(
-                            robot.GetActiveDOF(), len(start_config)
-                        )
-                    )
-                
-                args += ['jointstarts'] + self.serialize_dof_values(start_config)
-
-        if jointgoals is not None:
-            for goal_config in jointgoals:
-                if len(goal_config) != robot.GetActiveDOF():
-                    raise ValueError(
-                        'Incorrect number of DOFs in goal configuration;'
-                        ' expected {:d}, got {:d}'.format(
-                            robot.GetActiveDOF(), len(goal_config)
-                        )
-                    )
-            
-                args += ['jointgoals'] + self.serialize_dof_values(goal_config)
-
-        if tsr_chains is not None:
-            for tsr_chain in tsr_chains:
-                args += [ 'TSRChain', tsr_chain.serialize() ]
-
-        # FIXME: Why can't we write to anything other than cmovetraj.txt or
-        # /tmp/cmovetraj.txt with CBiRRT?
-        traj_path = 'cmovetraj.txt'
-        args += [ 'filename', traj_path ]
-        args_str = ' '.join(args)
-
-        response = self.problem.SendCommand(args_str, True)
-        if not response.strip().startswith('1'):
-            raise PlanningError('Unknown error: ' + response)
-         
-        # Construct the output trajectory.
-        with open(traj_path, 'rb') as traj_file:
-            traj_xml = traj_file.read()
-            traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
-            traj.deserialize(traj_xml)
-
-        # Strip extraneous groups from the output trajectory.
-        # TODO: Where are these groups coming from!?
-        cspec = robot.GetActiveConfigurationSpecification()
-        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
-
-        return traj
-
-    @staticmethod
-    def serialize_dof_values(dof_values):
-        return [ str(len(dof_values)), 
-                 ' '.join([ str(x) for x in dof_values]) ]
-
     @PlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
@@ -265,3 +173,95 @@ class CBiRRTPlanner(BasePlanner):
             tsr_chains=tsr_chains,
             **kw_args
         )
+
+    def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
+             jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
+             extra_args=None, **kw_args):
+        self.env.LoadProblem(self.problem, robot.GetName())
+
+        args = [ 'RunCBiRRT' ]
+
+        if extra_args is not None:
+            args += extra_args
+
+        if smoothingitrs is not None:
+            if smoothingitrs < 0:
+                raise ValueError('Invalid number of smoothing iterations. Value'
+                                 'must be non-negative; got  {:d}.'.format(
+                                    smoothingitrs))
+
+            args += [ 'smoothingitrs', str(smoothingitrs) ]
+
+        if timelimit is not None:
+            if not (timelimit > 0):
+                raise ValueError('Invalid value for "timelimit". Limit must be'
+                                 ' non-negative; got {:f}.'.format(timelimit))
+
+            args += [ 'timelimit', str(timelimit) ]
+
+        if allowlimadj is not None:
+            args += [ 'allowlimadj', str(int(allowlimadj)) ]
+
+        if psample is not None:
+            if not (0 <= psample <= 1):
+                raise ValueError('Invalid value for "psample". Value must be in'
+                                 ' the range [0, 1]; got {:f}.'.format(psample))
+
+            args += [ 'psample', str(psample) ]
+
+        if jointstarts is not None:
+            for start_config in jointstarts:
+                if len(start_config) != robot.GetActiveDOF():
+                    raise ValueError(
+                        'Incorrect number of DOFs in start configuration;'
+                        ' expected {:d}, got {:d}'.format(
+                            robot.GetActiveDOF(), len(start_config)
+                        )
+                    )
+                
+                args += ['jointstarts'] + self.serialize_dof_values(start_config)
+
+        if jointgoals is not None:
+            for goal_config in jointgoals:
+                if len(goal_config) != robot.GetActiveDOF():
+                    raise ValueError(
+                        'Incorrect number of DOFs in goal configuration;'
+                        ' expected {:d}, got {:d}'.format(
+                            robot.GetActiveDOF(), len(goal_config)
+                        )
+                    )
+            
+                args += ['jointgoals'] + self.serialize_dof_values(goal_config)
+
+        if tsr_chains is not None:
+            for tsr_chain in tsr_chains:
+                args += [ 'TSRChain', tsr_chain.serialize() ]
+
+        # FIXME: Why can't we write to anything other than cmovetraj.txt or
+        # /tmp/cmovetraj.txt with CBiRRT?
+        traj_path = 'cmovetraj.txt'
+        args += [ 'filename', traj_path ]
+        args_str = ' '.join(args)
+
+        response = self.problem.SendCommand(args_str, True)
+        if not response.strip().startswith('1'):
+            raise PlanningError('Unknown error: ' + response)
+         
+        # Construct the output trajectory.
+        with open(traj_path, 'rb') as traj_file:
+            traj_xml = traj_file.read()
+            traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+            traj.deserialize(traj_xml)
+
+        # Strip extraneous groups from the output trajectory.
+        # TODO: Where are these groups coming from!?
+        cspec = robot.GetActiveConfigurationSpecification()
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
+
+        return traj
+
+    @staticmethod
+    def serialize_dof_values(dof_values):
+        return [ str(len(dof_values)), 
+                 ' '.join([ str(x) for x in dof_values]) ]
+
