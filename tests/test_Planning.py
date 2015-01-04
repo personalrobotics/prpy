@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-import openravepy, unittest, numpy, numpy.testing
+import openravepy, unittest, numpy
 from openravepy import (Environment, IkFilterOptions, IkParameterization,
                         IkParameterizationType)
 from prpy.planning.cbirrt import CBiRRTPlanner
-from prpy.planning.ompl import OMPLPlanner
+from prpy.planning.ompl import OMPLPlanner, OMPLSimplifier
 from prpy.planning.base import PlanningError
+from numpy.testing import assert_allclose
 
 
 # Generic test setup
@@ -96,6 +97,16 @@ class BasePlannerTest(object):
 
         return False
 
+    def _ComputeArcLength(self, traj):
+        distance = 0.
+
+        for iwaypoint in xrange(1, traj.GetNumWaypoints()):
+            prev_waypoint = traj.GetWaypoint(iwaypoint - 1)
+            curr_waypoint = traj.GetWaypoint(iwaypoint)
+            distance += numpy.linalg.norm(curr_waypoint - prev_waypoint)
+
+        return distance
+
     def assertTransformClose(self, actual_pose, expected_pose,
                              linear_tol=1e-3, angular_tol=1e-3):
         rel_pose = numpy.dot(numpy.linalg.inv(actual_pose), expected_pose)
@@ -110,7 +121,7 @@ class BasePlannerTest(object):
 #
 # Methods from BasePlannerTest are also available in these classes. However,
 # they should NOT inherit from BasePlannerTest.
-class PlanToConfigurationTests(object):
+class PlanToConfigurationTest(object):
     def test_PlanToConfiguration_GoalIsFeasible_FindsSolution(self):
         # Setup
         with self.env:
@@ -129,8 +140,8 @@ class PlanToConfigurationTests(object):
         last_waypoint = path.GetWaypoint(path.GetNumWaypoints() - 1)
 
         self._ValidatePath(path)
-        numpy.testing.assert_allclose(first_waypoint, self.config_feasible_start)
-        numpy.testing.assert_allclose(last_waypoint, self.config_feasible_goal)
+        assert_allclose(first_waypoint, self.config_feasible_start)
+        assert_allclose(last_waypoint, self.config_feasible_goal)
         self.assertFalse(self._CollisionCheckPath(path))
 
     def test_PlanToConfiguration_StartInCollision_ThrowsPlanningError(self):
@@ -174,7 +185,7 @@ class PlanToConfigurationTests(object):
                 self.robot, self.config_self_collision)
 
 
-class PlanToEndEffectorPose(object):
+class PlanToEndEffectorPoseTest(object):
     def test_PlanToEndEffectorPose_GoalIsFeasible_FindsSolution(self):
         # Setup
         with self.env:
@@ -190,7 +201,7 @@ class PlanToEndEffectorPose(object):
         self._ValidatePath(path)
 
         first_waypoint = path.GetWaypoint(0)
-        numpy.testing.assert_allclose(first_waypoint, self.config_feasible_start)
+        assert_allclose(first_waypoint, self.config_feasible_start)
 
         with self.env:
             last_waypoint = path.GetWaypoint(path.GetNumWaypoints() - 1)
@@ -249,23 +260,77 @@ class PlanToEndEffectorPose(object):
             self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
 
 
+class ShortcutPathTest(object):
+    planner_factory = OMPLSimplifier
+
+    waypoint1 = numpy.array([
+        1.12376031,  0.60576977, -0.05000000,
+        1.33403907,  0.44772461, -0.31481177,
+       -1.90265540
+    ])
+    waypoint2 = numpy.array([
+        1.53181533,  0.80270404, -0.05      ,
+        1.75341989,  0.21348846, -0.91026757,
+       -1.59603932
+    ])
+    waypoint3 = numpy.array([
+        1.50376031,  0.60576977, -0.05000000,
+        1.33403907,  0.44772461, -0.31481177,
+       -1.90265540
+    ])
+
+    def setUp(self):
+        self.input_path = openravepy.RaveCreateTrajectory(self.env, '')
+        self.input_path.Init(self.robot.GetActiveConfigurationSpecification())
+        self.input_path.Insert(0, self.waypoint1)
+        self.input_path.Insert(1, self.waypoint2)
+        self.input_path.Insert(2, self.waypoint3)
+
+    def test_ShortcutPath_ShortcutExists_ReducesLength(self):
+        # Setup/Test
+        smoothed_path = self.planner.ShortcutPath(self.robot, self.input_path)
+
+        # Assert
+        self.assertEquals(smoothed_path.GetConfigurationSpecification(),
+                          self.input_path.GetConfigurationSpecification())
+        self.assertGreaterEqual(smoothed_path.GetNumWaypoints(), 2)
+
+        n = smoothed_path.GetNumWaypoints()
+        assert_allclose(smoothed_path.GetWaypoint(0),     self.waypoint1)
+        assert_allclose(smoothed_path.GetWaypoint(n - 1), self.waypoint3)
+
+        self.assertLess(self._ComputeArcLength(smoothed_path),
+                        0.5 * self._ComputeArcLength(self.input_path))
+
+    # TODO: Test some of the error cases.
+
+
 # Planner-specific tests
 #
 # Each of these classes MUST EXTEND BasePlannerTest, one or more
 # method-specific test classes (e.g. PlanToConfigurationTests), and the
 # unittest.TestCase class. The unittest.TestCase class MUST APPEAR LAST in the
 # list of base classes.
-"""
-class OMPLPlannerTests(BasePlannerTest, PlanToConfigurationTests,
-                      unittest.TestCase): 
-    planner_factory = OMPLPlanner
-"""
 
 class CBiRRTPlannerTests(BasePlannerTest,
-                         PlanToConfigurationTests,
-                         PlanToEndEffectorPose,
+                         PlanToConfigurationTest,
+                         PlanToEndEffectorPoseTest,
                          unittest.TestCase): 
     planner_factory = CBiRRTPlanner
+
+class OMPLPlannerTests(BasePlannerTest,
+                       PlanToConfigurationTest,
+                       unittest.TestCase): 
+    planner_factory = OMPLPlanner
+
+class OMPLSimplifierTests(BasePlannerTest,
+                          ShortcutPathTest,
+                          unittest.TestCase): 
+    planner_factory = OMPLSimplifier
+
+    def setUp(self):
+        BasePlannerTest.setUp(self)
+        ShortcutPathTest.setUp(self)
 
 if __name__ == '__main__':
     openravepy.RaveInitialize(True)
