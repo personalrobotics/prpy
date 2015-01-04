@@ -30,8 +30,10 @@
 
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, planning, util
+import prpy.util
 from prpy.clone import Clone, Cloned
 from prpy.tsr.tsrlibrary import TSRLibrary
+from ..planning.ompl import OMPLSimplifier
 
 logger = logging.getLogger('robot')
 
@@ -56,6 +58,7 @@ class Robot(openravepy.Robot):
         # Standard, commonly-used OpenRAVE plugins.
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+        self.ompl_simplifier = OMPLSimplifier()
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
@@ -93,6 +96,7 @@ class Robot(openravepy.Robot):
 
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+        self.ompl_simplifier = OMPLSimplifier()
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
@@ -137,6 +141,26 @@ class Robot(openravepy.Robot):
                 active_manipulators.append(manipulator)
 
         return active_manipulators
+
+    def SimplifyPath(self, path, timelimit=1.):
+        from openravepy import PlannerStatus
+        from prpy.exceptions import PrPyException
+
+        simplified_path = prpy.util.CopyTrajectory(path)
+        extra_args = '<time_limit>{:f}</time_limit>'.format(timelimit)
+
+        # Use OMPL to simplify the trajectory. This smoother samples two random
+        # points on the path and attempts to connect them with a straight line
+        # segment. If the straight line is collision free, the line segment is
+        # incorporated into the path.
+        # TODO: Replace this with the SmoothTrajectory helper function.
+        return self.ompl_simplifier.ShortcutPath(self, path)
+
+        # It's not possible to call the shortcut_linear smoother without also
+        # invoking the LinearRetimer. Strip the extraneous groups.
+        ConvertTrajectory(simplified_path, path.GetConfigurationSpecification())
+
+        return simplified_path
 
     def RetimeTrajectory(self, traj, **kw_args):
         """Compute timing information for a trajectory.

@@ -29,7 +29,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, os, tempfile
+from ..util import CopyTrajectory
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from openravepy import PlannerStatus 
 
 class OMPLPlanner(BasePlanner):
     def __init__(self, algorithm='RRTConnect'):
@@ -55,8 +57,6 @@ class OMPLPlanner(BasePlanner):
         @param goal desired configuration
         @return traj
         """
-        from openravepy import PlannerStatus
-
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
         if ompl_args is not None:
@@ -87,3 +87,39 @@ class OMPLPlanner(BasePlanner):
             self.env.Unlock()
 
         return traj
+
+class OMPLSimplifier(BasePlanner):
+    def __init__(self):
+        super(OMPLSimplifier, self).__init__()
+
+        try:
+            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_Simplifier')
+        except openravepy.openrave_exception:
+            raise UnsupportedPlanningError('Unable to create OMPL planner.')
+
+    def __str__(self):
+        return 'OMPL Simplifier'
+
+    @PlanningMethod
+    def ShortcutPath(self, robot, path, timeout=1.):
+        # The planner operates in-place, so we need to copy the input path.
+        output_path = CopyTrajectory(path)
+
+        extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
+        
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetExtraParameters(extraParams)
+
+        # TODO: It would be nice to call planningutils.SmoothTrajectory here,
+        # but we can't because it passes a NULL robot to InitPlan. This is an
+        # issue that needs to be fixed in or_ompl.
+        self.planner.InitPlan(robot, params)
+        status = self.planner.PlanPath(output_path, releasegil=True)
+        if status not in [ PlannerStatus.HasSolution,
+                           PlannerStatus.InterruptedWithSolution ]:
+            raise PlanningError('Simplifier returned with status {0:s}.'.format(
+                                str(status)))
+
+        return output_path
+
