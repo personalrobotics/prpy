@@ -2,11 +2,13 @@
 import openravepy, unittest, numpy
 from openravepy import (Environment, IkFilterOptions, IkParameterization,
                         IkParameterizationType)
+from prpy.planning.base import PlanningError
 from prpy.planning.cbirrt import CBiRRTPlanner
 from prpy.planning.ompl import OMPLPlanner, OMPLSimplifier
-from prpy.planning.base import PlanningError
+from prpy.planning.retimer import ParabolicRetimer
 from numpy.testing import assert_allclose
 
+VerifyTrajectory = openravepy.planningutils.VerifyTrajectory
 
 # Generic test setup
 #
@@ -42,6 +44,24 @@ class BasePlannerTest(object):
         2.79154009e+00,   1.30899694e+00,  -4.71027738e-16,
         0.00000000e+00
     ])
+
+    # Waypoints that can be pair-wise connected by feasible straight line paths.
+    waypoint1 = numpy.array([
+        1.12376031,  0.60576977, -0.05000000,
+        1.33403907,  0.44772461, -0.31481177,
+       -1.90265540
+    ])
+    waypoint2 = numpy.array([
+        1.53181533,  0.80270404, -0.05      ,
+        1.75341989,  0.21348846, -0.91026757,
+       -1.59603932
+    ])
+    waypoint3 = numpy.array([
+        1.50376031,  0.60576977, -0.05000000,
+        1.33403907,  0.44772461, -0.31481177,
+       -1.90265540
+    ])
+
 
     def setUp(self):
         self.env = openravepy.Environment()
@@ -261,24 +281,6 @@ class PlanToEndEffectorPoseTest(object):
 
 
 class ShortcutPathTest(object):
-    planner_factory = OMPLSimplifier
-
-    waypoint1 = numpy.array([
-        1.12376031,  0.60576977, -0.05000000,
-        1.33403907,  0.44772461, -0.31481177,
-       -1.90265540
-    ])
-    waypoint2 = numpy.array([
-        1.53181533,  0.80270404, -0.05      ,
-        1.75341989,  0.21348846, -0.91026757,
-       -1.59603932
-    ])
-    waypoint3 = numpy.array([
-        1.50376031,  0.60576977, -0.05000000,
-        1.33403907,  0.44772461, -0.31481177,
-       -1.90265540
-    ])
-
     def setUp(self):
         self.input_path = openravepy.RaveCreateTrajectory(self.env, '')
         self.input_path.Init(self.robot.GetActiveConfigurationSpecification())
@@ -304,6 +306,73 @@ class ShortcutPathTest(object):
 
     # TODO: Test some of the error cases.
 
+class RetimeTrajectoryTest(object):
+    def setUp(self):
+        self.feasible_path = openravepy.RaveCreateTrajectory(self.env, '')
+        self.feasible_path.Init(self.robot.GetActiveConfigurationSpecification())
+        self.feasible_path.Insert(0, self.waypoint1)
+        self.feasible_path.Insert(1, self.waypoint2)
+        self.feasible_path.Insert(2, self.waypoint3)
+
+        self.dt = 0.01
+        self.tolerance = 0.1 # 10% error
+
+    def test_RetimeTrajectory(self):
+        # Setup/Test
+        traj = self.planner.RetimeTrajectory(self.robot, self.feasible_path)
+
+        # Assert
+        dof_resolutions = self.robot.GetActiveDOFResolutions()
+        position_cspec = self.feasible_path.GetConfigurationSpecification()
+        velocity_cspec = position_cspec.ConvertToDerivativeSpecification(1)
+        zero_dof_values = numpy.zeros(position_cspec.GetDOF())
+
+        # Verify that the trajectory passes through the original waypoints.
+        waypoints = [ self.waypoint1, self.waypoint2, self.waypoint3 ]
+        waypoint_indices = [ None ] * len(waypoints)
+
+        for iwaypoint in xrange(traj.GetNumWaypoints()):
+            joint_values = traj.GetWaypoint(iwaypoint, position_cspec) 
+
+            # Compare the waypoint against every input waypoint.
+            for icandidate, candidate_waypoint in enumerate(waypoints):
+                if numpy.allclose(joint_values, candidate_waypoint):
+                    self.assertIsNone(waypoint_indices[icandidate])
+                    waypoint_indices[icandidate] = iwaypoint
+
+        self.assertEquals(waypoint_indices[0], 0)
+        self.assertEquals(waypoint_indices[-1], traj.GetNumWaypoints() - 1)
+
+        for iwaypoint in waypoint_indices:
+            self.assertIsNotNone(iwaypoint)
+
+            # Verify that the velocity at the waypoint is zero.
+            joint_velocities = traj.GetWaypoint(iwaypoint, velocity_cspec)
+            assert_allclose(joint_velocities, zero_dof_values)
+
+        # Verify the trajectory between waypoints.
+        for t in numpy.arange(self.dt, traj.GetDuration(), self.dt):
+            iafter = traj.GetFirstWaypointIndexAfterTime(t)
+            ibefore = iafter - 1
+
+            joint_values = traj.Sample(t, position_cspec)
+            joint_values_before = traj.GetWaypoint(ibefore, position_cspec) 
+            joint_values_after = traj.GetWaypoint(iafter, position_cspec) 
+            
+            distance_full = numpy.linalg.norm(joint_values_after - joint_values_before)
+            distance_before = numpy.linalg.norm(joint_values - joint_values_before)
+            distance_after = numpy.linalg.norm(joint_values - joint_values_after)
+            deviation = distance_before + distance_after - distance_full
+            self.assertLess(deviation, self.tolerance * distance_full)
+
+        # Check joint limits and dynamic feasibility.
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(self.robot)
+
+        openravepy.planningutils.VerifyTrajectory(params, traj, self.dt)
+
+    # TODO: Test failure cases.
+
 
 # Planner-specific tests
 #
@@ -312,6 +381,7 @@ class ShortcutPathTest(object):
 # unittest.TestCase class. The unittest.TestCase class MUST APPEAR LAST in the
 # list of base classes.
 
+"""
 class CBiRRTPlannerTests(BasePlannerTest,
                          PlanToConfigurationTest,
                          PlanToEndEffectorPoseTest,
@@ -331,6 +401,16 @@ class OMPLSimplifierTests(BasePlannerTest,
     def setUp(self):
         BasePlannerTest.setUp(self)
         ShortcutPathTest.setUp(self)
+"""
+
+class ParabolicRetimerTests(BasePlannerTest,
+                            RetimeTrajectoryTest,
+                            unittest.TestCase): 
+    planner_factory = ParabolicRetimer
+
+    def setUp(self):
+        BasePlannerTest.setUp(self)
+        RetimeTrajectoryTest.setUp(self)
 
 if __name__ == '__main__':
     openravepy.RaveInitialize(True)

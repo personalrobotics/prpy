@@ -31,9 +31,12 @@
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, planning, util
 import prpy.util
-from prpy.clone import Clone, Cloned
-from prpy.tsr.tsrlibrary import TSRLibrary
+from ..clone import Clone, Cloned
+from ..tsr.tsrlibrary import TSRLibrary
+from ..planning.base import Ranked
 from ..planning.ompl import OMPLSimplifier
+from ..planning.retimer import ParabolicRetimer
+
 
 logger = logging.getLogger('robot')
 
@@ -58,7 +61,12 @@ class Robot(openravepy.Robot):
         # Standard, commonly-used OpenRAVE plugins.
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+
+        # Path post-processing for execution. This includes simplification of
+        # the geometric path, retiming a path into a trajectory, and smoothing
+        # (joint simplificaiton and retiming).
         self.ompl_simplifier = OMPLSimplifier()
+        self.retimer = ParabolicRetimer()
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
@@ -156,13 +164,7 @@ class Robot(openravepy.Robot):
         # TODO: Replace this with the SmoothTrajectory helper function.
         return self.ompl_simplifier.ShortcutPath(self, path)
 
-        # It's not possible to call the shortcut_linear smoother without also
-        # invoking the LinearRetimer. Strip the extraneous groups.
-        ConvertTrajectory(simplified_path, path.GetConfigurationSpecification())
-
-        return simplified_path
-
-    def RetimeTrajectory(self, traj, **kw_args):
+    def RetimeTrajectory(self, path, smooth=True, **kw_args):
         """Compute timing information for a trajectory.
 
         This function computes timing information for a trajectory, populating
@@ -172,35 +174,11 @@ class Robot(openravepy.Robot):
         Note that this method does NOT modify the trajectory in-place, but
         instead returns a timed version of the trajectory.
 
-        @param traj input trajectory
+        @param path input path
         @return timed output trajectory
         """
-        from openravepy import PlannerStatus
-        from prpy.exceptions import PrPyException
-        from prpy.util import CopyTrajectory
-
-        # Attempt smoothing with the Parabolic Retimer first.
-        smooth_traj = CopyTrajectory(traj)
-        status = openravepy.planningutils.SmoothTrajectory(
-            smooth_traj, 0.99, 0.99, 'ParabolicSmoother', '')
-        if status in [PlannerStatus.HasSolution,
-                      PlannerStatus.InterruptedWithSolution]:
-            return smooth_traj
-
-        # If this fails, fall back on the Linear Retimer.
-        # (Linear retiming should always work, but will produce a
-        # slower path where the robot stops at each waypoint.)
-        logger.warning(
-            "SmoothTrajectory failed, using LinearTrajectoryRetimer. "
-            "Robot will stop at each waypoint.")
-        retimed_traj = CopyTrajectory(traj)
-        status = openravepy.planningutils.RetimeTrajectory(
-            retimed_traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
-        if status in [PlannerStatus.HasSolution,
-                      PlannerStatus.InterruptedWithSolution]:
-            return retimed_traj
-        raise PrPyException("Path retimer failed with status '{:s}'"
-                            .format(status))
+        # TODO: Implement smoothing.
+        return self.retimer.RetimeTrajectory(path)
 
     def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
         """

@@ -200,14 +200,16 @@ def AdaptTrajectory(traj, new_start, new_goal, robot):
     new_traj = MatrixToTraj(new_traj_matrix,cs,dof,robot)
     return new_traj
 
-def CopyTrajectory(traj):
+def CopyTrajectory(traj, env=None):
     """
     Create a new copy of a trajectory using its Clone() operator.
     @param traj input trajectory
     @return copy of the trajectory
     """
-    copy_traj = openravepy.RaveCreateTrajectory(traj.GetEnv(),
-                                                traj.GetXMLId())
+    if env is None:
+        env = traj.GetEnv()
+
+    copy_traj = openravepy.RaveCreateTrajectory(env, traj.GetXMLId())
     copy_traj.Clone(traj, 0)
     return copy_traj
 
