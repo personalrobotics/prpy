@@ -46,8 +46,11 @@ class NamedPlanner(BasePlanner):
         @param **kw_args optional arguments passed to PlanToConfiguration
         @returns traj trajectory
         """
-        if not hasattr(robot, 'configurations'):
-            raise PlanningError('{0:s} does not have a table of named configurations.'.format(robot))
+        try:
+            configurations = robot.configurations
+        except AttributeError:
+            raise PlanningError('{:s} does not have a table of named'
+                                ' configurations.'.format(robot))
 
         try:
             saved_dof_indices, saved_dof_values = robot.configurations.get_configuration(name)
