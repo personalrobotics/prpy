@@ -48,7 +48,7 @@ class OpenRAVEPlanner(BasePlanner):
         return 'OpenRAVE {0:s}'.format(self.algorithm)
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, maxiter=500, continue_planner=False, or_args=None, **kw_args):
+    def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OpenRAVE. This will invoke the OpenRAVE
         planner specified in the OpenRAVEPlanner constructor.
@@ -56,6 +56,11 @@ class OpenRAVEPlanner(BasePlanner):
         @param goal desired configuration
         @return traj
         """
+
+        return self._Plan(robot, goal, **kw_args)
+
+
+    def _Plan(self, robot, goals, maxiter=500, continue_planner=False, or_args=None, **kw_args):
 
         # Get rid of default postprocessing
         extraParams =  '<_postprocessing planner=""><_nmaxiterations>0</_nmaxiterations></_postprocessing>'
@@ -68,7 +73,7 @@ class OpenRAVEPlanner(BasePlanner):
 
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
-        params.SetGoalConfig(goal)
+        params.SetGoalConfig(goals)
         params.SetExtraParameters(extraParams)
 
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
@@ -93,3 +98,29 @@ class OpenRAVEPlanner(BasePlanner):
             self.env.Unlock()
 
         return traj
+
+
+class BiRRT(OpenRAVEPlanner):
+
+    def __init__(self):
+        OpenRAVEPlanner.__init__(self, algorithm='birrt')
+
+    @PlanningMethod
+    def PlanToConfigurations(self, robot, goals, **kw_args):
+        """
+        Plan to one of many configuration with OpenRAVE's birrt planner.
+        @param robot
+        @param goals list of desired configurations
+        @return traj
+        """
+
+        # Serialize
+        goals = numpy.ravel(numpy.vstack(goals))
+
+        return self._Plan(robot, goals, **kw_args)
+ 
+
+
+
+
+
