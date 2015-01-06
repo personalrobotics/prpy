@@ -38,11 +38,11 @@ class OMPLPlanner(BasePlanner):
         super(OMPLPlanner, self).__init__()
 
         self.setup = False
-
         self.algorithm = algorithm
+
         try:
-            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL')
-            self.simplifier = openravepy.RaveCreatePlanner(self.env, 'OMPLSimplifier')
+            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_' + algorithm)
+            self.simplifier = openravepy.RaveCreatePlanner(self.env, 'OMPL_Simplifier')
         except openravepy.openrave_exception:
             raise UnsupportedPlanningError('Unable to create OMPL module.')
 
@@ -62,11 +62,7 @@ class OMPLPlanner(BasePlanner):
 
     def _Plan(self, robot, goal, timeout=30., shortcut_timeout=5.,
               continue_planner=False, ompl_args=None, **kw_args):
-        extraParams = '<time_limit>{time_limit:f}</time_limit>'\
-                      '<planner_type>{algorithm:s}</planner_type>'.format(
-            time_limit = timeout,
-            algorithm = self.algorithm
-        )
+        extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
         if ompl_args is not None:
             for key,value in ompl_args.iteritems():
