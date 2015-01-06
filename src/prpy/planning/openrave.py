@@ -114,7 +114,12 @@ class BiRRT(OpenRAVEPlanner):
         @return traj
         """
 
-        # Serialize
+        if type(goals) is not list:
+            raise ValueError('Wanted a list of goals and got {0:s} instead'.format(type(goals)))
+        if len(goals[0]) != len(robot.GetActiveDOFIndices()):
+            raise ValueError('Goals must be of same length as robot active DOFs')
+        # Serialize 
+        # Will raise ValueError if goals are not equal length
         goals = numpy.ravel(numpy.vstack(goals))
 
         return self._Plan(robot, goals, **kw_args)
