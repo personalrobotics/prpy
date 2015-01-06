@@ -115,7 +115,7 @@ class BiRRT(OpenRAVEPlanner):
         """
 
         if type(goals) is not list:
-            raise ValueError('Wanted a list of goals and got {0:s} instead'.format(type(goals)))
+            raise TypeError('Wanted a list of goals and got {0:s} instead'.format(type(goals)))
         if len(goals[0]) != len(robot.GetActiveDOFIndices()):
             raise ValueError('Goals must be of same length as robot active DOFs')
         # Serialize 
