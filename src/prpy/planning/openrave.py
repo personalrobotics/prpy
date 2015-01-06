@@ -3,7 +3,8 @@
 # Copyright (c) 2013, Carnegie Mellon University
 # All rights reserved.
 # Authors: Siddhartha Srinivasa <siddh@cs.cmu.edu>
-# Authors: Michael Koval <mkoval@cs.cmu.edu>
+#          Michael Koval <mkoval@cs.cmu.edu>
+#          Pras Velagapudi <mkoval@cs.cmu.edu>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -29,8 +30,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, numpy, openravepy, os, tempfile
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+import numpy
+import openravepy
+from base import (BasePlanner,
+                  PlanningError,
+                  UnsupportedPlanningError,
+                  PlanningMethod)
+
 
 class OpenRAVEPlanner(BasePlanner):
     def __init__(self, algorithm='birrt'):
@@ -42,7 +48,8 @@ class OpenRAVEPlanner(BasePlanner):
         try:
             self.planner = openravepy.RaveCreatePlanner(self.env, algorithm)
         except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create {0:s} module.'.format(self))
+            raise UnsupportedPlanningError('Unable to create {:s} module.'
+                                           .format(str(self)))
 
     def __str__(self):
         return 'OpenRAVE {0:s}'.format(self.algorithm)
@@ -50,17 +57,17 @@ class OpenRAVEPlanner(BasePlanner):
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
-        Plan to a desired configuration with OpenRAVE. This will invoke the OpenRAVE
-        planner specified in the OpenRAVEPlanner constructor.
-        @param robot
-        @param goal desired configuration
-        @return traj
+        Plan to a desired configuration with OpenRAVE. This will invoke the
+        OpenRAVE planner specified in the OpenRAVEPlanner constructor.
+        @param robot the robot whose active DOFs will be used
+        @param goal the desired robot joint configuration
+        @return traj a trajectory from current configuration to specified goal
         """
 
         return self._Plan(robot, goal, **kw_args)
 
-
-    def _Plan(self, robot, goals, maxiter=500, continue_planner=False, or_args=None, **kw_args):
+    def _Plan(self, robot, goals, maxiter=500, continue_planner=False,
+              or_args=None, **kw_args):
 
         # Get rid of default postprocessing
         extraParams =  '<_postprocessing planner=""><_nmaxiterations>0</_nmaxiterations></_postprocessing>'
@@ -68,8 +75,9 @@ class OpenRAVEPlanner(BasePlanner):
         extraParams += '<_nmaxiterations>{:d}</_nmaxiterations>'.format(maxiter)
 
         if or_args is not None:
-            for key,value in or_args.iteritems():
-                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
+            for key, value in or_args.iteritems():
+                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k=str(key),
+                                                             v=str(value))
 
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
@@ -88,19 +96,19 @@ class OpenRAVEPlanner(BasePlanner):
 
             status = self.planner.PlanPath(traj, releasegil=True)
             from openravepy import PlannerStatus
-            if status not in [ PlannerStatus.HasSolution,
-                               PlannerStatus.InterruptedWithSolution ]:
-                raise PlanningError('Planner returned with status {0:s}.'.format(
-                                    str(status)))
+            if status not in [PlannerStatus.HasSolution,
+                              PlannerStatus.InterruptedWithSolution]:
+                raise PlanningError('Planner returned with status {:s}.'
+                                    .format(str(status)))
         except Exception as e:
-            raise PlanningError('Planning failed with error: {0:s}'.format(e))
+            raise PlanningError('Planning failed with error: {:s}'.format(e))
         finally:
             self.env.Unlock()
 
         return traj
 
 
-class BiRRT(OpenRAVEPlanner):
+class BiRRTPlanner(OpenRAVEPlanner):
 
     def __init__(self):
         OpenRAVEPlanner.__init__(self, algorithm='birrt')
@@ -108,24 +116,19 @@ class BiRRT(OpenRAVEPlanner):
     @PlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
-        Plan to one of many configuration with OpenRAVE's birrt planner.
-        @param robot
-        @param goals list of desired configurations
-        @return traj
+        Plan to one of many configuration with OpenRAVE's BiRRT planner.
+        @param robot the robot whose active DOFs will be used
+        @param goals a list of desired robot joint configurations
+        @return traj trajectory from current configuration to one of the goals
         """
 
         if type(goals) is not list:
-            raise TypeError('Wanted a list of goals and got {0:s} instead'.format(type(goals)))
+            raise TypeError('Wanted a list of goals and got {:s} instead'
+                            .format(type(goals)))
         if len(goals[0]) != len(robot.GetActiveDOFIndices()):
-            raise ValueError('Goals must be of same length as robot active DOFs')
-        # Serialize 
-        # Will raise ValueError if goals are not equal length
+            raise ValueError('Goals must be same length as robot active DOFs.')
+
+        # Serialize list of goals into a single 1D vector
+        # (This will raise ValueError if the goals are not equal length.)
         goals = numpy.ravel(numpy.vstack(goals))
-
         return self._Plan(robot, goals, **kw_args)
- 
-
-
-
-
-
