@@ -36,6 +36,12 @@ from base import BasePlanner, PlanningError, PlanningMethod
 logger = logging.getLogger('prpy.planning.ik')
 
 
+def unique_rows(a):
+    a = numpy.ascontiguousarray(a)
+    unique_a = numpy.unique(a.view([('', a.dtype)]*a.shape[1]))
+    return unique_a.view(a.dtype).reshape((unique_a.shape[0], a.shape[1]))
+
+
 class IKPlanner(BasePlanner):
     def __init__(self):
         super(IKPlanner, self).__init__()
@@ -46,7 +52,7 @@ class IKPlanner(BasePlanner):
     @PlanningMethod
     def PlanToIKs(self, robot, goal_poses,
                   ranker=ik_ranking.JointLimitAvoidance,
-                  num_attempts=1, chunk_size=1, **kw_args):
+                  num_attempts=5, chunk_size=1, **kw_args):
         """
         Create a plan to put a robot active manipulator's end effector at one
         of the specified affine poses.
@@ -79,18 +85,24 @@ class IKPlanner(BasePlanner):
         # thread. It should be possible to fix this by IK ranking once, then
         # calling PlanToConfiguration in separate threads.
 
-        # Find an unordered list of IK solutions for every specified goal pose.
+        # Find complete list of IK solutions for every specified goal pose.
         with robot.GetEnv():
             ik_solutions = []
             for goal_pose in goal_poses:
                 manipulator = robot.GetActiveManipulator()
                 ik_param = IkParameterization(
                     goal_pose, IkParameterizationType.Transform6D)
-                ik_solutions += manipulator.FindIKSolutions(
+                ik_solution = manipulator.FindIKSolutions(
                     ik_param, IkFilterOptions.CheckEnvCollisions)
+                if ik_solution.shape[0] > 0:
+                    ik_solutions.append(ik_solution)
 
-        if ik_solutions.shape[0] == 0:
+        if len(ik_solutions) == 0:
             raise PlanningError('There is no IK solution at the goal pose.')
+
+        # Combine this into a single list of potential goal configurations.
+        ik_solutions = numpy.vstack(ik_solutions)
+        ik_solutions = unique_rows(ik_solutions)
 
         # Sort the IK solutions in ascending order by the costs returned by the
         # ranker. Lower cost solutions are better and infinite cost solutions
@@ -103,32 +115,34 @@ class IKPlanner(BasePlanner):
         if ranked_ik_solutions.shape[0] == 0:
             raise PlanningError('All IK solutions have infinite cost.')
 
-        # Group the ik solutions into groups of the specified size
+        # Group the IK solutions into groups of the specified size
         # (plan for each group of IK solutions together).
-        def chunker(iterable, chunksize):
-            return map(None, *[iter(iterable)]*chunksize)
-        ranked_ik_solution_groups = chunker(ranked_ik_solutions, chunk_size)
+        ranked_ik_solution_sets = [
+            ranked_ik_solutions[i:i+chunk_size, :]
+            for i in range(0, ranked_ik_solutions.shape[0], chunk_size)
+        ]
 
         # Sequentially plan to the solution groups in descending cost order.
-        num_attempts = min(ranked_ik_solution_groups.shape[0], num_attempts)
-        ik_group_list = enumerate(ranked_ik_solution_groups[0:num_attempts, :])
-        for i, ik_group in ik_group_list:
+        num_attempts = min(len(ranked_ik_solution_sets), num_attempts)
+        ik_set_list = enumerate(ranked_ik_solution_sets[:num_attempts])
+        for i, ik_set in ik_set_list:
             try:
-                if ik_group.shape[0] > 1:
-                    traj = robot.planner.PlanToConfigurations(robot, ik_group)
+                if ik_set.shape[0] > 1:
+                    traj = robot.planner.PlanToConfigurations(robot, ik_set)
                 else:
-                    traj = robot.planner.PlanToConfiguration(robot, ik_group)
+                    traj = robot.planner.PlanToConfiguration(robot, ik_set[0])
 
-                logger.info('Planned to IK solution %d of %d.',
+                logger.info('Planned to IK solution set %d of %d.',
                             i + 1, num_attempts)
                 return traj
             except PlanningError as e:
-                logger.warning('Planning to IK solution %d of %d failed: %s',
-                               i + 1, num_attempts, e)
+                logger.warning(
+                    'Planning to IK solution set %d of %d failed: %s',
+                    i + 1, num_attempts, e)
 
         raise PlanningError(
-            'Planning to the top {:d} of {:d} IK solution failed.'
-            .format(num_attempts, ranked_ik_solution_groups.shape[0]))
+            'Planning to the top {:d} of {:d} IK solution sets failed.'
+            .format(num_attempts, ranked_ik_solution_sets.shape[0]))
 
     @PlanningMethod
     def PlanToIK(self, robot, goal_pose, **kw_args):
