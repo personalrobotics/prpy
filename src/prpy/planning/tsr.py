@@ -41,7 +41,7 @@ class TSRPlanner(BasePlanner):
         return 'TSRPlanner'
 
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains,
+    def PlanToTSR(self, robot, tsrchains, chunk_size=10,
                   tsr_samples=10, ranker=None, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
@@ -54,7 +54,8 @@ class TSRPlanner(BasePlanner):
 
         @param robot the robot whose active manipulator will be used
         @param tsrchains a list of TSR chains that define a goal set
-        @param tsr_samples the number of samples of the TSR chains to use
+        @param tsr_samples the number of samples of each goal TSR chain to try
+        @param chunk_size the number of possible goals to use per planning call
         @param ranker an IK ranking function to use over the IK solutions
         @return traj a trajectory that satisfies the specified TSR chains
         """
@@ -66,4 +67,5 @@ class TSRPlanner(BasePlanner):
         # TODO: round robin between each TSR chain that has sample_goal.
         goal_poses = [tsrchains[0].sample() for i in range(tsr_samples)]
         return robot.planner.PlanToIKs(
-            robot, goal_poses, ranker=ranker, **kw_args)
+            robot, goal_poses,
+            ranker=ranker, chunk_size=chunk_size, **kw_args)
