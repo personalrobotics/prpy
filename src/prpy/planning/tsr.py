@@ -31,6 +31,7 @@ import logging
 import time
 import itertools
 import numpy
+import openravepy
 from base import BasePlanner, PlanningMethod, PlanningError
 
 logger = logging.getLogger('prpy.planning.tsr')
@@ -44,9 +45,10 @@ class TSRPlanner(BasePlanner):
         return 'TSRPlanner'
 
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, num_attempts=10,
-                  chunk_size=20, ranker=None,
-                  tsr_samples=100, tsr_timeout=1.0, **kw_args):
+    def PlanToTSR(self, robot, tsrchains, num_attempts=3,
+                  chunk_size=100,
+                  ranker=None,
+                  tsr_samples=300, tsr_timeout=3.0, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
         samples a fixed number of goals from the specified TSRs up-front, then
@@ -65,17 +67,25 @@ class TSRPlanner(BasePlanner):
         @param ranker an IK ranking function to use over the IK solutions
         @return traj a trajectory that satisfies the specified TSR chains
         """
-        from ..ik_ranking import NominalConfiguration
-        if ranker is None:
-            ranker = NominalConfiguration(robot.GetActiveDOFValues())
-
         # Plan using the active manipulator.
         manipulator = robot.GetActiveManipulator()
 
-        # Create an iterator that will cycle through sampling each TSR chain.
+        # The default ranking is distance from current configuration.
+        from ..ik_ranking import NominalConfiguration
+        if ranker is None:
+            ranker = NominalConfiguration(manipulator.GetArmDOFValues())
+
+        # Test for tsrchains that cannot be handled.
+        for tsrchain in tsrchains:
+            if tsrchain.sample_start or tsrchain.constrain:
+                raise PlanningError(
+                    'Cannot handle start or trajectory-wide TSR constraints.')
+        tsrchains = [t for t in tsrchains if t.sample_goal]
+
+        # Create an iterator that cycles through each TSR chain.
         tsr_cycler = itertools.cycle(tsrchains)
 
-        # Create an iterator that will sample until the timelimit.
+        # Create an iterator that cycles TSR chains until the timelimit.
         tsr_timelimit = time.time() + tsr_timeout
         tsr_sampler = itertools.takewhile(
             lambda v: time.time() < tsr_timelimit, tsr_cycler)
@@ -105,30 +115,38 @@ class TSRPlanner(BasePlanner):
         ranked_indices = ranked_indices[~numpy.isposinf(scores)]
         ranked_ik_solutions = ik_solutions[ranked_indices, :]
 
-        # Group the IK solutions into groups of the specified size
-        # (plan for each group of IK solutions together).
+        # Group the IK solutions into sets of the specified size
+        # (plan for each set of IK solutions together).
         ranked_ik_solution_sets = [
             ranked_ik_solutions[i:i+chunk_size, :]
             for i in range(0, ranked_ik_solutions.shape[0], chunk_size)
         ]
 
-        # Sequentially plan to the solution groups in descending cost order.
         num_attempts = min(len(ranked_ik_solution_sets), num_attempts)
         ik_set_list = enumerate(ranked_ik_solution_sets[:num_attempts])
-        for i, ik_set in ik_set_list:
-            try:
-                if ik_set.shape[0] > 1:
-                    traj = robot.planner.PlanToConfigurations(robot, ik_set)
-                else:
-                    traj = robot.planner.PlanToConfiguration(robot, ik_set[0])
 
-                logger.info('Planned to IK solution set %d of %d.',
-                            i + 1, num_attempts)
-                return traj
-            except PlanningError as e:
-                logger.warning(
-                    'Planning to IK solution set %d of %d failed: %s',
-                    i + 1, num_attempts, e)
+        # Configure the robot to use the active manipulator for planning.
+        p = openravepy.KinBody.SaveParameters
+        with robot.CreateRobotStateSaver(p.ActiveDOF):
+            robot.SetActiveDOFs(manipulator.GetArmIndices())
+
+            # Try planning to each solution set in descending cost order.
+            for i, ik_set in ik_set_list:
+                try:
+                    if ik_set.shape[0] > 1:
+                        traj = robot.planner.PlanToConfigurations(
+                            robot, ik_set)
+                    else:
+                        traj = robot.planner.PlanToConfiguration(
+                            robot, ik_set[0])
+
+                    logger.info('Planned to IK solution set %d of %d.',
+                                i + 1, num_attempts)
+                    return traj
+                except PlanningError as e:
+                    logger.warning(
+                        'Planning to IK solution set %d of %d failed: %s',
+                        i + 1, num_attempts, e)
 
         # If none of the planning attempts succeeded, report failure.
         raise PlanningError(
