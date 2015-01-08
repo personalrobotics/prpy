@@ -30,11 +30,13 @@
 
 import numpy
 
+
 def NoRanking(robot, ik_solutions):
     """
     Return IK solutions with an arbitrary ranking.
     """
     return numpy.ones(ik_solutions.shape[0])
+
 
 def JointLimitAvoidance(robot, ik_solutions):
     """
@@ -49,6 +51,7 @@ def JointLimitAvoidance(robot, ik_solutions):
     distance = numpy.minimum(lower_distance, upper_distance)
     return -numpy.sum(distance**2, axis=1)
 
+
 class NominalConfiguration(object):
     def __init__(self, q_nominal):
         """
@@ -59,4 +62,4 @@ class NominalConfiguration(object):
 
     def __call__(self, robot, ik_solutions):
         assert ik_solutions.shape[1] == self.q_nominal.shape[0]
-        return numpy.linalg.norm(ik_solutions - self.q_nominal, axis=0)
+        return numpy.linalg.norm(ik_solutions - self.q_nominal, axis=1)
