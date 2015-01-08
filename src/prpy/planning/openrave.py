@@ -121,10 +121,6 @@ class BiRRTPlanner(OpenRAVEPlanner):
         @param goals a list of desired robot joint configurations
         @return traj trajectory from current configuration to one of the goals
         """
-
-        if type(goals) is not list:
-            raise TypeError('Wanted a list of goals and got {:s} instead'
-                            .format(type(goals)))
         if len(goals[0]) != len(robot.GetActiveDOFIndices()):
             raise ValueError('Goals must be same length as robot active DOFs.')
 
