@@ -45,7 +45,7 @@ class TSRPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, num_attempts=10,
-                  chunk_size=10, ranker=None,
+                  chunk_size=20, ranker=None,
                   tsr_samples=100, tsr_timeout=1.0, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
@@ -59,9 +59,9 @@ class TSRPlanner(BasePlanner):
         @param robot the robot whose active manipulator will be used
         @param tsrchains a list of TSR chains that define a goal set
         @param num_attempts the maximum number of planning attempts to make
+        @param chunk_size the number of sampled goals to use per planning call
         @param tsr_samples the maximum number of samples of the goal TSR chains
         @param tsr_timeout the maximum time to spend sampling goal TSR chains
-        @param chunk_size the number of possible goals to use per planning call
         @param ranker an IK ranking function to use over the IK solutions
         @return traj a trajectory that satisfies the specified TSR chains
         """
@@ -133,4 +133,4 @@ class TSRPlanner(BasePlanner):
         # If none of the planning attempts succeeded, report failure.
         raise PlanningError(
             'Planning to the top {:d} of {:d} IK solution sets failed.'
-            .format(num_attempts, ranked_ik_solution_sets.shape[0]))
+            .format(num_attempts, len(ranked_ik_solution_sets)))
