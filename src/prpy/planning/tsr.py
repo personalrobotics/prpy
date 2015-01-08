@@ -68,12 +68,13 @@ class TSRPlanner(BasePlanner):
         @return traj a trajectory that satisfies the specified TSR chains
         """
         # Plan using the active manipulator.
-        manipulator = robot.GetActiveManipulator()
+        with robot.GetEnv():
+            manipulator = robot.GetActiveManipulator()
 
-        # The default ranking is distance from current configuration.
-        from ..ik_ranking import NominalConfiguration
-        if ranker is None:
-            ranker = NominalConfiguration(manipulator.GetArmDOFValues())
+            # Distance from current configuration is default ranking.
+            if ranker is None:
+                from ..ik_ranking import NominalConfiguration
+                ranker = NominalConfiguration(manipulator.GetArmDOFValues())
 
         # Test for tsrchains that cannot be handled.
         for tsrchain in tsrchains:
