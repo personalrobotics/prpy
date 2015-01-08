@@ -46,7 +46,7 @@ class TSRPlanner(BasePlanner):
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, num_attempts=10,
                   chunk_size=10, ranker=None,
-                  tsr_samples=100, tsr_timeout=5.0, **kw_args):
+                  tsr_samples=100, tsr_timeout=1.0, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
         samples a fixed number of goals from the specified TSRs up-front, then
@@ -117,8 +117,6 @@ class TSRPlanner(BasePlanner):
         ik_set_list = enumerate(ranked_ik_solution_sets[:num_attempts])
         for i, ik_set in ik_set_list:
             try:
-                import IPython
-                IPython.embed()
                 if ik_set.shape[0] > 1:
                     traj = robot.planner.PlanToConfigurations(robot, ik_set)
                 else:
@@ -132,6 +130,7 @@ class TSRPlanner(BasePlanner):
                     'Planning to IK solution set %d of %d failed: %s',
                     i + 1, num_attempts, e)
 
+        # If none of the planning attempts succeeded, report failure.
         raise PlanningError(
             'Planning to the top {:d} of {:d} IK solution sets failed.'
             .format(num_attempts, ranked_ik_solution_sets.shape[0]))
