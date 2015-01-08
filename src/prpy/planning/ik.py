@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 import logging
 import numpy
+import openravepy
 from .. import ik_ranking
 from base import (BasePlanner,
                   PlanningError,
@@ -78,16 +79,21 @@ class IKPlanner(BasePlanner):
             raise PlanningError('All IK solutions have infinite cost.')
 
         # Sequentially plan to the solutions in descending order of cost.
-        num_attempts = min(ranked_ik_solutions.shape[0], num_attempts)
-        for i, ik_sol in enumerate(ranked_ik_solutions[0:num_attempts, :]):
-            try:
-                traj = robot.planner.PlanToConfiguration(robot, ik_sol)
-                logger.info('Planned to IK solution %d of %d.', i + 1,
-                            num_attempts)
-                return traj
-            except PlanningError as e:
-                logger.warning('Planning to IK solution %d of %d failed: %s',
-                               i + 1, num_attempts, e)
+        p = openravepy.KinBody.SaveParameters
+        with robot.CreateRobotStateSaver(p.ActiveDOF):
+            robot.SetActiveDOFs(manipulator.GetArmIndices())
+
+            num_attempts = min(ranked_ik_solutions.shape[0], num_attempts)
+            for i, ik_sol in enumerate(ranked_ik_solutions[0:num_attempts, :]):
+                try:
+                    traj = robot.planner.PlanToConfiguration(robot, ik_sol)
+                    logger.info('Planned to IK solution %d of %d.',
+                                i + 1, num_attempts)
+                    return traj
+                except PlanningError as e:
+                    logger.warning(
+                        'Planning to IK solution %d of %d failed: %s',
+                        i + 1, num_attempts, e)
 
         raise PlanningError(
             'Planning to the top {:d} of {:d} IK solutions failed.'
