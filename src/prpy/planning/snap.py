@@ -27,10 +27,24 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-import logging, numpy, openravepy
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+import numpy
+import openravepy
+from base import BasePlanner, PlanningError, PlanningMethod
 
 class SnapPlanner(BasePlanner):
+    """Planner that checks the straight-line trajectory to the goal.
+
+    SnapPlanner is a utility planner class that collision checks the
+    straight-line trajectory to the goal. If that trajectory is invalid, i.e..
+    due to an environment or self collision, the planner immediately returns
+    failure by raising a PlanningError. Collision checking is performed using
+    the standard CheckPathAllConstraints method.
+    
+    SnapPlanner is intended to be used only as a "short circuit" to speed up
+    planning between nearby configurations. This planner is most commonly used
+    as the first item in a Sequence meta-planner to avoid calling a motion
+    planner when the trivial solution is valid.
+    """
     def __init__(self):
         super(SnapPlanner, self).__init__()
  
@@ -38,72 +52,80 @@ class SnapPlanner(BasePlanner):
         return 'SnapPlanner'
 
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, snap_tolerance=0.1, **kw_args):
+    def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's current
         configuration to the goal configuration. This will fail if the
-        configurations differ by more than the tolerance.
+        straight-line path is not collision free.
+
         @param robot
         @param goal desired configuration
-        @param snap_tolerance maximum Euclidean C-space distance in radians
         @return traj
         """
-        return self._Snap(robot, goal, snap_tolerance=snap_tolerance, **kw_args)
+        return self._Snap(robot, goal, **kw_args)
 
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, snap_tolerance=0.1, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's current
         configuration to a desired end-effector pose. This happens by finding
-        the nearest IK solution to the robot's current configuration and
-        attempts to snap there if possible.
+        the closest IK solution to the robot's current configuration and
+        attempts to snap there (using PlanToConfiguration) if possible. In the
+        case of a redundant manipulator, no attempt is made to check other IK
+        solutions.
+
         @param robot
         @param goal_pose desired end-effector pose
-        @param snap_tolerance maximum Euclidean C-space distance in radians
         @return traj
         """
-        # Find an IK solution.
+        ikp = openravepy.IkParameterizationType
+        ikfo = openravepy.IkFilterOptions
+
+        # Find an IK solution. OpenRAVE tries to return a solution that is
+        # close to the configuration of the arm, so we don't need to do any
+        # custom IK ranking.
         manipulator = robot.GetActiveManipulator()
         current_config = robot.GetDOFValues(manipulator.GetArmIndices())
-        ik_param = openravepy.IkParameterization(goal_pose, openravepy.IkParameterizationType.Transform6D)
-        ik_solutions = manipulator.FindIKSolutions(ik_param, openravepy.IkFilterOptions.CheckEnvCollisions)
+        ik_param = openravepy.IkParameterization(goal_pose, ikp.Transform6D)
+        ik_solution = manipulator.FindIKSolution(ik_param, ikfo.CheckEnvCollisions)
 
-        if ik_solutions.shape[0] == 0:
+        if ik_solution is None:
             raise PlanningError('There is no IK solution at the goal pose.')
 
-        # Sort the IK solutions in ascending order by the costs returned by the
-        # ranker. Lower cost solutions are better and infinite cost solutions are
-        # assumed to be infeasible.
-        scores = numpy.zeros(ik_solutions.shape[0])
-        for i in xrange(scores.shape[0]):
-            scores[i] = numpy.abs(ik_solutions[i] - current_config).max()
+        return self._Snap(robot, ik_solution, **kw_args)
 
-        sorted_indices = numpy.argsort(scores)
-        sorted_indices = sorted_indices[~numpy.isposinf(scores)]
-        sorted_ik_solutions = ik_solutions[sorted_indices, :]
+    def _Snap(self, robot, goal, **kw_args):
+        Closed = openravepy.Interval.Closed
 
-        # Try snapping to the closest IK solution.
-        return self._Snap(robot, sorted_ik_solutions[0, :], snap_tolerance=snap_tolerance, **kw_args)
-
-    def _Snap(self, robot, goal, snap_tolerance, **kw_args):
+        curr = robot.GetActiveDOFValues()
         active_indices = robot.GetActiveDOFIndices()
-        current_dof_values = robot.GetActiveDOFValues()
 
-        # Only snap if we're close to the goal configuration.
-        if (goal - current_dof_values).max() > snap_tolerance:
-            raise PlanningError('Distance from goal larger than snap tolerance.')
+        # Use the CheckPathAllConstraints helper function to collision check
+        # the straight-line trajectory. We pass dummy values for dq0, dq1,
+        # and timeelapsed since this is a purely geometric check.
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetGoalConfig(goal)
+        check = params.CheckPathAllConstraints(curr, goal, [], [], 0., Closed)
+
+        # The function returns a bitmask of ConstraintFilterOptions flags,
+        # indicating which constraints are violated. We'll abort if any
+        # constraints are violated.
+        if check != 0:
+            raise PlanningError('Straight line trajectory is not valid.')
 
         # Create a two-point trajectory that starts at our current
         # configuration and takes us to the goal.
         traj = openravepy.RaveCreateTrajectory(self.env, '')
-        config_spec = robot.GetActiveConfigurationSpecification()
+        cspec = robot.GetActiveConfigurationSpecification()
         active_indices = robot.GetActiveDOFIndices()
 
-        waypoint1, waypoint2 = numpy.zeros(config_spec.GetDOF()), numpy.zeros(config_spec.GetDOF())
-        config_spec.InsertJointValues(waypoint1, current_dof_values, robot, active_indices, False)
-        config_spec.InsertJointValues(waypoint2, current_dof_values, robot, active_indices, False)
+        waypoints = numpy.zeros((2, cspec.GetDOF()))
+        cspec.InsertJointValues(waypoints[0, :], curr, robot,
+                                active_indices, False)
+        cspec.InsertJointValues(waypoints[1, :], goal, robot,
+                                active_indices, False)
 
-        traj.Init(config_spec)
-        traj.Insert(0, waypoint1)
-        traj.Insert(1, waypoint2)
+        traj.Init(cspec)
+        traj.Insert(0, waypoints.ravel())
         return traj

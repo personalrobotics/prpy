@@ -142,12 +142,15 @@ class DistanceFieldManagerTest(unittest.TestCase):
         self.assertTrue(self.is_processed)
 
     def test_Sync_RecomputesDistanceFieldIfStateChanges(self):
-        self.robot.GetKinematicsGeometryHash = lambda: 'mock_before'
         self.manager.sync(self.robot)
         del self.module.computedistancefield_args[:]
         del self.module.removefield_args[:]
 
-        self.robot.GetKinematicsGeometryHash = lambda: 'mock_after'
+        # Change the geometry to invalidate the key.
+        link = self.robot.GetLink('segway')
+        link.SetGroupGeometries('test', [])
+        link.SetGeometriesFromGroup('test')
+
         self.manager.sync(self.robot)
 
         self.assertEqual(len(self.module.computedistancefield_args), 1)
