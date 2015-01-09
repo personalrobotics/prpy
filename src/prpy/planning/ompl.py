@@ -58,7 +58,7 @@ class OMPLPlanner(BasePlanner):
         @param goal desired configuration
         @return traj
         """
-        self._Plan(robot, goal, **kw_args)
+        return self._Plan(robot, goal, **kw_args)
 
     def _Plan(self, robot, goal, timeout=30., shortcut_timeout=5.,
               continue_planner=False, ompl_args=None, **kw_args):
