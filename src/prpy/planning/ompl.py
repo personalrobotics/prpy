@@ -58,19 +58,34 @@ class OMPLPlanner(BasePlanner):
         @param goal desired configuration
         @return traj
         """
-        self._Plan(robot, goal, **kw_args)
+        return self._Plan(robot, goal=goal, **kw_args)
 
-    def _Plan(self, robot, goal, timeout=30., shortcut_timeout=5.,
-              continue_planner=False, ompl_args=None, **kw_args):
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, **kw_args):
+        """
+        Plan using the given set of TSR chains with OMPL.
+        @param robot 
+        @param tsrchains A list of tsrchains to use during planning
+        @param return traj
+        """
+        return self._TSRPlan(robot, tsrchains, **kw_args)
+
+    def _Plan(self, robot, goal=None, timeout=30., shortcut_timeout=5.,
+              continue_planner=False, ompl_args=None, 
+              formatted_extra_params=None, **kw_args):
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
         if ompl_args is not None:
             for key,value in ompl_args.iteritems():
                 extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
 
+        if formatted_extra_params is not None:
+            extraParams += formatted_extra_params
+
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
-        params.SetGoalConfig(goal)
+        if goal is not None:
+            params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
 
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
@@ -108,19 +123,19 @@ class OMPLPlanner(BasePlanner):
 
         return traj
 
+    def _TSRPlan(self, robot, tsrchains, **kw_args):
+        
+        extraParams = ''
+        for chain in tsrchains:
+            extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = 'tsr_chain', v=chain.serialize())
+            
+        return self._Plan(robot, formatted_extra_params=extraParams, **kw_args)
+
 class RRTConnect(OMPLPlanner):
     def __init__(self):
         OMPLPlanner.__init__(self, algorithm='RRTConnect')
 
-    @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
-        """
-        Plan to a desired configuration with OMPL. This will invoke the OMPL
-        planner specified in the OMPLPlanner constructor.
-        @param robot
-        @param goal desired configuration
-        @return traj
-        """
+    def _SetPlannerRange(robot, ompl_args=None):
         from copy import deepcopy
 
         if ompl_args is None:
@@ -150,6 +165,31 @@ class RRTConnect(OMPLPlanner):
             ompl_args['range'] = ompl_range
             logger.debug('Defaulted RRT-Connect range parameter to %.3f.',
                          ompl_range)
+        return ompl_args
 
-        return self._Plan(robot, goal, ompl_args=ompl_args, **kw_args)
+    @PlanningMethod
+    def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
+        """
+        Plan to a desired configuration with OMPL. This will invoke the OMPL
+        planner specified in the OMPLPlanner constructor.
+        @param robot
+        @param goal desired configuration
+        @return traj
+        """
+        
+        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
+
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
+        """
+        Plan using the given TSR chains with OMPL. 
+        @param robot
+        @param tsrchains A list of TSRChain objects to respect during planning
+        @param ompl_args ompl RRTConnect specific parameters
+        @return traj
+        """
+        
+        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        return self._TSRPlan(robot, tsrchains, ompl_args=ompl_args, **kw_args)
 
