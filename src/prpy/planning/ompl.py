@@ -70,6 +70,61 @@ class OMPLPlanner(BasePlanner):
         """
         return self._TSRPlan(robot, tsrchains, **kw_args)
 
+    @PlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
+        """
+        Plan along a straight line in the given direction for a desired distance
+        Note: Assumed the end-effector to plan for is the one that is part of
+           the marked active manipulator on the robot
+        
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum amount of distance in meters
+        @return traj
+        """
+        
+        tsrchains = self._CreateStraightLineTSRChains(robot, direction, distance)
+        self._TSRPlan(robot, tsrchains, **kw_args)
+
+    def _CreateStraightLineTSRChains(self, robot, direction, distance):
+        with robot:
+            manip = robot.GetActiveManipulator()
+            H_world_ee = manip.GetEndEffectorTransform()
+
+            # 'object frame w' is at ee, z pointed along direction to move
+            import prpy
+            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
+            H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
+
+            # Serialize TSR string (goal)
+            Hw_end = numpy.eye(4)
+            Hw_end[2,3] = distance
+
+            goaltsr = prpy.tsr.tsr.TSR(T0_w = numpy.dot(H_world_w,Hw_end), 
+                                     Tw_e = H_w_ee, 
+                                     Bw = numpy.zeros((6,2)), 
+                                     manip = robot.GetActiveManipulatorIndex())
+            goal_tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal = True,
+                                                 TSR = goaltsr)
+
+            # Serialize TSR string (whole-trajectory constraint)
+            Bw = numpy.zeros((6,2))
+            epsilon = 0.001
+            Bw = numpy.array([[-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [min(0.0, distance),  max(0.0, distance)],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon]])
+
+            trajtsr = prpy.tsr.tsr.TSR(T0_w = H_world_w, 
+                                   Tw_e = H_w_ee, 
+                                   Bw = Bw, 
+                                   manip = robot.GetActiveManipulatorIndex())
+            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True, TSRs=trajtsr)
+
+        return [goal_tsr_chain, traj_tsr_chain]
+
     def _Plan(self, robot, goal=None, timeout=30., shortcut_timeout=5.,
               continue_planner=False, ompl_args=None, 
               formatted_extra_params=None, **kw_args):
@@ -192,4 +247,20 @@ class RRTConnect(OMPLPlanner):
         
         ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
         return self._TSRPlan(robot, tsrchains, ompl_args=ompl_args, **kw_args)
-
+    
+    @PlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
+        """
+        Plan along a straight line in the given direction for a desired distance
+        Note: Assumed the end-effector to plan for is the one that is part of
+           the marked active manipulator on the robot
+        
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum amount of distance in meters
+        @return traj
+        """
+        
+        tsrchains = self._CreateStraightLineTSRChains(robot, direction, distance)
+        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        self._TSRPlan(robot, tsrchains, ompl_args=ompl_args, **kw_args)
