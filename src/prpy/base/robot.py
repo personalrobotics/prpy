@@ -167,7 +167,7 @@ class Robot(openravepy.Robot):
         # (Linear retiming should always work, but will produce a
         # slower path where the robot stops at each waypoint.)
         logger.warning(
-            "SmoothTrajectory failed, using LinearTrajectoryRetimer. "
+            "SmoothTrajectory failed, using ParabolicTrajectoryRetimer. "
             "Robot will stop at each waypoint.")
         retimed_traj = CopyTrajectory(traj)
         status = openravepy.planningutils.RetimeTrajectory(
