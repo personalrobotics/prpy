@@ -33,7 +33,7 @@ import logging
 import openravepy
 import numpy
 from .. import bind, named_config, util
-from prpy import Cloned
+from prpy.clone import Cloned
 from prpy.tsr.tsrlibrary import TSRLibrary
 
 logger = logging.getLogger('robot')
