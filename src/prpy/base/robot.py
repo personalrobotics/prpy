@@ -171,7 +171,7 @@ class Robot(openravepy.Robot):
             "Robot will stop at each waypoint.")
         retimed_traj = CopyTrajectory(traj)
         status = openravepy.planningutils.RetimeTrajectory(
-            retimed_traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
+            retimed_traj, False, 1., 1., 'ParabolicTrajectoryRetimer', '')
         if status in [PlannerStatus.HasSolution,
                       PlannerStatus.InterruptedWithSolution]:
             return retimed_traj
