@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -28,12 +28,16 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import functools, logging, openravepy, numpy
-from .. import bind, named_config, planning, util
-from prpy.clone import Clone, Cloned
+import functools
+import logging
+import openravepy
+import numpy
+from .. import bind, named_config, util
+from prpy import Cloned
 from prpy.tsr.tsrlibrary import TSRLibrary
 
 logger = logging.getLogger('robot')
+
 
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
@@ -44,13 +48,13 @@ class Robot(openravepy.Robot):
         except ValueError as e:
             self.tsrlibrary = None
             logger.warning('Failed creating TSRLibrary for robot "%s": %s',
-                self.GetName(), e.message
-            )
+                           self.GetName(), e.message)
 
         self.controllers = list()
         self.manipulators = list()
         self.configurations = named_config.ConfigurationLibrary()
-        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
+        self.multicontroller = openravepy.RaveCreateMultiController(
+            self.GetEnv(), '')
         self.SetController(self.multicontroller)
 
         # Standard, commonly-used OpenRAVE plugins.
@@ -59,7 +63,7 @@ class Robot(openravepy.Robot):
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
         # Add planning methods to the tab-completion list.
@@ -69,7 +73,7 @@ class Robot(openravepy.Robot):
 
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
         delegate_method = getattr(self.planner, name)
 
@@ -77,30 +81,37 @@ class Robot(openravepy.Robot):
         if self.planner.has_planning_method(name):
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
-                return self._PlanWrapper(delegate_method, args, kw_args) 
+                return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
 
-        raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
+        raise AttributeError('{0:s} is missing method "{1:s}".'
+                             .format(repr(self), name))
 
     def CloneBindings(self, parent):
         self.planner = parent.planner
         self.controllers = list()
-        self.manipulators = [ Cloned(manipulator) for manipulator in parent.manipulators ]
+        self.manipulators = [Cloned(manipulator)
+                             for manipulator in parent.manipulators]
         self.configurations = parent.configurations
-        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
+        self.multicontroller = openravepy.RaveCreateMultiController(
+            self.GetEnv(), '')
         self.SetController(self.multicontroller)
 
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
 
-    def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
+    def AttachController(self, name, args,
+                         dof_indices, affine_dofs, simulated):
         """
-        Create and attach a controller to a subset of this robot's DOFs. If
-        simulated is False, a controller is created using 'args' and is attached
-        to the multicontroller. In simulation mode an IdealController is
-        created instead. Regardless of the simulation mode, the multicontroller
-        must be finalized before use.  @param name user-readable name used to identify this controller
+        Create and attach a controller to a subset of this robot's DOFs.
+
+        If simulated is False, a controller is created using 'args' and is
+        attached to the multicontroller. In simulation mode an IdealController
+        is created instead. Regardless of the simulation mode, the
+        multicontroller must be finalized before use.
+
+        @param name user-readable name used to identify this controller
         @param args real controller arguments
         @param dof_indices controlled joint DOFs
         @param affine_dofs controleld affine DOFs
@@ -110,21 +121,23 @@ class Robot(openravepy.Robot):
         if simulated:
             args = 'IdealController'
 
-        delegate_controller = openravepy.RaveCreateController(self.GetEnv(), args)
+        delegate_controller = openravepy.RaveCreateController(
+            self.GetEnv(), args)
         if delegate_controller is None:
             type_name = args.split()[0]
-            message = 'Creating controller {0:s} of type {1:s} failed.'.format(name, type_name)
+            message = ('Creating controller {0:s} of type {1:s} failed.'
+                       .format(name, type_name))
             raise openravepy.openrave_exception(message)
 
-        self.multicontroller.AttachController(delegate_controller, dof_indices, affine_dofs)
-                
+        self.multicontroller.AttachController(delegate_controller,
+                                              dof_indices, affine_dofs)
         return delegate_controller
 
     def GetTrajectoryManipulators(self, traj):
         """
         Extract the manipulators that are active in a trajectory. A manipulator
-        is considered active if joint values are specified for one or more of its
-        controlled DOFs.
+        is considered active if joint values are specified for one or more of
+        its controlled DOFs.
         @param traj input trajectory
         @returns list of active manipulators
         """
@@ -190,8 +203,8 @@ class Robot(openravepy.Robot):
         has_base = hasattr(self, 'base')
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
         if needs_base and not has_base:
-            raise ValueError('Unable to execute affine DOF trajectory; robot does'\
-                             ' not have a MobileBase.')
+            raise ValueError('Unable to execute affine DOF trajectory; '
+                             'robot does not have a MobileBase.')
 
         # TODO: Throw an error if the trajectory contains both normal DOFs and
         # affine DOFs.
@@ -202,12 +215,12 @@ class Robot(openravepy.Robot):
                 traj = self.RetimeTrajectory(traj)
             # Retime a base trajectory.
             else:
-                max_vel = [ self.GetAffineTranslationMaxVels()[0],
-                            self.GetAffineTranslationMaxVels()[1],
-                            self.GetAffineRotationAxisMaxVels()[2] ]
+                max_vel = [self.GetAffineTranslationMaxVels()[0],
+                           self.GetAffineTranslationMaxVels()[1],
+                           self.GetAffineRotationAxisMaxVels()[2]]
                 max_accel = [3.*v for v in max_vel]
-                openravepy.planningutils.RetimeAffineTrajectory(traj, max_vel,
-                                                                max_accel, False)
+                openravepy.planningutils.RetimeAffineTrajectory(
+                    traj, max_vel, max_accel, False)
 
         self.GetController().SetPath(traj)
 
@@ -237,7 +250,7 @@ class Robot(openravepy.Robot):
         #  that we know the offset and number of dofs
         config_spec = traj.GetConfigurationSpecification()
         num_waypoints = traj.GetNumWaypoints()
-        
+
         # Check for the velocity group
         has_velocity_group = True
         try:
@@ -247,17 +260,22 @@ class Robot(openravepy.Robot):
             has_velocity_group = False
 
         # Now check all the waypoints
+        prev_values = None
+        prev_dt = None
         for idx in range(0, num_waypoints):
-
             wpt = traj.GetWaypoint(idx)
-            
+
             if has_velocity_group:
                 # First check the velocities defined for the waypoint
-                velocities = config_spec.ExtractJointValues(wpt, self, traj_indices, 1)
+                velocities = config_spec.ExtractJointValues(wpt, self,
+                                                            traj_indices, 1)
                 for vidx in range(len(velocities)):
                     if (velocities[vidx] > velocity_limits[vidx]):
-                        logging.warn('Velocity for waypoint %d joint %d violates limits (value: %0.3f, limit: %0.3f)' % 
-                                     (idx, vidx, velocities[vidx], velocity_limits[vidx]))
+                        logging.warn(
+                            'Velocity for waypoint %d joint %d violates limits'
+                            ' (value: %0.3f, limit: %0.3f)' %
+                            (idx, vidx, velocities[vidx],
+                             velocity_limits[vidx]))
                         return True
 
             # Now check the velocities calculated by differencing positions
@@ -265,11 +283,15 @@ class Robot(openravepy.Robot):
             values = config_spec.ExtractJointValues(wpt, self, traj_indices, 0)
 
             if idx > 0:
-                diff_velocities = numpy.fabs(values - prev_values)/(dt - prev_dt)
+                diff_velocities = \
+                    numpy.fabs(values - prev_values) / (dt - prev_dt)
                 for vidx in range(len(diff_velocities)):
                     if (diff_velocities[vidx] > velocity_limits[vidx]):
-                        logging.warn('Velocity for waypoint %d joint %d violates limits (value: %0.3f, limit: %0.3f)' % 
-                                     (idx, vidx, diff_velocities[vidx], velocity_limits[vidx]))
+                        logging.warn(
+                            'Velocity for waypoint %d joint %d violates limits'
+                            '(value: %0.3f, limit: %0.3f)' %
+                            (idx, vidx, diff_velocities[vidx],
+                             velocity_limits[vidx]))
                         return True
 
             # Set current to previous
@@ -284,7 +306,8 @@ class Robot(openravepy.Robot):
 
         # Strip inactive DOFs from the trajectory.
         config_spec = self.GetActiveConfigurationSpecification()
-        openravepy.planningutils.ConvertTrajectorySpecification(traj, config_spec)
+        openravepy.planningutils.ConvertTrajectorySpecification(
+            traj, config_spec)
 
         # Optionally execute the trajectory.
         if 'execute' not in kw_args or kw_args['execute']:
