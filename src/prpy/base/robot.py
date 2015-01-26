@@ -156,7 +156,8 @@ class Robot(openravepy.Robot):
         from prpy.util import CopyTrajectory, SimplifyTrajectory
 
         # Simplify the trajectory before performing retiming.
-        traj = SimplifyTrajectory(traj, self)
+        if traj.GetDuration() == 0.0:
+            traj = SimplifyTrajectory(traj, self)
 
         # Attempt smoothing with the Parabolic Retimer first.
         smooth_traj = CopyTrajectory(traj)
