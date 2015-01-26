@@ -1,13 +1,11 @@
-PrPy
-====
+# PrPy
 PrPy is a Python library used by the Personal Robotics Laboratory at Carnegie
 Mellon University. This library includes robot-agnostic utilities that make
 it easier to use OpenRAVE in Python scripts. This includes a high-level
 planning pipeline, helper functions, and visualization tools.
 
 
-Planning Pipeline
------------------
+## Planning Pipeline
 There are a large array of motion planners that have complementary strengths
 and weaknesses. PrPy provides a *planning pipeline* in the `prpy.planning`
 namespace that makes it easy plan with multiple planners in parallel on a
@@ -30,8 +28,7 @@ environment to be cloned. All planning occurs in the internal, cloned
 environment.
 
 
-Built-In Planners
-~~~~~~~~~~~~~~~~~
+### Built-In Planners
 PrPy provides wrappers for several existing planning libraries:
 
 - `planning.cbirrt.CBiRRTPlanner`: [Constrained Bi-directional
@@ -60,13 +57,9 @@ planners:
 See the Python docstrings the above classes for more information.;
 
 
-Planning Methods
-~~~~~~~~~~~~~~~~
+### Planning Methods
 
-
-Examples
-~~~~~~~~
-
+### Examples
 Trajectory optimizers, like CHOMP, typically produce higher quality paths than
 randomized planners. However, these algorithms are not probabilistically
 complete and can get stuck in local minima. You can mitigate this by using the
@@ -94,6 +87,4 @@ support for `PlanToBasePose`:
     path1 = planner.PlanToConfiguration(robot, goal)
     path2 = planner.PlanToBasePose(robot, goal_pose)
 
-Base Planners
-~~~~~~~~~~~~~
-
+## Base Planners
