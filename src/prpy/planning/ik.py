@@ -3,7 +3,6 @@
 # Copyright (c) 2013, Carnegie Mellon University
 # All rights reserved.
 # Authors: Michael Koval <mkoval@cs.cmu.edu>
-#          Pras Velagapudi <pkv@cs.cmu.edu>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -30,16 +29,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 import logging
 import numpy
+import openravepy
 from .. import ik_ranking
-from base import BasePlanner, PlanningError, PlanningMethod
+from base import (BasePlanner,
+                  PlanningError,
+                  PlanningMethod)
 
 logger = logging.getLogger('prpy.planning.ik')
-
-
-def unique_rows(a):
-    a = numpy.ascontiguousarray(a)
-    unique_a = numpy.unique(a.view([('', a.dtype)]*a.shape[1]))
-    return unique_a.view(a.dtype).reshape((unique_a.shape[0], a.shape[1]))
 
 
 class IKPlanner(BasePlanner):
@@ -47,36 +43,11 @@ class IKPlanner(BasePlanner):
         super(IKPlanner, self).__init__()
 
     def __str__(self):
-        return 'IKPlanner'
+        return 'IKConfigurationPlanner'
 
     @PlanningMethod
-    def PlanToIKs(self, robot, goal_poses,
-                  ranker=ik_ranking.JointLimitAvoidance,
-                  num_attempts=5, chunk_size=1, **kw_args):
-        """
-        Create a plan to put a robot active manipulator's end effector at one
-        of the specified affine poses.
-
-        To do this, full IK solutions are computed for each goal pose. These
-        solutions are combined into a single list, which is ranked by the
-        specified ranking function. The solutions are chunked into groups of
-        the specified size and the robot planner is called iteratively on each
-        group in descending ranked order to find a trajectory to reach any
-        solution in the group.
-
-        The planner will terminate when a solution trajectory is found or the
-        robot planner has be called for the specified number of attempts.
-
-        If chunk size = 1, robot.planner.PlanToConfiguration is used.
-        If chunk size >= 1, robot.planner.PlanToConfigurations is used.
-
-        @param robot the robot whose active manipulator will be used
-        @param goal_pose a desired affine transform for the end effector
-        @param ranker an IK ranking function to use over the IK solutions
-        @param num_attempts the number of planning calls before giving up
-        @param chunk_size the number of IK solutions to use per planning call
-        @return traj a trajectory that places the end effector at the goal pose
-        """
+    def PlanToIK(self, robot, goal_pose, ranker=ik_ranking.JointLimitAvoidance,
+                 num_attempts=1, **kw_args):
         from openravepy import (IkFilterOptions,
                                 IkParameterization,
                                 IkParameterizationType)
@@ -85,24 +56,16 @@ class IKPlanner(BasePlanner):
         # thread. It should be possible to fix this by IK ranking once, then
         # calling PlanToConfiguration in separate threads.
 
-        # Find complete list of IK solutions for every specified goal pose.
+        # Find an unordered list of IK solutions.
         with robot.GetEnv():
-            ik_solutions = []
-            for goal_pose in goal_poses:
-                manipulator = robot.GetActiveManipulator()
-                ik_param = IkParameterization(
-                    goal_pose, IkParameterizationType.Transform6D)
-                ik_solution = manipulator.FindIKSolutions(
-                    ik_param, IkFilterOptions.CheckEnvCollisions)
-                if ik_solution.shape[0] > 0:
-                    ik_solutions.append(ik_solution)
+            manipulator = robot.GetActiveManipulator()
+            ik_param = IkParameterization(
+                goal_pose, IkParameterizationType.Transform6D)
+            ik_solutions = manipulator.FindIKSolutions(
+                ik_param, IkFilterOptions.CheckEnvCollisions)
 
-        if len(ik_solutions) == 0:
+        if ik_solutions.shape[0] == 0:
             raise PlanningError('There is no IK solution at the goal pose.')
-
-        # Combine this into a single list of potential goal configurations.
-        ik_solutions = numpy.vstack(ik_solutions)
-        ik_solutions = unique_rows(ik_solutions)
 
         # Sort the IK solutions in ascending order by the costs returned by the
         # ranker. Lower cost solutions are better and infinite cost solutions
@@ -115,46 +78,23 @@ class IKPlanner(BasePlanner):
         if ranked_ik_solutions.shape[0] == 0:
             raise PlanningError('All IK solutions have infinite cost.')
 
-        # Group the IK solutions into groups of the specified size
-        # (plan for each group of IK solutions together).
-        ranked_ik_solution_sets = [
-            ranked_ik_solutions[i:i+chunk_size, :]
-            for i in range(0, ranked_ik_solutions.shape[0], chunk_size)
-        ]
+        # Sequentially plan to the solutions in descending order of cost.
+        p = openravepy.KinBody.SaveParameters
+        with robot.CreateRobotStateSaver(p.ActiveDOF):
+            robot.SetActiveDOFs(manipulator.GetArmIndices())
 
-        # Sequentially plan to the solution groups in descending cost order.
-        num_attempts = min(len(ranked_ik_solution_sets), num_attempts)
-        ik_set_list = enumerate(ranked_ik_solution_sets[:num_attempts])
-        for i, ik_set in ik_set_list:
-            try:
-                if ik_set.shape[0] > 1:
-                    traj = robot.planner.PlanToConfigurations(robot, ik_set)
-                else:
-                    traj = robot.planner.PlanToConfiguration(robot, ik_set[0])
-
-                logger.info('Planned to IK solution set %d of %d.',
-                            i + 1, num_attempts)
-                return traj
-            except PlanningError as e:
-                logger.warning(
-                    'Planning to IK solution set %d of %d failed: %s',
-                    i + 1, num_attempts, e)
+            num_attempts = min(ranked_ik_solutions.shape[0], num_attempts)
+            for i, ik_sol in enumerate(ranked_ik_solutions[0:num_attempts, :]):
+                try:
+                    traj = robot.planner.PlanToConfiguration(robot, ik_sol)
+                    logger.info('Planned to IK solution %d of %d.',
+                                i + 1, num_attempts)
+                    return traj
+                except PlanningError as e:
+                    logger.warning(
+                        'Planning to IK solution %d of %d failed: %s',
+                        i + 1, num_attempts, e)
 
         raise PlanningError(
-            'Planning to the top {:d} of {:d} IK solution sets failed.'
-            .format(num_attempts, ranked_ik_solution_sets.shape[0]))
-
-    @PlanningMethod
-    def PlanToIK(self, robot, goal_pose, **kw_args):
-        """
-        Create a plan to put a robot active manipulator's end effector at the
-        specified affine pose.
-
-        @param robot the robot whose active manipulator will be used
-        @param goal_pose a desired affine transform for the end effector
-        @param ranker an IK ranking function to use over the IK solutions
-        @param num_attempts the number of planning calls before giving up
-        @param chunk_size the number of IK solutions to use per planning call
-        @return traj a trajectory that places the end effector at the goal pose
-        """
-        return self.PlanToIKs(robot, goal_poses=[goal_pose], **kw_args)
+            'Planning to the top {:d} of {:d} IK solutions failed.'
+            .format(num_attempts, ranked_ik_solutions.shape[0]))
