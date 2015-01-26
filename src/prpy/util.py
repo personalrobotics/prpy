@@ -262,7 +262,7 @@ def SimplifyTrajectory(traj, robot):
         max_err_vals = numpy.max(errors, axis=0)
 
         # Add any extrema that deviated more than joint resolution.
-        max_err_idx = (max_err_vals > resolutions)
+        max_err_idx = max_err_idx[max_err_vals > resolutions]
         mask[max_err_idx] = True
 
         # If none deviated more than joint resolution, the set is complete.
