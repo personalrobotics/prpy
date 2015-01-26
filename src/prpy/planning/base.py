@@ -242,7 +242,7 @@ class Ranked(MetaPlanner):
         executor = kw_args.get('executor')
         all_planners = self._planners
         planners = []
-        results = [None]*len(self._planners)
+        results = [None] * len(self._planners)
 
         # Find only planners that support the required planning method.
         for index, planner in enumerate(all_planners):
