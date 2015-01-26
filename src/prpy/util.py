@@ -229,6 +229,9 @@ def SimplifyTrajectory(traj, robot):
     """
     from scipy import interpolate
 
+    if traj.GetDuration() != 0.0:
+        raise ValueError("Cannot handle timed trajectories yet!")
+
     cspec = traj.GetConfigurationSpecification()
     dofs = robot.GetActiveDOFIndices()
     idxs = range(traj.GetNumWaypoints())
@@ -237,8 +240,7 @@ def SimplifyTrajectory(traj, robot):
     times = numpy.array(
         idxs if not traj.GetDuration() else
         numpy.cumsum([cspec.ExtractDeltaTime(traj.GetWaypoint(i),
-                                             robot, dofs)
-                      for i in idxs]))
+                                             robot, dofs) for i in idxs]))
     values = numpy.array(
         [cspec.ExtractJointValues(traj.GetWaypoint(i), robot, dofs)
          for i in idxs])
