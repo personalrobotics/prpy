@@ -153,7 +153,10 @@ class Robot(openravepy.Robot):
         """
         from openravepy import PlannerStatus
         from prpy.exceptions import PrPyException
-        from prpy.util import CopyTrajectory
+        from prpy.util import CopyTrajectory, SimplifyTrajectory
+
+        # Simplify the trajectory before performing retiming.
+        traj = SimplifyTrajectory(traj, self)
 
         # Attempt smoothing with the Parabolic Retimer first.
         smooth_traj = CopyTrajectory(traj)
@@ -167,11 +170,12 @@ class Robot(openravepy.Robot):
         # (Linear retiming should always work, but will produce a
         # slower path where the robot stops at each waypoint.)
         logger.warning(
-            "SmoothTrajectory failed, using LinearTrajectoryRetimer. "
-            "Robot will stop at each waypoint.")
+            "SmoothTrajectory failed, using ParabolicTrajectoryRetimer. "
+            "Robot will stop at each waypoint: {:d}"
+            .format(traj.GetNumWaypoints()))
         retimed_traj = CopyTrajectory(traj)
         status = openravepy.planningutils.RetimeTrajectory(
-            retimed_traj, False, 0.99, 0.99, 'LinearTrajectoryRetimer', '')
+            retimed_traj, False, 1., 1., 'ParabolicTrajectoryRetimer', '')
         if status in [PlannerStatus.HasSolution,
                       PlannerStatus.InterruptedWithSolution]:
             return retimed_traj
@@ -190,8 +194,8 @@ class Robot(openravepy.Robot):
         has_base = hasattr(self, 'base')
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
         if needs_base and not has_base:
-            raise ValueError('Unable to execute affine DOF trajectory; robot does'\
-                             ' not have a MobileBase.')
+            raise ValueError('Unable to execute affine DOF trajectory; '
+                             'robot does not have a MobileBase.')
 
         # TODO: Throw an error if the trajectory contains both normal DOFs and
         # affine DOFs.
@@ -202,12 +206,12 @@ class Robot(openravepy.Robot):
                 traj = self.RetimeTrajectory(traj)
             # Retime a base trajectory.
             else:
-                max_vel = [ self.GetAffineTranslationMaxVels()[0],
-                            self.GetAffineTranslationMaxVels()[1],
-                            self.GetAffineRotationAxisMaxVels()[2] ]
+                max_vel = [self.GetAffineTranslationMaxVels()[0],
+                           self.GetAffineTranslationMaxVels()[1],
+                           self.GetAffineRotationAxisMaxVels()[2]]
                 max_accel = [3.*v for v in max_vel]
-                openravepy.planningutils.RetimeAffineTrajectory(traj, max_vel,
-                                                                max_accel, False)
+                openravepy.planningutils.RetimeAffineTrajectory(
+                    traj, max_vel, max_accel, False)
 
         self.GetController().SetPath(traj)
 
@@ -237,7 +241,7 @@ class Robot(openravepy.Robot):
         #  that we know the offset and number of dofs
         config_spec = traj.GetConfigurationSpecification()
         num_waypoints = traj.GetNumWaypoints()
-        
+
         # Check for the velocity group
         has_velocity_group = True
         try:
