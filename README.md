@@ -49,11 +49,50 @@ Additionally, PrPy provides several simple planners of its own:
 Finally, PrPy provides several meta-planners for combining the above
 planners:
 
-- `prpy.base.Sequence`
-- `prpy.base.Ranked`
-- `prpy.ik.IKPlanner`
-- `prpy.named.NamedPlanner`
+- `prpy.base.Sequence`: sequentially queries a list of planners and returns the
+  result of the first planner in the list that succeeds.
+- `prpy.base.Ranked`: queries a list of planners in parallel and returns the
+  solution first planner in the list that returns success
+- `prpy.ik.IKPlanner`: plan to an end-effector pose by sequentially planning to
+  a list of ranked IK solutions
+- `prpy.named.NamedPlanner`: plan to a named configuration associated with the robot
 
+See the Python docstrings the above classes for more information.;
+
+
+Planning Methods
+~~~~~~~~~~~~~~~~
+
+
+Examples
+~~~~~~~~
+
+Trajectory optimizers, like CHOMP, typically produce higher quality paths than
+randomized planners. However, these algorithms are not probabilistically
+complete and can get stuck in local minima. You can mitigate this by using the
+`Sequence` planner to first call CHOMP, then fall back on RRT-Connect:
+
+    planner = Sequence(CHOMPPlanner(), OMPLPlanner('RRTConnect'))
+    path = planner.PlanToConfiguration(robot, goal)
+
+Unfortunately, this means that RRT-Connect does not start planning until CHOMP
+has already failed to find a solution. Instead of using `Sequence`, we can use
+the `Ranked` meta-planner to plan with both planners in parallel. Just as
+before, the meta-planner will immediately return CHOMP's solution if it returns
+success. However, RRT-Connect will have a head-start if CHOMP fails:
+
+    planner = Ranked(CHOMPPlanner(), OMPLPlanner('RRTConnect'))
+    path = planner.PlanToConfiguration(robot, goal)`
+
+In other cases, a meta-planner can be used to combine the disparate
+capabilities of multiple planenrs. For example, SBPL is currently the only
+planner included with PrPy that supports planning for affine DOFs. We can use a
+meta-planner to combine OMPL's support for `PlanToConfiguration` with SBPL's
+support for `PlanToBasePose`:
+
+    planner = Sequence(OMPLPlanner('RRTConnect'), SBPLPlanner())
+    path1 = planner.PlanToConfiguration(robot, goal)
+    path2 = planner.PlanToBasePose(robot, goal_pose)
 
 Base Planners
 ~~~~~~~~~~~~~
