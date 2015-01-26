@@ -211,6 +211,72 @@ def CopyTrajectory(traj):
     copy_traj.Clone(traj, 0)
     return copy_traj
 
+
+def SimplifyTrajectory(traj, robot):
+    """
+    Re-interpolate trajectory as minimal set of linear segments.
+
+    This function attempts to extract linear segments from the given
+    trajectory by iteratively finding extrema waypoints until a set of
+    linear segments until all of the original trajectory waypoints are
+    within the robot's joint resolutions of the interpolated segments.
+
+    Currently, only untimed trajectories are supported!
+
+    @param robot the robot that should be used for the interpolation
+    @param traj input trajectory that will be simplified
+    @returns output trajectory of timed linear segments
+    """
+    from scipy import interpolate
+
+    cspec = traj.GetConfigurationSpecification()
+    dofs = robot.GetActiveDOFIndices()
+    idxs = range(traj.GetNumWaypoints())
+    joints = [robot.GetJointFromDOFIndex(d) for d in dofs]
+
+    times = numpy.array(
+        idxs if not traj.GetDuration() else
+        numpy.cumsum([cspec.ExtractDeltaTime(traj.GetWaypoint(i),
+                                             robot, dofs)
+                      for i in idxs]))
+    values = numpy.array(
+        [cspec.ExtractJointValues(traj.GetWaypoint(i), robot, dofs)
+         for i in idxs])
+    resolutions = numpy.array([j.GetResolution(0) for j in joints])
+
+    # Start with an extrema set of the first to the last waypoint.
+    mask = numpy.zeros(times.shape, dtype=bool)
+    mask[[0, -1]] = True
+
+    for _ in idxs:
+        # Create new interpolation set from current extrema.
+        f = interpolate.interp1d(times[mask], values[mask, :],
+                                 axis=0, kind='linear')
+        errors = numpy.abs(f(times) - values)
+
+        # TODO: Can this be a single call?
+        # Find  the extrema in the remaining waypoints.
+        max_err_idx = numpy.argmax(errors, axis=0)
+        max_err_vals = numpy.max(errors, axis=0)
+
+        # Add any extrema that deviated more than joint resolution.
+        max_err_idx = (max_err_vals > resolutions)
+        mask[max_err_idx] = True
+
+        # If none deviated more than joint resolution, the set is complete.
+        if len(max_err_idx) < 0:
+            break
+
+    # Return a new reduced trajectory.
+    import openravepy
+    reduced_traj = openravepy.RaveCreateTrajectory(traj.GetEnv(),
+                                                   traj.GetXMLId())
+    reduced_traj.Init(cspec)
+    for (new_idx, old_idx) in enumerate(mask.nonzero()[0]):
+        reduced_traj.Insert(new_idx, traj.GetWaypoint(old_idx))
+    return reduced_traj
+
+
 def IsInCollision(traj, robot, selfcoll_only=False):
     report = openravepy.CollisionReport()
     
