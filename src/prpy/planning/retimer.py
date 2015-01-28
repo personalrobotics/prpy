@@ -29,9 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, os, tempfile
-from ..util import CopyTrajectory
+from ..util import CopyTrajectory, SimplifyTrajectory
 from base import BasePlanner, PlanningError, PlanningMethod
 from openravepy import PlannerStatus 
+
 
 class OpenRAVERetimer(BasePlanner):
     def __init__(self, algorithm):
@@ -42,7 +43,26 @@ class OpenRAVERetimer(BasePlanner):
     def RetimeTrajectory(self, robot, path):
         RetimeTrajectory = openravepy.planningutils.RetimeTrajectory
 
-        output_traj = CopyTrajectory(path, env=self.env)
+        cspec = path.GetConfigurationSpecification()
+        group = cspec.GetGroupFromName('joint_values')
+        if group.interpolation != 'linear':
+            raise PlanningError(
+                'Path has interpolation of type "{:s}"; only "linear"'
+                ' interpolation is supported.'.format(
+                    group.interpolation
+                )
+            )
+
+        # Copy the input trajectory into the planning environment. This is
+        # necessary for two reasons: (1) the input trajectory may be in another
+        # environment and/or (2) the retimer modifies the trajectory in-place.
+        input_path = CopyTrajectory(path, env=self.env)
+
+        # Remove co-linear waypoints. Some of the default OpenRAVE retimers do
+        # not perform this check internally (e.g. ParabolicTrajectoryRetimer).
+        output_traj = SimplifyTrajectory(input_path, robot)
+
+        # Compute the timing. This happens in-place.
         status = RetimeTrajectory(output_traj, False, 1., 1., self.algorithm)
 
         if status not in [ PlannerStatus.HasSolution,
@@ -52,6 +72,12 @@ class OpenRAVERetimer(BasePlanner):
 
         return output_traj
 
+
 class ParabolicRetimer(OpenRAVERetimer):
     def __init__(self):
         super(ParabolicRetimer, self).__init__('ParabolicTrajectoryRetimer')
+
+
+class ParabolicSmoother(OpenRAVERetimer):
+    def __init__(self):
+        super(ParabolicRetimer, self).__init__('ParabolicSmoother')
