@@ -151,6 +151,9 @@ class Robot(openravepy.Robot):
         return active_manipulators
 
     def SimplifyPath(self, path, timelimit=1.):
+        """ Simplify a geometric path.
+        """
+
         from openravepy import PlannerStatus
         from prpy.exceptions import PrPyException
 
@@ -182,16 +185,16 @@ class Robot(openravepy.Robot):
         from prpy.util import CopyTrajectory, SimplifyTrajectory
 
         # Simplify the trajectory before performing retiming.
-        if traj.GetDuration() == 0.0:
-            traj = SimplifyTrajectory(traj, self)
+        if path.GetDuration() == 0.0:
+            path = SimplifyTrajectory(path, self)
 
         # Attempt smoothing with the Parabolic Retimer first.
-        smooth_traj = CopyTrajectory(traj)
+        smooth_path = CopyTrajectory(path)
         status = openravepy.planningutils.SmoothTrajectory(
-            smooth_traj, 0.99, 0.99, 'ParabolicSmoother', '')
+            smooth_path, 0.99, 0.99, 'ParabolicSmoother', '')
         if status in [PlannerStatus.HasSolution,
                       PlannerStatus.InterruptedWithSolution]:
-            return smooth_traj
+            return smooth_path
 
         # If this fails, fall back on the Linear Retimer.
         # (Linear retiming should always work, but will produce a
@@ -199,8 +202,8 @@ class Robot(openravepy.Robot):
         logger.warning(
             "SmoothTrajectory failed, using ParabolicTrajectoryRetimer. "
             "Robot will stop at each waypoint: {:d}"
-            .format(traj.GetNumWaypoints()))
-        retimed_traj = CopyTrajectory(traj)
+            .format(path.GetNumWaypoints()))
+        retimed_traj = CopyTrajectory(path)
         status = openravepy.planningutils.RetimeTrajectory(
             retimed_traj, False, 1., 1., 'ParabolicTrajectoryRetimer', '')
         if status in [PlannerStatus.HasSolution,
