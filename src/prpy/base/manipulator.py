@@ -150,7 +150,7 @@ class Manipulator(openravepy.Robot.Manipulator):
             cloned_traj = Cloned(robot)._PlanWrapper(planning_method, args, cloned_args)
 
             # Strip inactive DOFs from the trajectory.
-            config_spec = Cloned(robot).GetActiveConfigurationSpecification()
+            config_spec = Cloned(robot).GetActiveConfigurationSpecification('linear')
             openravepy.planningutils.ConvertTrajectorySpecification(cloned_traj, config_spec)
             traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), cloned_traj.GetXMLId())
             traj.Clone(cloned_traj, 0)

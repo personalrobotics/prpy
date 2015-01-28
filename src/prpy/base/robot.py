@@ -285,7 +285,7 @@ class Robot(openravepy.Robot):
         traj = planning_method(self, *args, **kw_args)
 
         # Strip inactive DOFs from the trajectory.
-        config_spec = self.GetActiveConfigurationSpecification()
+        config_spec = self.GetActiveConfigurationSpecification('linear')
         openravepy.planningutils.ConvertTrajectorySpecification(traj, config_spec)
 
         # Optionally execute the trajectory.
