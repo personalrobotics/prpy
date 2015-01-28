@@ -176,7 +176,7 @@ class CHOMPPlanner(BasePlanner):
         return 'CHOMP'
 
     @PlanningMethod
-    def OptimizeTrajectory(self, robot, traj, lambda_=100.0, n_iter=50):
+    def OptimizeTrajectory(self, robot, traj, lambda_=100.0, n_iter=50, **kw_args):
         self.distance_fields.sync(robot)
 
         cspec = traj.GetConfigurationSpecification()
@@ -254,6 +254,8 @@ class CHOMPPlanner(BasePlanner):
 
         return traj
 
+    '''
+    JK - Disabling. This is not working reliably.
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, lambda_=100.0, n_iter=100, goal_tolerance=0.01, **kw_args):
         """
@@ -286,6 +288,7 @@ class CHOMPPlanner(BasePlanner):
             raise PlanningError(str(e))
 
         return traj
+    '''
 
     def ComputeDistanceField(self, robot):
         logger.warning('ComputeDistanceField is deprecated. Distance fields are'
