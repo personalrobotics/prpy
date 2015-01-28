@@ -280,7 +280,6 @@ def SimplifyTrajectory(traj, robot):
         reduced_traj.Insert(new_idx, traj.GetWaypoint(old_idx))
     return reduced_traj
 
-
 def IsInCollision(traj, robot, selfcoll_only=False):
     report = openravepy.CollisionReport()
     
@@ -396,18 +395,24 @@ class AlignmentToken(object):
         self.body = None
 
 class Timer(object):
-    def __init__(self, message):
+    def __init__(self, message=None):
         self.message = message
         self.start = 0 
 
     def __enter__(self):
-        logging.info('%s started execution.', self.message)
+        if self.message is not None:
+            logging.info('%s started execution.', self.message)
+
         self.start = time.time()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.stop()
-        logging.info('%s executed in %.5f seconds.', self.message, self.get_duration())
+
+        if self.message is not None:
+            logging.info('%s executed in %.5f seconds.',
+                self.message, self.get_duration()
+            )
 
     def stop(self):
         self.end = time.time()
