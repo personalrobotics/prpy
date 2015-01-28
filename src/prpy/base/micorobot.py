@@ -101,6 +101,7 @@ class MicoRobot(Robot):
 
 
        # openravepy.planningutils.RetimeTrajectory(traj)
+
         self.GetController().SetPath(traj)
 
         active_manipulators = self.GetTrajectoryManipulators(traj)

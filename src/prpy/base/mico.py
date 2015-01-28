@@ -92,7 +92,7 @@ class Mico(Manipulator):
             #self.controller = self.GetRobot().AttachController(name=self.GetName(),
             #args='roscontroller openrave {0} 1'.format(rospy.get_namespace()),
 
-            self.or_physical_controller = ('roscontroller openrave {0}'.format(rospy.get_namespace()))
+            self.or_physical_controller = ('roscontroller openrave {0} 1'.format(rospy.get_namespace()))
             self.ros_controllers = [
                 "traj_controller",
                 "joint_state_controller",
@@ -107,7 +107,7 @@ class Mico(Manipulator):
             c = self.controller
             robot.SetController(c, m, 0)
 
-	#self.hand_controller = self.GetRobot().AttachController(name=self.GetRobot().GetName(),
+    #self.hand_controller = self.GetRobot().AttachController(name=self.GetRobot().GetName(),
             #args='MicoHandController {0:s} {1:s}'.format('prpy', '/mico_hand_controller'),
             #dof_indices=self.GetGripperIndices(), affine_dofs=0, simulated=sim)
 
@@ -120,7 +120,7 @@ class Mico(Manipulator):
                 self.ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot, iktype=iktype)
                 if not self.ikmodel.load():
                     self.ikmodel.autogenerate()
-	'''
+    '''
         # Enable servo motions in simulation mode.
         from prpy.simulation import ServoSimulator
         self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)

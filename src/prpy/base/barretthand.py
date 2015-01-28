@@ -49,10 +49,20 @@ class BarrettHand(EndEffector):
         EndEffector.__init__(self, manipulator)
         self.simulated = sim
 
-        if len(manipulator.GetGripperIndices()) == 4:
-            manipulator.SetChuckingDirection([ 0., 1., 1., 1. ])
+        # Set the closing direction of the hand. This is only really necessary
+        # for the programmatically loaded HERB model. We can't easily specify
+        # ClosingDirection in URDF or SRDF.
+        gripper_indices = manipulator.GetGripperIndices()
+        closing_direction = numpy.zeros(len(gripper_indices))
+        finger_indices = self.GetFingerIndices()
 
-        # Hand controller
+        for i, dof_index in enumerate(gripper_indices):
+            if dof_index in finger_indices:
+                closing_direction[i] = 1.
+
+        manipulator.SetChuckingDirection(closing_direction)
+
+        # Load the  hand controller.
         robot = self.manipulator.GetRobot()
         env = robot.GetEnv()
         self.controller = robot.AttachController(name=self.GetName(),
@@ -70,6 +80,28 @@ class BarrettHand(EndEffector):
                 'BarrettFTSensor {0:s} {1:s}'.format('prpy', owd_namespace))
 
         # TODO: Attach the tactile sensor plugin.
+
+    def GetSpreadIndex(self):
+        """ Gets the DOF index of the spread joint.
+        @return DOF index of the spread joint
+        """
+        return self._GetJointFromName('j00').GetDOFIndex()
+
+    def GetFingerIndices(self):
+        """ Gets the DOF indices of the fingers.
+        These are returned in the order: [ finger 0, finger 1, and finger 2 ].
+        @return DOF indices of the fingers
+        """
+        names = [ 'j01', 'j11', 'j21' ]
+        return [ self._GetJointFromName(name).GetDOFIndex() for name in names ]
+
+    def GetIndices(self):
+        """ Gets the DOF indices of this hand.
+        For compatability with OWD, the indices are always returned in the
+        order: [ finger 0, finger 1, finger 2, spread ].
+        @return DOF indices of the hand
+        """
+        return self.GetFingerIndices() + [ self.GetSpreadIndex() ]
 
     def MoveHand(hand, f1=None, f2=None, f3=None, spread=None, timeout=None):
         """Change the hand preshape.
@@ -209,3 +241,8 @@ class BarrettHand(EndEffector):
             hand.ft_sensor.SendCommand('Tare')
             # TODO: Do we still need to wait this long?
             time.sleep(2)
+
+    def _GetJointFromName(self, name):
+        robot = self.manipulator.GetRobot()
+        full_name = '/{:s}/{:s}'.format(self.manipulator.GetName(), name)
+        return robot.GetJoint(full_name)

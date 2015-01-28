@@ -145,7 +145,6 @@ class TSRLibrary(object):
                                           TSRs = all_tsrs)
 
                     return [yaml_chain]
-                TSRLibrary.add_factory(func, robot_name, kinbody_name, action_name) 
 
             except Exception, e:
                 logger.error('Failed to load TSRChain: %s - (Chain: %s)' % (str(e), chain))
@@ -164,7 +163,7 @@ class TSRLibrary(object):
         @param object_name name of the object
         @param action_name name of the action
         """
-        logger.info('Adding TSRLibrary factory for robot "%s", object "%s", action "%s".',
+        logger.debug('Adding TSRLibrary factory for robot "%s", object "%s", action "%s".',
             robot_name, object_name, action_name)
 
         if action_name in cls.all_factories[robot_name][object_name]:
