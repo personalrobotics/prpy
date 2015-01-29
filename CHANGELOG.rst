@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.2.0 (2015-01-29)
+------------------
 * Adding `kw_args` to CHOMP's `OptimizeTrajectory` so execute flag doesn't cause error.
 * Disabling `PlanToTSR` in CHOMP due to inconsistent behavior.
 * Added linear path segment simplification.
