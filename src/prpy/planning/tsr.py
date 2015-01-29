@@ -45,9 +45,9 @@ class TSRPlanner(BasePlanner):
         return 'TSRPlanner'
 
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, num_attempts=3,
-                  chunk_size=20, tsr_timeout=2.0,
-                  ranker=None, **kw_args):
+    def PlanToTSR(self, robot, tsrchains, tsr_timeout=2.0,
+                  num_attempts=3, chunk_size=20, ranker=None,
+                  max_deviation=2*numpy.pi, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
         samples a fixed number of goals from the specified TSRs up-front, then
@@ -61,9 +61,10 @@ class TSRPlanner(BasePlanner):
         @param tsrchains a list of TSR chains that define a goal set
         @param num_attempts the maximum number of planning attempts to make
         @param chunk_size the number of sampled goals to use per planning call
-        @param tsr_samples the maximum number of samples of the goal TSR chains
         @param tsr_timeout the maximum time to spend sampling goal TSR chains
         @param ranker an IK ranking function to use over the IK solutions
+        @param max_deviation the maximum per-joint deviation from current pose
+                             that can be considered a valid sample.
         @return traj a trajectory that satisfies the specified TSR chains
         """
         # Plan using the active manipulator.
@@ -74,7 +75,7 @@ class TSRPlanner(BasePlanner):
             if ranker is None:
                 from ..ik_ranking import NominalConfiguration
                 ranker = NominalConfiguration(manipulator.GetArmDOFValues(),
-                                              ignore_multirotations=True)
+                                              max_deviation=max_deviation)
 
         # Test for tsrchains that cannot be handled.
         for tsrchain in tsrchains:
@@ -112,9 +113,11 @@ class TSRPlanner(BasePlanner):
         # are assumed to be infeasible.
         ik_solutions = numpy.vstack(ik_solutions)
         scores = ranker(robot, ik_solutions)
-        ranked_indices = numpy.argsort(scores)
-        ranked_indices = ranked_indices[~numpy.isposinf(scores)]
-        ranked_ik_solutions = ik_solutions[ranked_indices, :]
+        valid_idxs = ~numpy.isposinf(scores)
+        valid_scores = scores[valid_idxs]
+        valid_solutions = ik_solutions[valid_idxs, :]
+        ranked_indices = numpy.argsort(valid_scores)
+        ranked_ik_solutions = valid_solutions[ranked_indices, :]
 
         # Group the IK solutions into sets of the specified size
         # (plan for each set of IK solutions together).
