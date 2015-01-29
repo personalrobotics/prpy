@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from ..util import CopyTrajectory
+from ..util import CopyTrajectory, SimplifyTrajectory
 from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
 from openravepy import Planner, PlannerStatus, RaveCreatePlanner, openrave_exception
 
@@ -57,6 +57,7 @@ class MacSmoother(BasePlanner):
         # necessary for two reasons: (1) the input trajectory may be in another
         # environment and/or (2) the retimer modifies the trajectory in-place.
         output_traj = CopyTrajectory(path, env=self.env)
+        output_traj = SimplifyTrajectory(output_traj, robot)
 
         # Blend the piecewise-linear input trajectory. The blender outputs a
         # collision-free path, consisting of piecewise-linear segments and
