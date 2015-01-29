@@ -53,13 +53,25 @@ def JointLimitAvoidance(robot, ik_solutions):
 
 
 class NominalConfiguration(object):
-    def __init__(self, q_nominal):
+    def __init__(self, q_nominal, ignore_multirotations=False):
         """
         Score IK solutions by their distance from a nominal configuration.
         @param q_nominal nominal configuration
+        @param ignore_multirotations return a score of numpy.inf for
+                    configurations more than a full joint rotation away
+                    from the nominal configuration.
         """
         self.q_nominal = q_nominal
+        self.ignore_multirotations = ignore_multirotations
 
     def __call__(self, robot, ik_solutions):
         assert ik_solutions.shape[1] == self.q_nominal.shape[0]
-        return numpy.linalg.norm(ik_solutions - self.q_nominal, axis=1)
+        L_2 = numpy.linalg.norm(ik_solutions - self.q_nominal,
+                                axis=1, ord=2)
+        # Ignore IK solutions that are more than one full rotation away.
+        # (This means a closer solution must exist!)
+        if self.ignore_multirotations:
+            L_inf = numpy.linalg.norm(ik_solutions - self.q_nominal,
+                                      axis=1, ord=numpy.inf)
+            L_2[L_inf > 2*numpy.pi] = numpy.inf
+        return L_2

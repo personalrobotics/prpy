@@ -74,7 +74,8 @@ class TSRPlanner(BasePlanner):
             # Distance from current configuration is default ranking.
             if ranker is None:
                 from ..ik_ranking import NominalConfiguration
-                ranker = NominalConfiguration(manipulator.GetArmDOFValues())
+                ranker = NominalConfiguration(manipulator.GetArmDOFValues(),
+                                              ignore_multirotations=True)
 
         # Test for tsrchains that cannot be handled.
         for tsrchain in tsrchains:
