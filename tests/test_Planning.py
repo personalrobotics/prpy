@@ -7,6 +7,7 @@ from prpy.planning.base import PlanningError
 from prpy.planning.cbirrt import CBiRRTPlanner
 from prpy.planning.ompl import OMPLPlanner, OMPLSimplifier
 from prpy.planning.retimer import ParabolicRetimer
+from prpy.planning.mac_smoother import MacSmoother
 from numpy.testing import assert_allclose
 
 VerifyTrajectory = openravepy.planningutils.VerifyTrajectory
@@ -86,7 +87,7 @@ class BasePlannerTest(object):
 
     def _ValidatePath(self, path):
         self.assertEquals(path.GetEnv(), self.env)
-        self.assertEquals(self.robot.GetActiveConfigurationSpecification(),
+        self.assertEquals(self.robot.GetActiveConfigurationSpecification('linear'),
                           path.GetConfigurationSpecification())
         self.assertGreaterEqual(path.GetNumWaypoints(), 1)
 
@@ -155,7 +156,7 @@ class PlanToConfigurationTest(object):
 
         # Assert.
         self.assertEquals(path.GetEnv(), self.env)
-        self.assertEquals(self.robot.GetActiveConfigurationSpecification(),
+        self.assertEquals(self.robot.GetActiveConfigurationSpecification('linear'),
                           path.GetConfigurationSpecification())
         self.assertGreaterEqual(path.GetNumWaypoints(), 1)
         first_waypoint = path.GetWaypoint(0)
@@ -285,7 +286,7 @@ class PlanToEndEffectorPoseTest(object):
 class ShortcutPathTest(object):
     def setUp(self):
         self.input_path = openravepy.RaveCreateTrajectory(self.env, '')
-        self.input_path.Init(self.robot.GetActiveConfigurationSpecification())
+        self.input_path.Init(self.robot.GetActiveConfigurationSpecification('linear'))
         self.input_path.Insert(0, self.waypoint1)
         self.input_path.Insert(1, self.waypoint2)
         self.input_path.Insert(2, self.waypoint3)
@@ -309,9 +310,33 @@ class ShortcutPathTest(object):
     # TODO: Test some of the error cases.
 
 
+class SmoothTrajectoryTest(object):
+    def setUp(self):
+        cspec = self.robot.GetActiveConfigurationSpecification('linear')
+
+        self.feasible_path = openravepy.RaveCreateTrajectory(self.env, '')
+        self.feasible_path.Init(cspec)
+        self.feasible_path.Insert(0, self.waypoint1)
+        self.feasible_path.Insert(1, self.waypoint2)
+        self.feasible_path.Insert(2, self.waypoint3)
+
+    def test_SmoothTrajectory_DoesNotModifyStartPoint(self):
+        # Setup/Test
+        traj = self.planner.RetimeTrajectory(self.robot, self.feasible_path)
+
+        # Assert
+        cspec = self.robot.GetActiveConfigurationSpecification('linear')
+        self.assertGreaterEqual(traj.GetNumWaypoints(), 2)
+
+        first_waypoint = traj.GetWaypoint(0, cspec)
+        last_waypoint = traj.GetWaypoint(traj.GetNumWaypoints() - 1, cspec)
+        assert_allclose(first_waypoint, self.waypoint1)
+        assert_allclose(last_waypoint, self.waypoint3)
+
+
 class RetimeTrajectoryTest(object):
     def setUp(self):
-        cspec = self.robot.GetActiveConfigurationSpecification()
+        cspec = self.robot.GetActiveConfigurationSpecification('linear')
 
         self.feasible_path = openravepy.RaveCreateTrajectory(self.env, '')
         self.feasible_path.Init(cspec)
@@ -419,6 +444,16 @@ class ParabolicRetimerTests(BasePlannerTest,
     def setUp(self):
         BasePlannerTest.setUp(self)
         RetimeTrajectoryTest.setUp(self)
+
+
+class MacSmootherTests(BasePlannerTest,
+                       SmoothTrajectoryTest,
+                       unittest.TestCase):
+    planner_factory = MacSmoother
+
+    def setUp(self):
+        BasePlannerTest.setUp(self)
+        SmoothTrajectoryTest.setUp(self)
 
 if __name__ == '__main__':
     openravepy.RaveInitialize(True)
