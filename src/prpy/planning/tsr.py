@@ -46,9 +46,8 @@ class TSRPlanner(BasePlanner):
 
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, num_attempts=3,
-                  chunk_size=100,
-                  ranker=None,
-                  tsr_samples=300, tsr_timeout=3.0, **kw_args):
+                  chunk_size=20, tsr_timeout=2.0,
+                  ranker=None, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
         samples a fixed number of goals from the specified TSRs up-front, then
