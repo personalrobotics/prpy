@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,8 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import abc, logging, functools, openravepy
-import time
-from .. import ik_ranking
 from ..clone import Clone, Cloned
 
 logger = logging.getLogger('planning')
@@ -60,7 +58,7 @@ class PlanningMethod(object):
             traj = openravepy.RaveCreateTrajectory(env, planning_traj.GetXMLId())
             traj.Clone(planning_traj, 0)
 
-        return traj 
+        return traj
 
     def __get__(self, instance, instancetype):
         # Bind the self reference and use update_wrapper to propagate the
@@ -123,7 +121,7 @@ class MetaPlanner(Planner):
                 all_planners.add(planner)
 
         return list(all_planners)
-    
+
     def __dir__(self):
         return self.get_planning_method_names()
 
@@ -149,7 +147,7 @@ class MetaPlanner(Planner):
 
             for planner, planner_method in docstrings:
                 formatted_docstring = ''
-                
+
                 if isinstance(planner, MetaPlanner):
                     if planner_method.__doc__ is not None:
                         formatted_docstring += planner_method.__doc__
@@ -170,6 +168,7 @@ class MetaPlanner(Planner):
                 meta_wrapper.__doc__ += formatted_docstring
 
         return meta_wrapper
+
 
 class Sequence(MetaPlanner):
     def __init__(self, *planners):
@@ -195,7 +194,7 @@ class Sequence(MetaPlanner):
                                  str(planner), method)
             except MetaPlanningError as e:
                 errors[planner] = e
-            except Exception as e:
+            except PlanningError as e:
                 logger.warning('Planning with %s failed: %s', planner, e)
                 errors[planner] = e
 
@@ -230,7 +229,7 @@ class Ranked(MetaPlanner):
                     results[index] = planning_method(*args, **kw_args)
                 except MetaPlanningError as e:
                     results[index] = e
-                except Exception as e:
+                except PlanningError as e:
                     logger.warning('Planning with %s failed: %s', planner, e)
                     results[index] = e
 
