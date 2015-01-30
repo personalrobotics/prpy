@@ -26,42 +26,98 @@ two subclasses:
 Each planner has one or more *planning methods*, annotated with the
 `@PlanningMethod` decorator, that like ordinary functions. However, unlike an
 ordinary function, calling a planning method causes the current OpenRAVE
-environment to be cloned. All planning occurs in the internal, cloned
-environment.
+environment to be cloned. Planning occurs in the cloned environment to PrPy to
+run multiple planners in parallel and to paralellize planning and execution.
 
 
 Built-In Planners
 ~~~~~~~~~~~~~~~~~
 PrPy provides wrappers for several existing planning libraries:
 
-- `planning.cbirrt.CBiRRTPlanner`: [Constrained Bi-directional
+- `CBiRRTPlanner`: [Constrained Bi-directional
    Rapidly-Exploring Random Tree (CBiRRT)](http://www.ri.cmu.edu/publication_view.html?pub_id=6309), requires the [CoMPs suite](https://github.com/personalrobotics/comps)
-- `planning.chomp.CHOMPlanner`: [Covariant Hamiltonian Optimization for Motion Planning (CHOMP)](https://www.ri.cmu.edu/publication_view.html?pub_id=7421), requires [or_cdchomp](https://github.com/personalrobotics/or_cdchomp.git)
-- `planning.ompl.OMPLPlanner`: wrapper for randomized planners implemented in the [Open Motion Planning Library](http://ompl.kavrakilab.org), requires [or_ompl](https://github.com/personalrobotics/or_ompl)
-- `planning.openrave.OpenRAVEPlanner`: wrapper for OpenRAVE planners that implement the [`PlannerBase` interface](http://openrave.org/docs/latest_stable/coreapihtml/arch_planner.html)
-- `planning.sbpl.SBPLPlanner`: wrapper for the [Search-Based Planning Library (SBPL)](https://github.com/sbpl/sbpl), requires [or_sbpl](https://github.com/personalrobotics/or_sbpl)
+- `CHOMPlanner`: [Covariant Hamiltonian Optimization for Motion Planning (CHOMP)](https://www.ri.cmu.edu/publication_view.html?pub_id=7421), requires [or_cdchomp](https://github.com/personalrobotics/or_cdchomp.git)
+- `OMPLPlanner`: wrapper for randomized planners implemented in the [Open Motion Planning Library](http://ompl.kavrakilab.org), requires [or_ompl](https://github.com/personalrobotics/or_ompl)
+- `OpenRAVEPlanner`: wrapper for OpenRAVE planners that implement the [`PlannerBase` interface](http://openrave.org/docs/latest_stable/coreapihtml/arch_planner.html)
+- `SBPLPlanner`: wrapper for the [Search-Based Planning Library (SBPL)](https://github.com/sbpl/sbpl), requires [or_sbpl](https://github.com/personalrobotics/or_sbpl)
 
 Additionally, PrPy provides several simple planners of its own:
 
-- `planning.mk.MKPlanner`: Jacobian pseudo-inverse controller for executing straight-line workspace trajectories
-- `planning.snap.SnapPlanner`: attempts to execute a straight-line joint-space trajectory to the goal
+- `MKPlanner`: Jacobian pseudo-inverse controller for executing straight-line workspace trajectories
+- `SnapPlanner`: attempts to execute a straight-line joint-space trajectory to the goal
 
 Finally, PrPy provides several meta-planners for combining the above
 planners:
 
-- `prpy.base.Sequence`: sequentially queries a list of planners and returns the
+- `Sequence`: sequentially queries a list of planners and returns the
   result of the first planner in the list that succeeds.
-- `prpy.base.Ranked`: queries a list of planners in parallel and returns the
+- `Ranked`: queries a list of planners in parallel and returns the
   solution first planner in the list that returns success
-- `prpy.ik.IKPlanner`: plan to an end-effector pose by sequentially planning to
+- `IKPlanner`: plan to an end-effector pose by sequentially planning to
   a list of ranked IK solutions
-- `prpy.named.NamedPlanner`: plan to a named configuration associated with the robot
+- `NamedPlanner`: plan to a named configuration associated with the robot
 
-See the Python docstrings the above classes for more information.;
+See the Python docstrings the above classes for more information.
 
 
-Planning Methods
-~~~~~~~~~~~~~~~~
+Common Planning Methods
+~~~~~~~~~~~~~~~~~~~~~~~
+  
+There is no formal list of `@PlanningMethod`s or their arguments. However, we
+have found these methods to be useful:
+
+- `PlanToConfiguration(robot, goal_config)`: plan the robot's active DOFs from
+  the robot's current configuration to the `goal_config` configuration.
+- `PlanToConfigurations(robot, goal_configs)`: plan the robot's active DOFs from
+  the robot's current configuration to one of the elements in the `goal_config`
+  list.
+- `PlanToEndEffectorPose(robot, goal_pose)`: plan the robot's active
+  manipulator's end-effector to `goal_pose`.
+- `PlanToEndEffectorOffset(robot, direction, min_distance, max_distance)`: plan
+  the robot's active manipulator in a straight line in the direction specified
+  by the `direction` unit vector for [ `min_distance`, `max_distance` ] meters.
+- `PlanToTSR(robot, tsrchains)`: plan with the start, goal, and/or constraints
+  specified by a list of TSR chains.
+- `PlanToBasePose(robot, goal_pose)`: plan with the robot's affine DOFs in the
+  plane to a desired base pose.
+
+Most planners that implement these methods accept a `timelimit` parameter, in
+seconds, for which to plan before raising a `PlanningError`. Additionally, many
+of these methods accept planner-specific keyword arguments.
+
+
+Writing a Custom Planner
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Implementing a custom planner requires extending the `BasePlanner` class and
+decorating one or more methods with the `@PlanningMethod` decorator. Extending
+the `BasePlanner` class constructs the planning environment `self.env` and
+allows PrPy to identify your planner as a base planner class, as opposed to a
+meta-planner. The `@PlanningMethod` decorator handles environment cloning and
+allows meta-planners to query the list of planning methods that the planner
+supports (e.g. to generate docstrings).
+
+Please obey the following guidelines:
+
+- Assume that the cloned environment is locked during the entire call.
+- Subclass constructor **must** call `BasePlanner.__init__`.
+- A `@PlanningMethod` **must not** call another `@PlanningMethod`.
+- Each `@PlanningMethod` **must** accept the first argument `robot`, which is a
+  robot in the cloned environment.
+- Each `@PlanningMethod` **must** accept `**kwargs` to ignore arguments that
+  are not supported by the planner.
+- Each `@PlanningMethod` **must** return a `Trajectory` which was created in
+  the cloned environment.
+- When possible, use one of the defacto-standard `@PlanningMethod` names listed
+  below.
+- Raise a `PlanningError` to indicate an expected, but fatal, error (e.g.
+  timeout with no collision-free path).
+- When applicable, raise a context-specific subclass of `PlanningError` to
+  indicate the nature of the error (e.g. `StartCollisionPlanningError`)
+- Raise a standard Python exception, e.g. `ValueError`, to indicate an
+  unexpected error has occurred (e.g. argument out of range).
+- Raise a `UnsupportedPlanningError` to indicate that the planning operation is
+  fundamentally not supported (e.g. constraint type is not implemented).
 
 
 Examples
@@ -93,7 +149,4 @@ support for `PlanToBasePose`:
     planner = Sequence(OMPLPlanner('RRTConnect'), SBPLPlanner())
     path1 = planner.PlanToConfiguration(robot, goal)
     path2 = planner.PlanToBasePose(robot, goal_pose)
-
-Base Planners
-~~~~~~~~~~~~~
 
