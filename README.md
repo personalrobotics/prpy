@@ -1,13 +1,13 @@
-PrPy
-====
+# PrPy
+
 PrPy is a Python library used by the Personal Robotics Laboratory at Carnegie
 Mellon University. This library includes robot-agnostic utilities that make
 it easier to use OpenRAVE in Python scripts. This includes a high-level
 planning pipeline, helper functions, and visualization tools.
 
 
-Planning Pipeline
------------------
+## Planning Pipeline
+
 There are a large array of motion planners that have complementary strengths
 and weaknesses. PrPy provides a *planning pipeline* in the `prpy.planning`
 namespace that makes it easy plan with multiple planners in parallel on a
@@ -30,8 +30,8 @@ environment to be cloned. Planning occurs in the cloned environment to PrPy to
 run multiple planners in parallel and to paralellize planning and execution.
 
 
-Built-In Planners
-~~~~~~~~~~~~~~~~~
+### Built-In Planners
+
 PrPy provides wrappers for several existing planning libraries:
 
 - `CBiRRTPlanner`: [Constrained Bi-directional
@@ -86,8 +86,7 @@ seconds, for which to plan before raising a `PlanningError`. Additionally, many
 of these methods accept planner-specific keyword arguments.
 
 
-Writing a Custom Planner
-~~~~~~~~~~~~~~~~~~~~~~~~
+### Writing a Custom Planner
 
 Implementing a custom planner requires extending the `BasePlanner` class and
 decorating one or more methods with the `@PlanningMethod` decorator. Extending
@@ -120,8 +119,7 @@ Please obey the following guidelines:
   fundamentally not supported (e.g. constraint type is not implemented).
 
 
-Examples
-~~~~~~~~
+### Examples
 
 Trajectory optimizers, like CHOMP, typically produce higher quality paths than
 randomized planners. However, these algorithms are not probabilistically
@@ -151,15 +149,14 @@ support for `PlanToBasePose`:
     path2 = planner.PlanToBasePose(robot, goal_pose)
 
 
-Environment Cloning
--------------------
+## Environment Cloning
+
 Cloning environments is critical to enable planning with multiple planners in
 parallel and parallelizing planning and execution. PrPy provides two utilities
 to simplify environment cloning in OpenRAVE: the `Clone` context manager and
 the the `Cloned` helper function
 
-Clone Context Manager
-~~~~~~~~~~~~~~~~~~~~~
+### Clone Context Manager
 
 PrPy adds a `Clone` context manager to manage temporary environment clones;
 e.g. those used during planning. This context manager clones an environment
@@ -207,8 +204,7 @@ environment inside the `with`-statement:
         # ...
 
 
-Cloned Helper Function
-~~~~~~~~~~~~~~~~~~~~~~
+### Cloned Helper Function
 
 It is frequently necessary to find an object in a cloned environment that
 refers to a particular object in the parent environment. This code frequently
