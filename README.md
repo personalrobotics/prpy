@@ -150,3 +150,102 @@ support for `PlanToBasePose`:
     path1 = planner.PlanToConfiguration(robot, goal)
     path2 = planner.PlanToBasePose(robot, goal_pose)
 
+
+Environment Cloning
+-------------------
+Cloning environments is critical to enable planning with multiple planners in
+parallel and parallelizing planning and execution. PrPy provides two utilities
+to simplify environment cloning in OpenRAVE: the `Clone` context manager and
+the the `Cloned` helper function
+
+Clone Context Manager
+~~~~~~~~~~~~~~~~~~~~~
+
+PrPy adds a `Clone` context manager to manage temporary environment clones;
+e.g. those used during planning. This context manager clones an environment
+when entering the `with`-block and destroys the environment when exiting the
+block. This code is careful to lock the source and destination environments
+during cloning correctly to avoid introducing a race condition.
+
+In the simplest case, the `Clone` context manager creates an internal,
+temporary environment that is not re-used between calls:
+
+    with Clone(env) as cloned_env:
+        robot = cloned_env.GetRobot('herb')
+        # ...
+
+The same context manager can be used to clone into an existing environment. In
+this case, the same target environment can be used by multiple calls. This
+allows OpenRAVE to re-use the environments resources (e.g. collision
+tri-meshes) and can dramatically improve performance:
+
+    clone_env = openravepy.Environment()
+
+    with Clone(env, clone_env=clone_env):
+        robot = cloned_env.GetRobot('herb')
+        # ...
+
+Often times, the cloned environment must be immediately locked to perform
+additional setup. This introduces a potential race condition between `Clone`
+releasing the lock and the code inside the `with`-block acquiring the lock. To
+avoid this, use the `lock` argument to enter the `with`-block without releasing
+the lock:
+
+    with Clone(env, lock=True) as cloned_env:
+        robot = cloned_env.GetRobot('herb')
+        # ...
+
+In this case, the cloned environment will be automatically unlocked when
+exiting the `with`-statement. This may be undesirable if you need to explicitly
+unlock the environment inside the `with`-statement. In this case, you may pass
+the `unlock=False` flag. In this case, you **must** explicitly unlock the
+environment inside the `with`-statement:
+
+    with Clone(env, lock=True, unlock=False) as cloned_env:
+        robot = cloned_env.GetRobot('herb')
+        env.Unlock()
+        # ...
+
+
+Cloned Helper Function
+~~~~~~~~~~~~~~~~~~~~~~
+
+It is frequently necessary to find an object in a cloned environment that
+refers to a particular object in the parent environment. This code frequently
+looks like this:
+
+    with Clone(env) as cloned_env:
+        cloned_robot = cloned_env.GetRobot(robot.GetName())
+        # ...
+
+The `Clone` helper function handles this name resolution for most OpenRAVE data
+types (including `Robot`, `KinBody`, `Link`, and `Manipulator`). This function
+accepts an arbitrary number of input parameters---of the supported types---and
+returns the corresponding objects in `Clone`d environment. For example, the
+above code can be re-written as:
+
+    with Clone(env) as cloned_env:
+        cloned_robot = Cloned(robot)
+        # ...
+
+If multiple `Clone` context managers are nested, the `Cloned` function returns
+the corresponding object in the inner-most block:
+
+    with Clone(env) as cloned_env1:
+        cloned_robot1 = Cloned(robot) # from cloned_env1
+        # ...
+
+        with Clone(env) as cloned_env2:
+            cloned_robot2 = Cloned(robot) # from cloned_env2
+            # ...
+
+        # ...
+        cloned_robot3 = Cloned(robot) # from cloned_env1
+
+Finally, as a convenience, the `Cloned` function can be used to simultaneously
+resolve multiple objects in one statement:
+
+    with Clone(env) as cloned_env:
+        cloned_robot, cloned_body = Cloned(robot, body)
+        # ...
+
