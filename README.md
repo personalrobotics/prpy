@@ -60,8 +60,7 @@ planners:
 See the Python docstrings the above classes for more information.
 
 
-Common Planning Methods
-~~~~~~~~~~~~~~~~~~~~~~~
+### Common Planning Methods
   
 There is no formal list of `@PlanningMethod`s or their arguments. However, we
 have found these methods to be useful:
