@@ -284,9 +284,6 @@ class Robot(openravepy.Robot):
         return False
 
     def _PlanWrapper(self, planning_method, args, kw_args):
-        print "H"
-        import IPython
-        IPython.embed()
 
         # Call the planner.
         traj = planning_method(self, *args, **kw_args)
