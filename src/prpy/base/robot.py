@@ -293,6 +293,13 @@ class Robot(openravepy.Robot):
 
         # Optionally execute the trajectory.
         if 'execute' not in kw_args or kw_args['execute']:
-            return self.ExecuteTrajectory(traj, **kw_args)
+            if 'defer' in kw_args and kw_args['defer'] is True:
+                import trollius
+                with kw_args['executor'] or \
+                        trollius.executor.get_default_executor() as executor:
+                    return executor.submit(self.ExecuteTrajectory,
+                                           traj.result(), kw_args)
+            else:
+                return self.ExecuteTrajectory(traj, **kw_args)
         else:
             return traj

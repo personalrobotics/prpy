@@ -50,15 +50,30 @@ class PlanningMethod(object):
     def __init__(self, func):
         self.func = func
 
-    def __call__(self, instance, robot, *args, **kw_args):
+    def __call__(self, instance, robot, defer=False, executor=None,
+                 *args, **kw_args):
         env = robot.GetEnv()
 
-        with Clone(env, clone_env=instance.env):
-            planning_traj = self.func(instance, Cloned(robot), *args, **kw_args)
-            traj = openravepy.RaveCreateTrajectory(env, planning_traj.GetXMLId())
-            traj.Clone(planning_traj, 0)
+        with Clone(env, clone_env=instance.env, lock=True, unlock=False) \
+                as cloned_env:
 
-        return traj
+            def call_planner():
+                # TODO: Is this locking semantic correct?
+                planning_traj = self.func(instance, Cloned(robot),
+                                          *args, **kw_args)
+                traj = openravepy.RaveCreateTrajectory(
+                    env, planning_traj.GetXMLId()
+                )
+                traj.Clone(planning_traj, 0)
+                cloned_env.Unlock()
+
+            if defer is True:
+                import trollius
+                with executor or trollius.executor.get_default_executor() \
+                        as executor:
+                    return executor.submit(call_planner)
+            else:
+                return call_planner()
 
     def __get__(self, instance, instancetype):
         # Bind the self reference and use update_wrapper to propagate the
@@ -180,25 +195,37 @@ class Sequence(MetaPlanner):
     def get_planners(self, method_name):
         return [ planner for planner in self._planners if hasattr(planner, method_name) ]
 
-    def plan(self, method, args, kw_args):
-        errors = dict()
+    def plan(self, method, defer=None, executor=None, args, kw_args):
 
-        for planner in self._planners:
-            try:
-                if hasattr(planner, method):
-                    logger.debug('Sequence - Calling planner "%s".', str(planner))
-                    planner_method = getattr(planner, method)
-                    return planner_method(*args, **kw_args)
-                else:
-                    logger.debug('Sequence - Skipping planner "%s"; does not have "%s" method.',
-                                 str(planner), method)
-            except MetaPlanningError as e:
-                errors[planner] = e
-            except PlanningError as e:
-                logger.warning('Planning with %s failed: %s', planner, e)
-                errors[planner] = e
+        # Helper function that actually calls each planner in sequence.
+        def call_planners(planners):
+            errors = dict()
 
-        raise MetaPlanningError('All planners failed.', errors)
+            for planner in planners:
+                try:
+                    if hasattr(planner, method):
+                        logger.debug('Sequence - Calling planner "%s".', str(planner))
+                        planner_method = getattr(planner, method)
+                        return planner_method(defer=False, *args, **kw_args)
+                    else:
+                        logger.debug('Sequence - Skipping planner "%s"; does not have "%s" method.',
+                                     str(planner), method)
+                except MetaPlanningError as e:
+                    errors[planner] = e
+                except PlanningError as e:
+                    logger.warning('Planning with %s failed: %s', planner, e)
+                    errors[planner] = e
+
+            raise MetaPlanningError('All planners failed.', errors)
+
+        if defer is True:
+            import trollius
+            with executor or trollius.executor.get_default_executor() \
+                    as executor:
+                return executor.submit(call_planners, self._planners)
+        else:
+            return call_planners(self._planners)
+
 
 class Ranked(MetaPlanner):
     def __init__(self, *planners):
@@ -210,70 +237,61 @@ class Ranked(MetaPlanner):
     def get_planners(self, method_name):
         return [ planner for planner in self._planners if hasattr(planner, method_name) ]
 
-    def plan(self, method, args, kw_args):
-        from threading import Condition, Thread
+    def plan(self, method, defer=None, executor=None, args, kw_args):
+        all_planners = self._planners
+        planners = []
+        results = [None]*len(self._planners)
 
-        planning_threads = list()
-        results = [ None ] * len(self._planners)
-        condition = Condition()
-
-        # Start planning in parallel.
-        for index, planner in enumerate(self._planners):
+        # Find only planners that support the required planning method.
+        for index, planner in enumerate(all_planners):
             if not hasattr(planner, method):
-                results[index] = PlanningError('%s does not implement method %s.' % (planner, method))
+                results[index] = PlanningError(
+                    "{:s} does not implement method {:s}."
+                    .format(planner, method)
+                )
                 continue
+            else:
+                planners.append((index, planner))
 
-            def planning_thread(index, planner):
-                try:
-                    planning_method = getattr(planner, method)
-                    results[index] = planning_method(*args, **kw_args)
-                except MetaPlanningError as e:
-                    results[index] = e
-                except PlanningError as e:
-                    logger.warning('Planning with %s failed: %s', planner, e)
-                    results[index] = e
+        # Helper function to call a planner and store its result or error.
+        def call_planner(index, planner):
+            try:
+                planning_method = getattr(planner, method)
+                results[index] = planning_method(defer=False, *args, **kw_args)
+            except MetaPlanningError as e:
+                results[index] = e
+            except PlanningError as e:
+                logger.warning("Planning with {:s} failed: {:s}"
+                               .format(planner, e))
+                results[index] = e
 
-                # Notify the main thread that we're done.
-                condition.acquire()
-                condition.notifyAll()
-                condition.release()
+        # Call every planners in parallel using a concurrent executor and
+        # return the first non-error result in the ordering when available.
+        def call_planners():
+            import trollius
+            with executor or trollius.executor.get_default_executor() \
+                    as executor:
+                for _ in executor.map(call_planner, planners):
+                    for result in results:
+                        if result is None:
+                            break
+                        elif isinstance(result, openravepy.Trajectory):
+                            return result
+                        elif not isinstance(result, PlanningError):
+                            logger.warning(
+                                "Planner {:s} returned {} of type {}; "
+                                "expected a trajectory or PlanningError."
+                                .format(str(planner), result, type(result))
+                            )
 
-            thread = Thread(target=planning_thread, args=(index, planner),
-                            name='%s-planning' % planner)
-            thread.daemon = True
-            thread.start()
+            raise MetaPlanningError("All planners failed.",
+                                    dict(zip(all_planners, results)))
 
-        # Block until a dominant planner finishes.
-        traj = None
-        condition.acquire()
-        all_done = False
-
-        # TODO: Can we replace this with a fold?
-        while traj is None and not all_done:
-            previous_done = True
-            all_done = True #assume everyone is done
-            for planner, result in zip(self._planners, results):
-                if result is None:
-                    previous_done = False
-                    all_done = False
-                elif isinstance(result, openravepy.Trajectory):
-                    # All better planners have failed. Short-circuit and return this
-                    # trajectory. It must be the highest-ranked one.
-                    if previous_done:
-                        traj = result
-                        break
-                elif not isinstance(result, PlanningError):
-                    logger.warning('Planner %s returned %r of type %r; '
-                                   'expected a trajectory or PlanningError.',
-                                   str(planner), result, type(result))
-
-            # Wait for a planner to finish.
-            if not all_done:
-                condition.wait()
-
-        condition.release()
-
-        if traj is not None:
-            return traj
+        # Either directly return the result or return a future.
+        if defer is True:
+            import trollius
+            with executor or trollius.executor.get_default_executor() \
+                    as executor:
+                return executor.submit(call_planners)
         else:
-            raise MetaPlanningError('All planners failed.', dict(zip(self._planners, results)))
+            return call_planners()
