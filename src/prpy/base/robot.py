@@ -287,31 +287,30 @@ class Robot(openravepy.Robot):
 
         # Call the planner.
         config_spec = self.GetActiveConfigurationSpecification()
-        traj = planning_method(self, *args, **kw_args)
+        result = planning_method(self, *args, **kw_args)
 
         # Define the post processing steps for the trajectory.
-        def postprocess_trajectory(trajectory, kw_args):
+        def postprocess_trajectory(traj, kw_args):
 
             # Strip inactive DOFs from the trajectory.
             openravepy.planningutils.ConvertTrajectorySpecification(
-                trajectory, config_spec
+                traj, config_spec
             )
 
             # Optionally execute the trajectory.
             if 'execute' not in kw_args or kw_args['execute']:
-                return self.ExecuteTrajectory(trajectory, **kw_args)
+                return self.ExecuteTrajectory(traj, **kw_args)
             else:
                 return traj
 
         # Perform postprocessing on a future trajectory.
-        def defer_trajectory(trajectory_future, kw_args):
-            postprocess_trajectory(trajectory_future.result(), kw_args)
+        def defer_trajectory(traj_future, kw_args):
+            postprocess_trajectory(traj_future.result(), kw_args)
 
-        # Return the result or a future to the result.
+        # Return the trajectory result or a future to the result.
         if 'defer' in kw_args and kw_args['defer'] is True:
             from trollius.executor import get_default_executor
             with kw_args.get('executor') or get_default_executor() as executor:
-                return executor.submit(defer_trajectory,
-                                       (traj.result(), kw_args))
+                return executor.submit(defer_trajectory, result, kw_args)
         else:
-            return postprocess_trajectory(traj, kw_args)
+            return postprocess_trajectory(result, kw_args)

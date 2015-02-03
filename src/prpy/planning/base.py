@@ -151,11 +151,10 @@ class MetaPlanner(Planner):
             executor = kw_args.get('executor')
 
             if defer is True:
-                import trollius
-                with executor or trollius.executor.get_default_executor() \
-                        as executor:
+                from trollius.executor import get_default_executor
+                with executor or get_default_executor() as executor:
                     return executor.submit(
-                        self.plan, (method_name, args, kw_args)
+                        self.plan, method_name, args, kw_args
                     )
             else:
                 return self.plan(method_name, args, kw_args)
