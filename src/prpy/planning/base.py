@@ -145,8 +145,16 @@ class MetaPlanner(Planner):
             raise AttributeError("Object {:s} has no attribute '{:s}'.".format(
                                  repr(self), method_name))
 
-        def meta_wrapper(*args, **kw_args):
-            return self.plan(method_name, args, kw_args)
+        def meta_wrapper(defer=None, executor=None, *args, **kw_args):
+            if defer is True:
+                import trollius
+                with executor or trollius.executor.get_default_executor() \
+                        as executor:
+                    return executor.submit(
+                        self.plan, method_name, args, kw_args
+                    )
+            else:
+                return self.plan(method_name, args, kw_args)
 
         # Grab docstrings from the delegate planners.
         meta_wrapper.__name__ = method_name
@@ -195,36 +203,26 @@ class Sequence(MetaPlanner):
     def get_planners(self, method_name):
         return [ planner for planner in self._planners if hasattr(planner, method_name) ]
 
-    def plan(self, method, defer=None, executor=None, args, kw_args):
+    def plan(self, method, args, kw_args):
+        errors = dict()
 
-        # Helper function that actually calls each planner in sequence.
-        def call_planners(planners):
-            errors = dict()
+        for planner in self._planners:
+            try:
+                if hasattr(planner, method):
+                    logger.debug('Sequence - Calling planner "%s".', str(planner))
+                    planner_method = getattr(planner, method)
+                    kw_args['defer'] = False
+                    return planner_method(*args, **kw_args)
+                else:
+                    logger.debug('Sequence - Skipping planner "%s"; does not have "%s" method.',
+                                 str(planner), method)
+            except MetaPlanningError as e:
+                errors[planner] = e
+            except PlanningError as e:
+                logger.warning('Planning with %s failed: %s', planner, e)
+                errors[planner] = e
 
-            for planner in planners:
-                try:
-                    if hasattr(planner, method):
-                        logger.debug('Sequence - Calling planner "%s".', str(planner))
-                        planner_method = getattr(planner, method)
-                        return planner_method(defer=False, *args, **kw_args)
-                    else:
-                        logger.debug('Sequence - Skipping planner "%s"; does not have "%s" method.',
-                                     str(planner), method)
-                except MetaPlanningError as e:
-                    errors[planner] = e
-                except PlanningError as e:
-                    logger.warning('Planning with %s failed: %s', planner, e)
-                    errors[planner] = e
-
-            raise MetaPlanningError('All planners failed.', errors)
-
-        if defer is True:
-            import trollius
-            with executor or trollius.executor.get_default_executor() \
-                    as executor:
-                return executor.submit(call_planners, self._planners)
-        else:
-            return call_planners(self._planners)
+        raise MetaPlanningError('All planners failed.', errors)
 
 
 class Ranked(MetaPlanner):
@@ -237,7 +235,8 @@ class Ranked(MetaPlanner):
     def get_planners(self, method_name):
         return [ planner for planner in self._planners if hasattr(planner, method_name) ]
 
-    def plan(self, method, defer=None, executor=None, args, kw_args):
+    def plan(self, method, args, kw_args):
+        executor = kw_args.get('executor')
         all_planners = self._planners
         planners = []
         results = [None]*len(self._planners)
@@ -257,7 +256,8 @@ class Ranked(MetaPlanner):
         def call_planner(index, planner):
             try:
                 planning_method = getattr(planner, method)
-                results[index] = planning_method(defer=False, *args, **kw_args)
+                kw_args['defer'] = False
+                results[index] = planning_method(*args, **kw_args)
             except MetaPlanningError as e:
                 results[index] = e
             except PlanningError as e:
@@ -267,31 +267,21 @@ class Ranked(MetaPlanner):
 
         # Call every planners in parallel using a concurrent executor and
         # return the first non-error result in the ordering when available.
-        def call_planners():
-            import trollius
-            with executor or trollius.executor.get_default_executor() \
-                    as executor:
-                for _ in executor.map(call_planner, planners):
-                    for result in results:
-                        if result is None:
-                            break
-                        elif isinstance(result, openravepy.Trajectory):
-                            return result
-                        elif not isinstance(result, PlanningError):
-                            logger.warning(
-                                "Planner {:s} returned {} of type {}; "
-                                "expected a trajectory or PlanningError."
-                                .format(str(planner), result, type(result))
-                            )
+        import trollius
+        with executor or trollius.executor.get_default_executor() \
+                as executor:
+            for _ in executor.map(call_planner, planners):
+                for result in results:
+                    if result is None:
+                        break
+                    elif isinstance(result, openravepy.Trajectory):
+                        return result
+                    elif not isinstance(result, PlanningError):
+                        logger.warning(
+                            "Planner {:s} returned {} of type {}; "
+                            "expected a trajectory or PlanningError."
+                            .format(str(planner), result, type(result))
+                        )
 
-            raise MetaPlanningError("All planners failed.",
-                                    dict(zip(all_planners, results)))
-
-        # Either directly return the result or return a future.
-        if defer is True:
-            import trollius
-            with executor or trollius.executor.get_default_executor() \
-                    as executor:
-                return executor.submit(call_planners)
-        else:
-            return call_planners()
+        raise MetaPlanningError("All planners failed.",
+                                dict(zip(all_planners, results)))
