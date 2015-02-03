@@ -50,15 +50,15 @@ class PlanningMethod(object):
     def __init__(self, func):
         self.func = func
 
-    def __call__(self, instance, robot, defer=False, executor=None,
-                 *args, **kw_args):
+    def __call__(self, instance, robot, *args, **kw_args):
         env = robot.GetEnv()
+        defer = kw_args.get('defer')
+        executor = kw_args.get('executor')
 
         with Clone(env, clone_env=instance.env, lock=True, unlock=False) \
                 as cloned_env:
 
             def call_planner():
-                # TODO: Is this locking semantic correct?
                 planning_traj = self.func(instance, Cloned(robot),
                                           *args, **kw_args)
                 traj = openravepy.RaveCreateTrajectory(
@@ -145,13 +145,16 @@ class MetaPlanner(Planner):
             raise AttributeError("Object {:s} has no attribute '{:s}'.".format(
                                  repr(self), method_name))
 
-        def meta_wrapper(defer=None, executor=None, *args, **kw_args):
+        def meta_wrapper(*args, **kw_args):
+            defer = kw_args.get('defer')
+            executor = kw_args.get('executor')
+
             if defer is True:
                 import trollius
                 with executor or trollius.executor.get_default_executor() \
                         as executor:
                     return executor.submit(
-                        self.plan, method_name, args, kw_args
+                        self.plan, (method_name, args, kw_args)
                     )
             else:
                 return self.plan(method_name, args, kw_args)
