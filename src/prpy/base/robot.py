@@ -286,21 +286,32 @@ class Robot(openravepy.Robot):
     def _PlanWrapper(self, planning_method, args, kw_args):
 
         # Call the planner.
+        config_spec = self.GetActiveConfigurationSpecification()
         traj = planning_method(self, *args, **kw_args)
 
-        # Strip inactive DOFs from the trajectory.
-        config_spec = self.GetActiveConfigurationSpecification()
-        openravepy.planningutils.ConvertTrajectorySpecification(traj, config_spec)
+        # Define the post processing steps for the trajectory.
+        def postprocess_trajectory(trajectory, kw_args):
 
-        # Optionally execute the trajectory.
-        if 'execute' not in kw_args or kw_args['execute']:
-            if 'defer' in kw_args and kw_args['defer'] is True:
-                import trollius
-                with kw_args['executor'] or \
-                        trollius.executor.get_default_executor() as executor:
-                    return executor.submit(self.ExecuteTrajectory,
-                                           traj.result(), kw_args)
+            # Strip inactive DOFs from the trajectory.
+            openravepy.planningutils.ConvertTrajectorySpecification(
+                trajectory, config_spec
+            )
+
+            # Optionally execute the trajectory.
+            if 'execute' not in kw_args or kw_args['execute']:
+                return self.ExecuteTrajectory(trajectory, **kw_args)
             else:
-                return self.ExecuteTrajectory(traj, **kw_args)
+                return traj
+
+        # Perform postprocessing on a future trajectory.
+        def defer_trajectory(trajectory_future, kw_args):
+            postprocess_trajectory(trajectory_future.result(), kw_args)
+
+        # Return the result or a future to the result.
+        if 'defer' in kw_args and kw_args['defer'] is True:
+            from trollius.executor import get_default_executor
+            with kw_args.get('executor') or get_default_executor() as executor:
+                return executor.submit(defer_trajectory,
+                                       (traj.result(), kw_args))
         else:
-            return traj
+            return postprocess_trajectory(traj, kw_args)
