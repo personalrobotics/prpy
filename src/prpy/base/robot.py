@@ -305,7 +305,7 @@ class Robot(openravepy.Robot):
 
         # Perform postprocessing on a future trajectory.
         def defer_trajectory(traj_future, kw_args):
-            postprocess_trajectory(traj_future.result(), kw_args)
+            return postprocess_trajectory(traj_future.result(), kw_args)
 
         # Return either the trajectory result or a future to the result.
         if 'defer' in kw_args and kw_args['defer'] is True:
