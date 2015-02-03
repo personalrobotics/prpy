@@ -69,9 +69,8 @@ class PlanningMethod(object):
                 return traj
 
             if defer is True:
-                import trollius
-                with executor or trollius.executor.get_default_executor() \
-                        as executor:
+                from trollius.executor import get_default_executor
+                with executor or get_default_executor() as executor:
                     return executor.submit(call_planner)
             else:
                 return call_planner()
@@ -270,9 +269,8 @@ class Ranked(MetaPlanner):
 
         # Call every planners in parallel using a concurrent executor and
         # return the first non-error result in the ordering when available.
-        import trollius
-        with executor or trollius.executor.get_default_executor() \
-                as executor:
+        from trollius.executor import get_default_executor
+        with executor or get_default_executor() as executor:
             for _ in executor.map(call_planner, planners):
                 for result in results:
                     if result is None:
