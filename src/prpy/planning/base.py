@@ -66,6 +66,7 @@ class PlanningMethod(object):
                 )
                 traj.Clone(planning_traj, 0)
                 cloned_env.Unlock()
+                return traj
 
             if defer is True:
                 import trollius
