@@ -310,7 +310,7 @@ class Robot(openravepy.Robot):
         # Return either the trajectory result or a future to the result.
         if 'defer' in kw_args and kw_args['defer'] is True:
             from trollius.executor import get_default_executor
-            with kw_args.get('executor') or get_default_executor() as executor:
-                return executor.submit(defer_trajectory, result, kw_args)
+            executor = kw_args.get('executor') or get_default_executor()
+            return executor.submit(defer_trajectory, result, kw_args)
         else:
             return postprocess_trajectory(result, kw_args)

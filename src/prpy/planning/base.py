@@ -53,7 +53,6 @@ class PlanningMethod(object):
     def __call__(self, instance, robot, *args, **kw_args):
         env = robot.GetEnv()
         defer = kw_args.get('defer')
-        executor = kw_args.get('executor')
 
         with Clone(env, clone_env=instance.env, lock=True, unlock=False) \
                 as cloned_env:
@@ -70,8 +69,8 @@ class PlanningMethod(object):
 
             if defer is True:
                 from trollius.executor import get_default_executor
-                with executor or get_default_executor() as executor:
-                    return executor.submit(call_planner)
+                executor = kw_args.get('executor') or get_default_executor()
+                return executor.submit(call_planner)
             else:
                 return call_planner()
 
@@ -147,14 +146,11 @@ class MetaPlanner(Planner):
 
         def meta_wrapper(*args, **kw_args):
             defer = kw_args.get('defer')
-            executor = kw_args.get('executor')
 
             if defer is True:
                 from trollius.executor import get_default_executor
-                with executor or get_default_executor() as executor:
-                    return executor.submit(
-                        self.plan, method_name, args, kw_args
-                    )
+                executor = kw_args.get('executor') or get_default_executor()
+                return executor.submit(self.plan, method_name, args, kw_args)
             else:
                 return self.plan(method_name, args, kw_args)
 
@@ -238,7 +234,6 @@ class Ranked(MetaPlanner):
         return [ planner for planner in self._planners if hasattr(planner, method_name) ]
 
     def plan(self, method, args, kw_args):
-        executor = kw_args.get('executor')
         all_planners = self._planners
         planners = []
         results = [None] * len(self._planners)
@@ -270,19 +265,19 @@ class Ranked(MetaPlanner):
         # Call every planners in parallel using a concurrent executor and
         # return the first non-error result in the ordering when available.
         from trollius.executor import get_default_executor
-        with executor or get_default_executor() as executor:
-            for _ in executor.map(call_planner, planners):
-                for result in results:
-                    if result is None:
-                        break
-                    elif isinstance(result, openravepy.Trajectory):
-                        return result
-                    elif not isinstance(result, PlanningError):
-                        logger.warning(
-                            "Planner {:s} returned {} of type {}; "
-                            "expected a trajectory or PlanningError."
-                            .format(str(planner), result, type(result))
-                        )
+        executor = kw_args.get('executor') or get_default_executor()
+        for _ in executor.map(call_planner, planners):
+            for result in results:
+                if result is None:
+                    break
+                elif isinstance(result, openravepy.Trajectory):
+                    return result
+                elif not isinstance(result, PlanningError):
+                    logger.warning(
+                        "Planner {:s} returned {} of type {}; "
+                        "expected a trajectory or PlanningError."
+                        .format(str(planner), result, type(result))
+                    )
 
         raise MetaPlanningError("All planners failed.",
                                 dict(zip(all_planners, results)))
