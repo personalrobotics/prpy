@@ -268,8 +268,16 @@ class Ranked(MetaPlanner):
         # Call every planners in parallel using a concurrent executor and
         # return the first non-error result in the ordering when available.
         from trollius.executor import get_default_executor
+        from trollius.tasks import as_completed
+
         executor = kw_args.get('executor') or get_default_executor()
-        for _ in executor.map(call_planner, planners):
+        futures = [executor.submit(call_planner, planner)
+                   for planner in planners]
+
+        # Each time a planner completes, check if we have a valid result
+        # (a planner found a solution and all higher-ranked planners had
+        # already failed).
+        for _ in as_completed(futures):
             for result in results:
                 if result is None:
                     break
