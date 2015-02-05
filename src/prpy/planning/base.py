@@ -56,16 +56,19 @@ class PlanningMethod(object):
 
         with Clone(env, clone_env=instance.env,
                    lock=True, unlock=False) as cloned_env:
+            cloned_robot = Cloned(robot)
 
             def call_planner():
-                planning_traj = self.func(instance, Cloned(robot),
-                                          *args, **kw_args)
-                traj = openravepy.RaveCreateTrajectory(
-                    env, planning_traj.GetXMLId()
-                )
-                traj.Clone(planning_traj, 0)
-                cloned_env.Unlock()
-                return traj
+                try:
+                    planner_traj = self.func(instance, cloned_robot,
+                                             *args, **kw_args)
+                    traj = openravepy.RaveCreateTrajectory(
+                        env, planner_traj.GetXMLId()
+                    )
+                    traj.Clone(planner_traj, 0)
+                    return traj
+                finally:
+                    cloned_env.Unlock()
 
             if defer is True:
                 from trollius.executor import get_default_executor
