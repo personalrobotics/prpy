@@ -54,8 +54,8 @@ class PlanningMethod(object):
         env = robot.GetEnv()
         defer = kw_args.get('defer')
 
-        with Clone(env, clone_env=instance.env, lock=True, unlock=False) \
-                as cloned_env:
+        with Clone(env, clone_env=instance.env,
+                   lock=True, unlock=False) as cloned_env:
 
             def call_planner():
                 planning_traj = self.func(instance, Cloned(robot),
