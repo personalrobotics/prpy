@@ -2,6 +2,12 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Adds the ability to pass a defer=True to PlanningMethods and ExecuteTrajectory.
+* Fixed detection of missing CBiRRT module.
+* Contributors: Michael Koval, Pras Velagapudi
+
 0.2.0 (2015-01-29)
 ------------------
 * Adding `kw_args` to CHOMP's `OptimizeTrajectory` so execute flag doesn't cause error.
