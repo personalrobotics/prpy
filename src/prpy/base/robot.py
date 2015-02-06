@@ -33,10 +33,10 @@ from .. import bind, named_config, planning, util
 import prpy.util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
-from ..planning.base import Ranked
+from ..planning.base import Sequence 
 from ..planning.ompl import OMPLSimplifier
-from ..planning.retimer import ParabolicRetimer
-
+from ..planning.retimer import ParabolicRetimer, ParabolicSmoother
+from ..planning.mac_smoother import MacSmoother
 
 logger = logging.getLogger('robot')
 
@@ -65,8 +65,12 @@ class Robot(openravepy.Robot):
         # Path post-processing for execution. This includes simplification of
         # the geometric path, retiming a path into a trajectory, and smoothing
         # (joint simplificaiton and retiming).
-        self.ompl_simplifier = OMPLSimplifier()
+        self.simplifier = OMPLSimplifier()
         self.retimer = ParabolicRetimer()
+        self.smoother = Sequence(
+            ParabolicSmoother(),
+            self.retimer
+        )
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
@@ -150,23 +154,6 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
-    def SimplifyPath(self, path, timelimit=1.):
-        """ Simplify a geometric path.
-        """
-
-        from openravepy import PlannerStatus
-        from prpy.exceptions import PrPyException
-
-        simplified_path = prpy.util.CopyTrajectory(path)
-        extra_args = '<time_limit>{:f}</time_limit>'.format(timelimit)
-
-        # Use OMPL to simplify the trajectory. This smoother samples two random
-        # points on the path and attempts to connect them with a straight line
-        # segment. If the straight line is collision free, the line segment is
-        # incorporated into the path.
-        # TODO: Replace this with the SmoothTrajectory helper function.
-        return self.ompl_simplifier.ShortcutPath(self, path)
-
     def RetimeTrajectory(self, path, smooth=True, **kw_args):
         """Compute timing information for a trajectory.
 
@@ -212,44 +199,34 @@ class Robot(openravepy.Robot):
         raise PrPyException("Path retimer failed with status '{:s}'"
                             .format(status))
 
-    def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
-        """
-        Executes a trajectory and optionally waits for it to finish.
-        @param traj input trajectory
-        @param retime optionally retime the trajectory before executing it
-        @param timeout duration to wait for execution
-        @returns final executed trajectory
-        """
-        # Check if this is a base trajectory.
-        has_base = hasattr(self, 'base')
-        needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
-        if needs_base and not has_base:
-            raise ValueError('Unable to execute affine DOF trajectory; '
-                             'robot does not have a MobileBase.')
+    def ExecutePath(self, path, simplify=True, smooth=True, timeout=1.,
+                    **kwargs):
+        # TODO: Verify that the path is untimed.
 
-        # TODO: Throw an error if the trajectory contains both normal DOFs and
-        # affine DOFs.
+        # Simplify the path. This is a purely geometric operation.
+        if simplify:
+            path = self.simplifier.ShortcutPath(self, path, timeout=timeout)
 
-        if retime:
-            # Retime a manipulator trajectory.
-            if not needs_base:
-                traj = self.RetimeTrajectory(traj)
-            # Retime a base trajectory.
-            else:
-                max_vel = [self.GetAffineTranslationMaxVels()[0],
-                           self.GetAffineTranslationMaxVels()[1],
-                           self.GetAffineRotationAxisMaxVels()[2]]
-                max_accel = [3.*v for v in max_vel]
-                openravepy.planningutils.RetimeAffineTrajectory(
-                    traj, max_vel, max_accel, False)
+        # Convert the path to a timed trajectory.
+        retimer = self.smoother if smooth else self.retimer
+        traj = retimer.RetimeTrajectory(self, path, **kwargs)
+
+        return self.ExecuteTrajectory(traj, **kwargs)
+
+    def ExecuteTrajectory(self, traj, timeout=None, **kw_args):
+        # TODO: Verify that the trajectory is timed.
+        # TODO: Check if this trajectory contains the base.
+
+        needs_base = False
 
         self.GetController().SetPath(traj)
 
         active_manipulators = self.GetTrajectoryManipulators(traj)
-        active_controllers = []
-        for active_manipulator in active_manipulators:
-            if hasattr(active_manipulator, 'controller'):
-                active_controllers.append(active_manipulator.controller)
+        active_controllers = [
+            active_manipulator.controller \
+            for active_manipulator in active_manipulators \
+            if hasattr(active_manipulator, 'controller')
+        ]
 
         if needs_base:
             active_controllers.append(self.base.controller)

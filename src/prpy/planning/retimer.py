@@ -44,6 +44,7 @@ class OpenRAVERetimer(BasePlanner):
         RetimeTrajectory = openravepy.planningutils.RetimeTrajectory
 
         cspec = path.GetConfigurationSpecification()
+        """
         group = cspec.GetGroupFromName('joint_values')
         if group.interpolation != 'linear':
             raise PlanningError(
@@ -52,6 +53,7 @@ class OpenRAVERetimer(BasePlanner):
                     group.interpolation
                 )
             )
+        """
 
         # Copy the input trajectory into the planning environment. This is
         # necessary for two reasons: (1) the input trajectory may be in another
