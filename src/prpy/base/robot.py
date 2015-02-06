@@ -312,6 +312,7 @@ class Robot(openravepy.Robot):
 
             # Optionally execute the trajectory.
             if 'execute' not in kw_args or kw_args['execute']:
+                kw_args['defer'] = False
                 return self.ExecuteTrajectory(traj, **kw_args)
             else:
                 return traj
