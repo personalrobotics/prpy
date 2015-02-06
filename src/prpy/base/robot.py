@@ -183,14 +183,27 @@ class Robot(openravepy.Robot):
         raise PrPyException("Path retimer failed with status '{:s}'"
                             .format(status))
 
-    def ExecuteTrajectory(self, traj, retime=True, timeout=None, **kw_args):
+    def ExecuteTrajectory(self, traj, retime=True, timeout=None,
+                          defer=False, executor=None, **kw_args):
         """
         Executes a trajectory and optionally waits for it to finish.
+
+        Passing `defer=True` to this function submits it for background
+        execution, and returns a Future which contains the result.
+
         @param traj input trajectory
         @param retime optionally retime the trajectory before executing it
         @param timeout duration to wait for execution
-        @returns final executed trajectory
+        @param defer return a future to this function and run in the background
+        @returns final executed trajectory or a Future to this result
         """
+        # If the planning call is deferred, submit the call to the executor.
+        if defer is True:
+            from trollius.executor import get_default_executor
+            executor = executor or get_default_executor()
+            return executor.submit(self.ExecuteTrajectory, traj, retime,
+                                   timeout, defer=False, **kw_args)
+
         # Check if this is a base trajectory.
         has_base = hasattr(self, 'base')
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
