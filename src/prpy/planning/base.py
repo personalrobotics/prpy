@@ -30,6 +30,7 @@
 
 import abc, logging, functools, openravepy
 from ..clone import Clone, Cloned
+from ..util import CopyTrajectory
 
 logger = logging.getLogger('planning')
 
@@ -45,6 +46,7 @@ class MetaPlanningError(PlanningError):
         self.errors = errors
 
     # TODO: Print the inner exceptions.
+
 
 class PlanningMethod(object):
     def __init__(self, func):
@@ -62,11 +64,7 @@ class PlanningMethod(object):
                 try:
                     planner_traj = self.func(instance, cloned_robot,
                                              *args, **kw_args)
-                    traj = openravepy.RaveCreateTrajectory(
-                        env, planner_traj.GetXMLId()
-                    )
-                    traj.Clone(planner_traj, 0)
-                    return traj
+                    return CopyTrajectory(planner_traj, env=env)
                 finally:
                     cloned_env.Unlock()
 
@@ -84,6 +82,7 @@ class PlanningMethod(object):
         functools.update_wrapper(wrapper, self.func)
         wrapper.is_planning_method = True
         return wrapper
+
 
 class Planner(object):
     def has_planning_method(self, method_name):
