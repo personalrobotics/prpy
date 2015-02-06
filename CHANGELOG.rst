@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.3.0 (2015-02-06)
+------------------
 * Adds the ability to pass a defer=True to PlanningMethods and ExecuteTrajectory.
 * Fixed detection of missing CBiRRT module.
 * Contributors: Michael Koval, Pras Velagapudi
