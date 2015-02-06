@@ -33,19 +33,74 @@ import openravepy, threading
 class CloneException(Exception):
     pass
 
-class ClonedEnvironment(openravepy.Environment):
+class Clone(object):
     local = threading.local()
 
-    def __init__(self, parent_env, destroy_on_exit):
-        self.__class__.get_envs().append(self)
+    def __init__(self, parent_env, clone_env=None, destroy_on_exit=None,
+                 lock=False, unlock=None, options=openravepy.CloningOptions.Bodies):
+        """
+        Context manager that clones the parent environment.
+
+        If clone_env is specified, then parent_env will be cloned into
+        clone_env. Otherwise, a new environment will be created and cloned from
+        parent_env. If clone_env is dynamically created, it will be destroyed
+        on exit by default unless the destroy_on_exit argument is false.
+
+        Both env and clone_env are always locked during cloning. If lock is
+        True, then clone_env remains locked inside the with-statement block it
+        is manually unlocked with clone_env.Unlock(). By default, the cloned
+        environment is unlocked when leaving the with-block. This can be
+        overridden by setting unlock=False (note that unlock=False MUST be
+        passed if cloned_env.Unlock() is manually called inside the
+        with-statement).
+
+        @param parent_env environment to clone
+        @param clone_env environment to clone into (optional)
+        @param destroy_on_exit whether to destroy the clone on __exit__
+        @param lock lock the cloned environment in the with-block
+        @param unlock unlock the environment when exiting the with-block 
+        @param options bitmask of CloningOptions
+        """
+
+        self.__class__.get_envs().append(clone_env)
+
         self.clone_parent = parent_env
-        self.destroy_on_exit = destroy_on_exit
+        self.options = options
+
+        self.lock = lock
+        self.unlock = unlock if unlock is not None else lock
+
+        if clone_env is not None:
+            self.clone_env = clone_env
+        else:
+            self.clone_env = openravepy.Environment()
+
+        if destroy_on_exit is not None:
+            self.destroy_on_exit = destroy_on_exit
+        else:
+            # By default, only destroy the environment if we implicitly created
+            # it. Otherwise, the user might expect it to still be around.
+            self.destroy_on_exit = clone_env is None
+
+        # Actually clone.
+        with self.clone_env:
+            with self.clone_parent:
+                self.clone_env.Clone(self.clone_parent, self.options)
+
+            # Required for InstanceDeduplicator to call CloneBindings for
+            # PrPy-annotated classes.
+            setattr(self.clone_env, 'clone_parent', self.clone_parent)
 
     def __enter__(self):
-        pass
+        if self.lock:
+            self.clone_env.Lock()
+
+        return self.clone_env
 
     def __exit__(self, *args):
-        from prpy.bind import clear_referrers
+        if self.unlock:
+            self.clone_env.Unlock()
+
         if self.destroy_on_exit:
             self.Destroy()
         else:
@@ -60,18 +115,20 @@ class ClonedEnvironment(openravepy.Environment):
         # destructed. This is too late for prpy.bind to cleanup circular
         # references.
         # TODO: Make this the default behavior in OpenRAVE.
-        for body in self.GetBodies():
+        for body in self.clone_env.GetBodies():
             import prpy.bind
             prpy.bind.InstanceDeduplicator.cleanup_callback(body, flag=0)
 
-        openravepy.Environment.Destroy(self)
-        self.SetUserData(None)
+        openravepy.Environment.Destroy(self.clone_env)
+        self.clone_env.SetUserData(None)
 
     @classmethod
     def get_env(cls):
         environments = cls.get_envs()
         if not environments:
-            raise CloneException('Cloned environments may only be used in a Clone context.')
+            raise CloneException(
+                'Cloned environments may only be used in a Clone context.'
+            )
         return environments[-1]
 
     @classmethod
@@ -80,27 +137,8 @@ class ClonedEnvironment(openravepy.Environment):
             cls.local.environments = list()
         return cls.local.environments
 
-def Clone(env, clone_env=None, destroy=None, options=openravepy.CloningOptions.Bodies):
-    # Default to destroying environments we create and not destroying
-    # environments that were passed in as an argument.
-    if destroy is None:
-        destroy = clone_env is None
-
-    if clone_env is None:
-        clone_env = openravepy.Environment()
-
-    with env:
-        clone_env.Lock()
-        try:
-            clone_env.Clone(env, options)
-            clone_env.__class__ = ClonedEnvironment
-            clone_env.__init__(env, destroy)
-        finally:
-            clone_env.Unlock()
-    return clone_env
-
 def Cloned(*instances):
-    clone_env = ClonedEnvironment.get_env()
+    clone_env = Clone.get_env()
     clone_instances = list()
 
     for instance in instances:
