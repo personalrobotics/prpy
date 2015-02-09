@@ -2,6 +2,44 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.3.0 (2015-02-06)
+------------------
+* Adds the ability to pass a defer=True to PlanningMethods and ExecuteTrajectory.
+* Fixed detection of missing CBiRRT module.
+* Contributors: Michael Koval, Pras Velagapudi
+
+0.2.0 (2015-01-29)
+------------------
+* Adding `kw_args` to CHOMP's `OptimizeTrajectory` so execute flag doesn't cause error.
+* Disabling `PlanToTSR` in CHOMP due to inconsistent behavior.
+* Added linear path segment simplification.
+* Changed the metaplanners to only catch `PlanningError`s instead of all Exceptions.
+* Planning to goal sets with OMPL.
+* Made `base.BarrettHand` compatable with the Hydro HERB model.
+* Added `RobotStateSaver` to set active manipulator DOFs before IK planning.
+* PEP8/lint fixes.
+* Removed type(list) check in `planning.openrave` (this check is too strict).
+* Fixed `NominalConfiguration`: norm was computed on wrong axis.
+* Bugfixes for SnapPlanner.
+* Set the default `range` for OMPL RRT-Connect.
+* Expose OpenRAVE's builtin planners as prpy Planners.
+* Changed `ValueError` to `TypeError` for wrong goals type
+* Some error checking for input goals
+* Removed robot-specific imports from PrPy.
+* Added several unit tests.
+* Fixed DOF values in `CHOMPDistanceFieldManager`.
+* Improved `SnapPlanner` docstrings.
+* `SnapPlanner` checks the straight-line trajectory
+  Switched to new or_ompl plugin architecture.
+* Added `OpenHand` and `CloseHandTight` functions
+* Use DOF resolution for snapping (`#16 <https://github.com/personalrobotics/prpy/issues/16>`_ and `#17 <https://github.com/personalrobotics/prpy/issues/17>`_).
+* Check collisions in `SnapPlanner` (fix for `#18 <https://github.com/personalrobotics/prpy/issues/18>`_).
+* Added `RetimeTrajectory` function that fall backs on linear smoothing.
+* Added documentation for TSR library.
+* Improved docstring for `ompl.PlanToTSR`
+* Adding `PlanToTSR` method
+* Contributors: Jennifer King, Michael Koval, Pras Velagapudi, Stefanos Nikolaidis, Siddhartha Srinivasa
+
 0.1.0 (2014-12-11)
 ------------------
 * Fixed tab completion on MobileBase.
