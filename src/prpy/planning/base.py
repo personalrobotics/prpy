@@ -29,16 +29,19 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import abc, logging, functools, openravepy
-from ..clone import Clone, Cloned
+from ..clone import Clone
 from ..util import CopyTrajectory
 
 logger = logging.getLogger('planning')
 
+
 class PlanningError(Exception):
     pass
 
+
 class UnsupportedPlanningError(PlanningError):
     pass
+
 
 class MetaPlanningError(PlanningError):
     def __init__(self, message, errors):
@@ -58,7 +61,7 @@ class PlanningMethod(object):
 
         with Clone(env, clone_env=instance.env,
                    lock=True, unlock=False) as cloned_env:
-            cloned_robot = Cloned(robot)
+            cloned_robot = cloned_env.Cloned(robot)
 
             def call_planner():
                 try:
@@ -70,8 +73,9 @@ class PlanningMethod(object):
 
             if defer is True:
                 from trollius.executor import get_default_executor
+                from trollius.futures import wrap_future
                 executor = kw_args.get('executor') or get_default_executor()
-                return executor.submit(call_planner)
+                return wrap_future(executor.submit(call_planner))
             else:
                 return call_planner()
 
@@ -151,8 +155,10 @@ class MetaPlanner(Planner):
 
             if defer is True:
                 from trollius.executor import get_default_executor
+                from trollius.futures import wrap_future
                 executor = kw_args.get('executor') or get_default_executor()
-                return executor.submit(self.plan, method_name, args, kw_args)
+                return wrap_future(executor.submit(self.plan, method_name,
+                                                   args, kw_args))
             else:
                 return self.plan(method_name, args, kw_args)
 
@@ -201,7 +207,8 @@ class Sequence(MetaPlanner):
         return 'Sequence({0:s})'.format(', '.join(map(str, self._planners)))
 
     def get_planners(self, method_name):
-        return [ planner for planner in self._planners if hasattr(planner, method_name) ]
+        return [planner for planner in self._planners
+                if hasattr(planner, method_name)]
 
     def plan(self, method, args, kw_args):
         errors = dict()
@@ -233,7 +240,8 @@ class Ranked(MetaPlanner):
         return 'Ranked({0:s})'.format(', '.join(map(str, self._planners)))
 
     def get_planners(self, method_name):
-        return [ planner for planner in self._planners if hasattr(planner, method_name) ]
+        return [planner for planner in self._planners
+                if hasattr(planner, method_name)]
 
     def plan(self, method, args, kw_args):
         all_planners = self._planners
@@ -267,10 +275,11 @@ class Ranked(MetaPlanner):
         # Call every planners in parallel using a concurrent executor and
         # return the first non-error result in the ordering when available.
         from trollius.executor import get_default_executor
+        from trollius.futures import wrap_future
         from trollius.tasks import as_completed
 
         executor = kw_args.get('executor') or get_default_executor()
-        futures = [executor.submit(call_planner, planner)
+        futures = [wrap_future(executor.submit(call_planner, planner))
                    for planner in planners]
 
         # Each time a planner completes, check if we have a valid result
