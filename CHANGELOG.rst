@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.3.1 (2015-02-10)
+------------------
 * Added fix for error caused by clone_env being set to None.
 * Contributors: Michael Koval, Pras
 
