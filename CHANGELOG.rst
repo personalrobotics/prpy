@@ -2,6 +2,12 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Added fix for error caused by clone_env being set to None.
+* Contributors: Michael Koval, Pras
+
+
 0.3.0 (2015-02-06)
 ------------------
 * Adds the ability to pass a defer=True to PlanningMethods and ExecuteTrajectory.
