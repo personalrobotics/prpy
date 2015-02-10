@@ -21,13 +21,29 @@ two subclasses:
 
 1. `prpy.planning.base.BasePlanner`: implements or wraps a motion planner
 2. `prpy.planning.base.MetaPlanner`: combines the output of multiple motion
-   planners, each of which is a `BasePlanner`
+   planners, each of which is a `BasePlanner` or another `MetaPlanner`
 
 Each planner has one or more *planning methods*, annotated with the
-`@PlanningMethod` decorator, that like ordinary functions. However, unlike an
-ordinary function, calling a planning method causes the current OpenRAVE
-environment to be cloned. Planning occurs in the cloned environment to PrPy to
-run multiple planners in parallel and to paralellize planning and execution.
+`@PlanningMethod` decorator, that look like ordinary functions. However, unlike
+an ordinary function, calling a planning method clones the robot's environment
+into a *planning environment* associated with the planner. Planning occurs in
+the cloned environment to allow PrPy to run multiple planners in parallel and
+to paralellize planning and execution.
+
+For example, the following code will use OMPL to plan `robot`'s active DOFs
+from their current values to to the `goal_config` configuration:
+
+    planner = OMPLPlanner()
+    output_path = planner.PlanToConfiguration(robot, goal_config)
+
+First, `robot.GetEnv()` is cloned into the the `planner.env` planning
+environment. Next, planning occurs in the cloned environment. Finally, the
+output path is cloned back into `robot.GetEnv()` and is returned by the
+planner.
+
+See the following sub-sections for more information about the built-in planners
+provided with PrPy, information about writing your own planner, and several
+more complex usage examples.
 
 
 ### Built-In Planners
@@ -36,15 +52,17 @@ PrPy provides wrappers for several existing planning libraries:
 
 - `CBiRRTPlanner`: [Constrained Bi-directional
    Rapidly-Exploring Random Tree (CBiRRT)](http://www.ri.cmu.edu/publication_view.html?pub_id=6309), requires the [CoMPs suite](https://github.com/personalrobotics/comps)
-- `CHOMPlanner`: [Covariant Hamiltonian Optimization for Motion Planning (CHOMP)](https://www.ri.cmu.edu/publication_view.html?pub_id=7421), requires [or_cdchomp](https://github.com/personalrobotics/or_cdchomp.git)
+- `CHOMPPlanner`: [Covariant Hamiltonian Optimization for Motion Planning (CHOMP)](https://www.ri.cmu.edu/publication_view.html?pub_id=7421), requires [or_cdchomp](https://github.com/personalrobotics/or_cdchomp.git)
 - `OMPLPlanner`: wrapper for randomized planners implemented in the [Open Motion Planning Library](http://ompl.kavrakilab.org), requires [or_ompl](https://github.com/personalrobotics/or_ompl)
 - `OpenRAVEPlanner`: wrapper for OpenRAVE planners that implement the [`PlannerBase` interface](http://openrave.org/docs/latest_stable/coreapihtml/arch_planner.html)
 - `SBPLPlanner`: wrapper for the [Search-Based Planning Library (SBPL)](https://github.com/sbpl/sbpl), requires [or_sbpl](https://github.com/personalrobotics/or_sbpl)
 
 Additionally, PrPy provides several simple planners of its own:
 
-- `MKPlanner`: Jacobian pseudo-inverse controller for executing straight-line workspace trajectories
-- `SnapPlanner`: attempts to execute a straight-line joint-space trajectory to the goal
+- `MKPlanner`: Jacobian pseudo-inverse controller for executing straight-line
+  workspace trajectories
+- `SnapPlanner`: attempts to execute a straight-line joint-space trajectory to
+  the goal
 
 Finally, PrPy provides several meta-planners for combining the above
 planners:
@@ -243,4 +261,8 @@ resolve multiple objects in one statement:
     with Clone(env) as cloned_env:
         cloned_robot, cloned_body = Cloned(robot, body)
         # ...
+
+
+## Method Binding
+
 
