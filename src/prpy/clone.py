@@ -58,11 +58,9 @@ class Clone(object):
         @param clone_env environment to clone into (optional)
         @param destroy_on_exit whether to destroy the clone on __exit__
         @param lock lock the cloned environment in the with-block
-        @param unlock unlock the environment when exiting the with-block 
+        @param unlock unlock the environment when exiting the with-block
         @param options bitmask of CloningOptions
         """
-
-        self.__class__.get_envs().append(clone_env)
 
         self.clone_parent = parent_env
         self.options = options
@@ -70,10 +68,8 @@ class Clone(object):
         self.lock = lock
         self.unlock = unlock if unlock is not None else lock
 
-        if clone_env is not None:
-            self.clone_env = clone_env
-        else:
-            self.clone_env = openravepy.Environment()
+        self.clone_env = clone_env or openravepy.Environment()
+        self.__class__.get_envs().append(self.clone_env)
 
         if destroy_on_exit is not None:
             self.destroy_on_exit = destroy_on_exit
@@ -90,6 +86,11 @@ class Clone(object):
             # Required for InstanceDeduplicator to call CloneBindings for
             # PrPy-annotated classes.
             setattr(self.clone_env, 'clone_parent', self.clone_parent)
+
+            # Convenience method to get references from Clone environment.
+            def ClonedWrapper(*instances):
+                return Cloned(*instances, clone_env=self.clone_env)
+            setattr(self.clone_env, 'Cloned', ClonedWrapper)
 
     def __enter__(self):
         if self.lock:
@@ -137,8 +138,9 @@ class Clone(object):
             cls.local.environments = list()
         return cls.local.environments
 
-def Cloned(*instances):
-    clone_env = Clone.get_env()
+
+def Cloned(*instances, **kwargs):
+    clone_env = kwargs.get('clone_env') or Clone.get_env()
     clone_instances = list()
 
     for instance in instances:
@@ -147,14 +149,18 @@ def Cloned(*instances):
         elif isinstance(instance, openravepy.KinBody):
             clone_instance = clone_env.GetKinBody(instance.GetName())
         elif isinstance(instance, openravepy.KinBody.Link):
-            clone_instance = Cloned(instance.GetParent()).GetLink(instance.GetName())
+            clone_instance = (Cloned(instance.GetParent(), clone_env=clone_env)
+                              .GetLink(instance.GetName()))
         elif isinstance(instance, openravepy.Robot.Manipulator):
-            clone_instance = Cloned(instance.GetRobot()).GetManipulator(instance.GetName())
+            clone_instance = (Cloned(instance.GetRobot(), clone_env=clone_env)
+                              .GetManipulator(instance.GetName()))
         else:
-            raise CloneException('Unable to clone object of type {0:s}.'.format(type(instance)))
+            raise CloneException('Unable to clone object of type {0:s}.'
+                                 .format(type(instance)))
 
         if clone_instance is None:
-            raise CloneException('{0:s} is not in the cloned environment.'.format(instance))
+            raise CloneException('{0:s} is not in the cloned environment.'
+                                 .format(instance))
 
         clone_instance.clone_parent = instance
         clone_instances.append(clone_instance)

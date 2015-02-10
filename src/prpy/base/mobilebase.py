@@ -30,7 +30,7 @@
 
 import copy, functools, numpy, openravepy
 from .. import bind
-from prpy.clone import Clone, Cloned
+from prpy.clone import Clone
 
 def create_affine_trajectory(robot, poses):
     doft = openravepy.DOFAffine.X | openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis
@@ -145,27 +145,29 @@ class MobileBase(object):
             raise NotImplementedError('DriveStraightUntilForce is not implemented')
 
     def _BasePlanWrapper(self, planning_method, args, kw_args):
-
-        from prpy.clone import Clone, Cloned
-        
         robot = self.robot
-        with Clone(robot.GetEnv()):
-            Cloned(robot).SetActiveDOFs([], 
-                                        affine = openravepy.DOFAffine.X |
-                                        openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis)
-
-            cloned_traj = planning_method(Cloned(robot), *args, **kw_args);
+        with Clone(robot.GetEnv()) as cloned_env:
+            cloned_robot = cloned_env.Cloned(robot)
+            cloned_robot.SetActiveDOFs(
+                [],
+                affine=(openravepy.DOFAffine.X |
+                        openravepy.DOFAffine.Y |
+                        openravepy.DOFAffine.RotationAxis)
+            )
+            cloned_traj = planning_method(cloned_robot, *args, **kw_args)
 
             # Strip inactive DOFs from the trajectory
-            config_spec = Cloned(robot).GetActiveConfigurationSpecification()
-            openravepy.planningutils.ConvertTrajectorySpecification(cloned_traj, config_spec)
-            traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), cloned_traj.GetXMLId())
-            traj.Clone(cloned_traj, 0)
+            config_spec = cloned_robot.GetActiveConfigurationSpecification()
+            openravepy.planningutils.ConvertTrajectorySpecification(
+                cloned_traj, config_spec
+            )
+
+            # Copy the trajectory back to the original environment.
+            from ..util import CopyTrajectory
+            traj = CopyTrajectory(cloned_traj, env=robot.GetEnv())
 
             # Optionally execute the trajectory.
             if 'execute' not in kw_args or kw_args['execute']:
                 return robot.ExecuteTrajectory(traj, **kw_args)
             else:
                 return traj
-
-            
