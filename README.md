@@ -387,7 +387,7 @@ See the classes in `prpy.base` for example implementations of `CloneBindings`.
 PrPy is licensed under a BSD license. See `LICENSE` for more information.
 
 
-## Authors
+## Contributors
 
 PrPy is developed by the
 [Personal Robotics Lab](https://personalrobotics.ri.cmu.edu) in the
