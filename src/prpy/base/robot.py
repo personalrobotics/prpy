@@ -86,7 +86,7 @@ class Robot(openravepy.Robot):
     def CloneBindings(self, parent):
         self.planner = parent.planner
         self.controllers = list()
-        self.manipulators = [Cloned(manipulator, clone_env=self.GetEnv())
+        self.manipulators = [Cloned(manipulator, into=self.GetEnv())
                              for manipulator in parent.manipulators]
         self.configurations = parent.configurations
         self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')

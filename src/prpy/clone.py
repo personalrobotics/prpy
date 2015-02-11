@@ -140,7 +140,23 @@ class Clone(object):
 
 
 def Cloned(*instances, **kwargs):
-    clone_env = kwargs.get('clone_env') or Clone.get_env()
+    """
+    Retrieve corresponding OpenRAVE object instances(s) in another environment.
+
+    Given an OpenRAVE object or list of objects, Cloned searches for similarly
+    named objects in a cloned environment, and returns references to these
+    matching objects.  Currently supports Robot, KinBody, and Link.
+
+    The instances are resolved within the Environment specified by the
+    'into' parameter, or the most recently cloned environment, if none is
+    specified.
+
+    @param instances an OpenRAVE object or list of objects
+    @returns matching object instance(s) from the other environment
+    @raises CloneException if the object has an unsupported type or a matching
+                           object cannot be found
+    """
+    clone_env = kwargs.get('into') or Clone.get_env()
     clone_instances = list()
 
     for instance in instances:
@@ -149,10 +165,10 @@ def Cloned(*instances, **kwargs):
         elif isinstance(instance, openravepy.KinBody):
             clone_instance = clone_env.GetKinBody(instance.GetName())
         elif isinstance(instance, openravepy.KinBody.Link):
-            clone_instance = (Cloned(instance.GetParent(), clone_env=clone_env)
+            clone_instance = (Cloned(instance.GetParent(), into=clone_env)
                               .GetLink(instance.GetName()))
         elif isinstance(instance, openravepy.Robot.Manipulator):
-            clone_instance = (Cloned(instance.GetRobot(), clone_env=clone_env)
+            clone_instance = (Cloned(instance.GetRobot(), into=clone_env)
                               .GetManipulator(instance.GetName()))
         else:
             raise CloneException('Unable to clone object of type {0:s}.'
