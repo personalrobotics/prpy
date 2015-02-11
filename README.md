@@ -303,6 +303,8 @@ reference same object. This is implemented by overriding `__getattribute__` and
 `__setattribute__` to defer all attribute queries to a single *canonical
 instance* of the object.
 
+### Canonical Instances
+
 An object is flagged for de-duplication using the
 `InstanceDeduplicator.add_canonical` function. The above example can be
 modified to work as follows:
