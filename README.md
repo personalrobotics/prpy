@@ -86,7 +86,7 @@ have found these methods to be useful:
 - `PlanToConfiguration(robot, goal_config)`: plan the robot's active DOFs from
   the robot's current configuration to the `goal_config` configuration.
 - `PlanToConfigurations(robot, goal_configs)`: plan the robot's active DOFs from
-  the robot's current configuration to one of the elements in the `goal_config`
+  the robot's current configuration to any of the elements in the `goal_configs`
   list.
 - `PlanToEndEffectorPose(robot, goal_pose)`: plan the robot's active
   manipulator's end-effector to `goal_pose`.
@@ -171,15 +171,16 @@ support for `PlanToBasePose`:
 Cloning environments is critical to enable planning with multiple planners in
 parallel and parallelizing planning and execution. PrPy provides two utilities
 to simplify environment cloning in OpenRAVE: the `Clone` context manager and
-the the `Cloned` helper function
+the the `Cloned` helper function.
+
 
 ### Clone Context Manager
 
-PrPy adds a `Clone` context manager to manage temporary environment clones;
-e.g. those used during planning. This context manager clones an environment
-when entering the `with`-block and destroys the environment when exiting the
-block. This code is careful to lock the source and destination environments
-during cloning correctly to avoid introducing a race condition.
+PrPy adds a `prpy.clone.Clone` context manager to manage temporary environment
+clones; e.g. those used during planning. This context manager clones an
+environment when entering the `with`-block and destroys the environment when
+exiting the block. This code is careful to lock the source and destination
+environments during cloning correctly to avoid introducing a race condition.
 
 In the simplest case, the `Clone` context manager creates an internal,
 temporary environment that is not re-used between calls:
@@ -231,11 +232,11 @@ looks like this:
         cloned_robot = cloned_env.GetRobot(robot.GetName())
         # ...
 
-The `Clone` helper function handles this name resolution for most OpenRAVE data
-types (including `Robot`, `KinBody`, `Link`, and `Manipulator`). This function
-accepts an arbitrary number of input parameters---of the supported types---and
-returns the corresponding objects in `Clone`d environment. For example, the
-above code can be re-written as:
+The `prpy.clone.Cloned` helper function handles this name resolution for most
+OpenRAVE data types (including `Robot`, `KinBody`, `Link`, and `Manipulator`).
+This function accepts an arbitrary number of input parameters---of the
+supported types---and returns the corresponding objects in `Clone`d
+environment. For example, the above code can be re-written as:
 
     with Clone(env) as cloned_env:
         cloned_robot = Cloned(robot)
@@ -255,6 +256,19 @@ the corresponding object in the inner-most block:
         # ...
         cloned_robot3 = Cloned(robot) # from cloned_env1
 
+The `Cloned` function only works if it is called from the same thread in which
+the `Clone` context manager was created. If this is not the case, you can still
+use the `Cloned` helper function by explicitly passing an environment:
+
+    with Clone(env) as cloned_env:
+        def fn(body, e):
+            cloned_robot = Cloned(body, clone_env=e)
+            # ...
+
+        thread = Thread(target=fn, args=(body, cloned_env))
+        thread.start()
+        thread.join()
+
 Finally, as a convenience, the `Cloned` function can be used to simultaneously
 resolve multiple objects in one statement:
 
@@ -265,4 +279,70 @@ resolve multiple objects in one statement:
 
 ## Method Binding
 
+Finally, PrPy offers helper functions for binding custom methods on (i.e.
+[monkey patching](http://en.wikipedia.org/wiki/Monkey_patch)) OpenRAVE data
+types, including: `KinBody`, `Robot`, `Link`, and `Joint`.
 
+This may appear trivial to accomplish using `setattr`. However, this is
+actually quite challenging to implement because OpenRAVE's Python bindings for
+these classes are automatically generated as [Boost.Python
+bindings](www.boost.org/doc/libs/release/libs/python/) that are managed by a
+`shared_ptr`. Each instance of a `shared_ptr` returned by C++ is wrapped in a
+separate Python object. As a result, the following code does not work as
+expected:
+
+    robot = env.GetRobot('herb')
+    setattr(robot, 'foo', 'bar')
+    robot_ref = env.GetRobot('herb')
+    robot_ref.foo # raises AttributeError
+
+PrPy provides the `prpy.bind.InstanceDeduplicator` class to work around this
+issue. This class takes advantage of the user data attached to an OpenRAVE
+environment to de-duplicate multiple Python `shared_ptr` instances that
+reference same object. This is implemented by overriding `__getattribute__` and
+`__setattribute__` to defer all attribute queries to a single *canonical
+instance* of the object.
+
+An object is flagged for de-duplication using the
+`InstanceDeduplicator.add_canonical` function. The above example can be
+modified to work as follows:
+
+    robot = env.GetRobot('herb')
+    InstanceDeduplicator.add_canonical(robot)
+
+    setattr(robot, 'foo', 'bar')
+    robot_ref = env.GetRobot('herb')
+    robot_ref.foo # returns 'bar'
+
+
+### Subclass Binding
+
+Frequently we wish to extend an OpenRAVE object with several tightly coupled
+attributes, properties, and methods. This can be achieved by creating subclass
+of appropriate OpenRAVE data type (e.g. `Robot`) and dynamically changing that
+instance's `__class__` at runtime. PrPy provides a `prpy.bind.bind_subclass`
+helper function that calls `add_canonical`, changes `__class__`, and calls the
+subclass' `__init__` function.
+
+This functionality is most frequently used with the generic PrPy subclasses
+provided in the `prpy.base` module. For example, the following code adds the
+capabilities of `prpy.base.Robot` to an existing robot:
+
+    robot = env.GetRobot('herb')
+    bind_subclass(robot, prpy.base.Robot)
+
+See the docstrings on the classes defined in `prpy.base` for more information.
+
+
+### Cloning Bound Subclasses
+
+OpenRAVE is not aware of methods, attributes, or properties that are added to
+objects in Python; e.g. using `add_canonical`. As a result, these attributes
+are not duplicated when the OpenRAVE environment is cloned. PrPy provides the
+limited capability to clone these attributes when: (1) the class was extended
+using the `bind_subclass` function and (2) the clone was created using the PrPy
+`Clone` function. If these two conditions hold, PrPy will call the
+`CloneBindings()` function on your custom subclass the first time the cloned
+object is referenced.
+
+See the classes in `prpy.base` for usage examples.
