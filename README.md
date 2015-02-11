@@ -34,7 +34,7 @@ For example, the following code will use OMPL to plan `robot`'s active DOFs
 from their current values to to the `goal_config` configuration:
 
 ```python
-planner = OMPLPlanner()
+planner = OMPLPlanner('RRTConnect')
 output_path = planner.PlanToConfiguration(robot, goal_config)
 ```
 
@@ -379,4 +379,31 @@ using the `bind_subclass` function and (2) the clone was created using the PrPy
 `CloneBindings()` function on your custom subclass the first time the cloned
 object is referenced.
 
-See the classes in `prpy.base` for usage examples.
+See the classes in `prpy.base` for example implementations of `CloneBindings`.
+
+
+## License
+
+PrPy is licensed under a BSD license. See `LICENSE` for more information.
+
+
+## Authors
+
+PrPy is developed by the
+[Personal Robotics Lab](https://personalrobotics.ri.cmu.edu) in the
+[Robotics Institute](https://www.ri.cmu.edu) at
+[Carnegie Mellon University](http://www.cmu.edu). This library was originally
+developed by [Michael Koval](https://github.com/mkoval), with some code copied
+from the earlier `prrave` library developed by [Chris Dellin](https://github.com/cdellin).
+
+This is a non-exhaustive list of contributors:
+
+- [Chris Dellin](https://github.com/cdellin)
+- [Evan Shapiro](https://github.com/es92)
+- [Jen King](https://github.com/jeking)
+- [Michael Koval](https://github.com/mkoval)
+- [Pras Velagapudi](https://github.com/psigen)
+- [Shervin Javdani](https://github.com/sjavdani)
+- [Sidd Srinivasa](https://github.com/siddhss5)
+- [Stefanos Nikolaidis](https://github.com/Stefanos19)
+
