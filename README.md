@@ -33,8 +33,10 @@ to paralellize planning and execution.
 For example, the following code will use OMPL to plan `robot`'s active DOFs
 from their current values to to the `goal_config` configuration:
 
-    planner = OMPLPlanner()
-    output_path = planner.PlanToConfiguration(robot, goal_config)
+```python
+planner = OMPLPlanner()
+output_path = planner.PlanToConfiguration(robot, goal_config)
+```
 
 First, `robot.GetEnv()` is cloned into the the `planner.env` planning
 environment. Next, planning occurs in the cloned environment. Finally, the
@@ -143,8 +145,10 @@ randomized planners. However, these algorithms are not probabilistically
 complete and can get stuck in local minima. You can mitigate this by using the
 `Sequence` planner to first call CHOMP, then fall back on RRT-Connect:
 
-    planner = Sequence(CHOMPPlanner(), OMPLPlanner('RRTConnect'))
-    path = planner.PlanToConfiguration(robot, goal)
+```python
+planner = Sequence(CHOMPPlanner(), OMPLPlanner('RRTConnect'))
+path = planner.PlanToConfiguration(robot, goal)
+```
 
 Unfortunately, this means that RRT-Connect does not start planning until CHOMP
 has already failed to find a solution. Instead of using `Sequence`, we can use
@@ -152,8 +156,10 @@ the `Ranked` meta-planner to plan with both planners in parallel. Just as
 before, the meta-planner will immediately return CHOMP's solution if it returns
 success. However, RRT-Connect will have a head-start if CHOMP fails:
 
-    planner = Ranked(CHOMPPlanner(), OMPLPlanner('RRTConnect'))
-    path = planner.PlanToConfiguration(robot, goal)`
+```python
+planner = Ranked(CHOMPPlanner(), OMPLPlanner('RRTConnect'))
+path = planner.PlanToConfiguration(robot, goal)`
+```
 
 In other cases, a meta-planner can be used to combine the disparate
 capabilities of multiple planenrs. For example, SBPL is currently the only
@@ -161,9 +167,11 @@ planner included with PrPy that supports planning for affine DOFs. We can use a
 meta-planner to combine OMPL's support for `PlanToConfiguration` with SBPL's
 support for `PlanToBasePose`:
 
-    planner = Sequence(OMPLPlanner('RRTConnect'), SBPLPlanner())
-    path1 = planner.PlanToConfiguration(robot, goal)
-    path2 = planner.PlanToBasePose(robot, goal_pose)
+```python
+planner = Sequence(OMPLPlanner('RRTConnect'), SBPLPlanner())
+path1 = planner.PlanToConfiguration(robot, goal)
+path2 = planner.PlanToBasePose(robot, goal_pose)
+```
 
 
 ## Environment Cloning
@@ -171,7 +179,7 @@ support for `PlanToBasePose`:
 Cloning environments is critical to enable planning with multiple planners in
 parallel and parallelizing planning and execution. PrPy provides two utilities
 to simplify environment cloning in OpenRAVE: the `Clone` context manager and
-the the `Cloned` helper function.
+the `Cloned` helper function.
 
 
 ### Clone Context Manager
@@ -185,20 +193,24 @@ environments during cloning correctly to avoid introducing a race condition.
 In the simplest case, the `Clone` context manager creates an internal,
 temporary environment that is not re-used between calls:
 
-    with Clone(env) as cloned_env:
-        robot = cloned_env.GetRobot('herb')
-        # ...
+```python
+with Clone(env) as cloned_env:
+    robot = cloned_env.GetRobot('herb')
+    # ...
+```
 
 The same context manager can be used to clone into an existing environment. In
 this case, the same target environment can be used by multiple calls. This
 allows OpenRAVE to re-use the environments resources (e.g. collision
 tri-meshes) and can dramatically improve performance:
 
-    clone_env = openravepy.Environment()
+```python
+clone_env = openravepy.Environment()
 
-    with Clone(env, clone_env=clone_env):
-        robot = cloned_env.GetRobot('herb')
-        # ...
+with Clone(env, clone_env=clone_env):
+    robot = cloned_env.GetRobot('herb')
+    # ...
+```
 
 Often times, the cloned environment must be immediately locked to perform
 additional setup. This introduces a potential race condition between `Clone`
@@ -206,9 +218,11 @@ releasing the lock and the code inside the `with`-block acquiring the lock. To
 avoid this, use the `lock` argument to enter the `with`-block without releasing
 the lock:
 
-    with Clone(env, lock=True) as cloned_env:
-        robot = cloned_env.GetRobot('herb')
-        # ...
+```python
+with Clone(env, lock=True) as cloned_env:
+    robot = cloned_env.GetRobot('herb')
+    # ...
+```
 
 In this case, the cloned environment will be automatically unlocked when
 exiting the `with`-statement. This may be undesirable if you need to explicitly
@@ -216,10 +230,12 @@ unlock the environment inside the `with`-statement. In this case, you may pass
 the `unlock=False` flag. In this case, you **must** explicitly unlock the
 environment inside the `with`-statement:
 
-    with Clone(env, lock=True, unlock=False) as cloned_env:
-        robot = cloned_env.GetRobot('herb')
-        env.Unlock()
-        # ...
+```python
+with Clone(env, lock=True, unlock=False) as cloned_env:
+    robot = cloned_env.GetRobot('herb')
+    env.Unlock()
+    # ...
+```
 
 
 ### Cloned Helper Function
@@ -228,9 +244,11 @@ It is frequently necessary to find an object in a cloned environment that
 refers to a particular object in the parent environment. This code frequently
 looks like this:
 
-    with Clone(env) as cloned_env:
-        cloned_robot = cloned_env.GetRobot(robot.GetName())
-        # ...
+```python
+with Clone(env) as cloned_env:
+    cloned_robot = cloned_env.GetRobot(robot.GetName())
+    # ...
+```
 
 The `prpy.clone.Cloned` helper function handles this name resolution for most
 OpenRAVE data types (including `Robot`, `KinBody`, `Link`, and `Manipulator`).
@@ -238,43 +256,51 @@ This function accepts an arbitrary number of input parameters---of the
 supported types---and returns the corresponding objects in `Clone`d
 environment. For example, the above code can be re-written as:
 
-    with Clone(env) as cloned_env:
-        cloned_robot = Cloned(robot)
-        # ...
+```python
+with Clone(env) as cloned_env:
+    cloned_robot = Cloned(robot)
+    # ...
+```
 
 If multiple `Clone` context managers are nested, the `Cloned` function returns
 the corresponding object in the inner-most block:
 
-    with Clone(env) as cloned_env1:
-        cloned_robot1 = Cloned(robot) # from cloned_env1
+```python
+with Clone(env) as cloned_env1:
+    cloned_robot1 = Cloned(robot) # from cloned_env1
+    # ...
+    
+    with Clone(env) as cloned_env2:
+        cloned_robot2 = Cloned(robot) # from cloned_env2
         # ...
-
-        with Clone(env) as cloned_env2:
-            cloned_robot2 = Cloned(robot) # from cloned_env2
-            # ...
-
-        # ...
-        cloned_robot3 = Cloned(robot) # from cloned_env1
+    
+    # ...
+    cloned_robot3 = Cloned(robot) # from cloned_env1
+```
 
 The `Cloned` function only works if it is called from the same thread in which
 the `Clone` context manager was created. If this is not the case, you can still
 use the `Cloned` helper function by explicitly passing an environment:
 
-    with Clone(env) as cloned_env:
-        def fn(body, e):
-            cloned_robot = Cloned(body, clone_env=e)
-            # ...
+```python
+with Clone(env) as cloned_env:
+    def fn(body, e):
+        cloned_robot = Cloned(body, clone_env=e)
+        # ...
 
-        thread = Thread(target=fn, args=(body, cloned_env))
-        thread.start()
-        thread.join()
+    thread = Thread(target=fn, args=(body, cloned_env))
+    thread.start()
+    thread.join()
+```
 
 Finally, as a convenience, the `Cloned` function can be used to simultaneously
 resolve multiple objects in one statement:
 
+```python
     with Clone(env) as cloned_env:
         cloned_robot, cloned_body = Cloned(robot, body)
         # ...
+```
 
 
 ## Method Binding
@@ -291,10 +317,12 @@ bindings](www.boost.org/doc/libs/release/libs/python/) that are managed by a
 separate Python object. As a result, the following code does not work as
 expected:
 
-    robot = env.GetRobot('herb')
-    setattr(robot, 'foo', 'bar')
-    robot_ref = env.GetRobot('herb')
-    robot_ref.foo # raises AttributeError
+```python
+robot = env.GetRobot('herb')
+setattr(robot, 'foo', 'bar')
+robot_ref = env.GetRobot('herb')
+robot_ref.foo # raises AttributeError
+```
 
 PrPy provides the `prpy.bind.InstanceDeduplicator` class to work around this
 issue. This class takes advantage of the user data attached to an OpenRAVE
@@ -309,12 +337,14 @@ An object is flagged for de-duplication using the
 `InstanceDeduplicator.add_canonical` function. The above example can be
 modified to work as follows:
 
-    robot = env.GetRobot('herb')
-    InstanceDeduplicator.add_canonical(robot)
+```python
+robot = env.GetRobot('herb')
+InstanceDeduplicator.add_canonical(robot)
 
-    setattr(robot, 'foo', 'bar')
-    robot_ref = env.GetRobot('herb')
-    robot_ref.foo # returns 'bar'
+setattr(robot, 'foo', 'bar')
+robot_ref = env.GetRobot('herb')
+robot_ref.foo # returns 'bar'
+```
 
 
 ### Subclass Binding
@@ -330,8 +360,10 @@ This functionality is most frequently used with the generic PrPy subclasses
 provided in the `prpy.base` module. For example, the following code adds the
 capabilities of `prpy.base.Robot` to an existing robot:
 
-    robot = env.GetRobot('herb')
-    bind_subclass(robot, prpy.base.Robot)
+```python
+robot = env.GetRobot('herb')
+bind_subclass(robot, prpy.base.Robot)
+```
 
 See the docstrings on the classes defined in `prpy.base` for more information.
 
