@@ -53,12 +53,12 @@ def JointLimitAvoidance(robot, ik_solutions):
 
 
 class NominalConfiguration(object):
-    def __init__(self, q_nominal, max_deviation=None):
+    def __init__(self, q_nominal, max_deviation=2*numpy.pi):
         """
         Score IK solutions by their distance from a nominal configuration.
         @param q_nominal nominal configuration
         @param max_deviation specify a maximum allowable per-joint deviation
-                             from the nominal configuration
+                             from the nominal configuration, default is 2*PI
         """
         self.q_nominal = q_nominal
         self.max_deviation = max_deviation
@@ -67,6 +67,7 @@ class NominalConfiguration(object):
         assert ik_solutions.shape[1] == self.q_nominal.shape[0]
         L_2 = numpy.linalg.norm(ik_solutions - self.q_nominal,
                                 axis=1, ord=2)
+
         # Ignore IK solutions that are more than the specified distance away.
         # (This means a closer solution must exist!)
         if self.max_deviation is not None:
