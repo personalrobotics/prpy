@@ -69,9 +69,8 @@ class MobileBase(object):
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
-
     def CloneBindings(self, parent):
-        self.__init__(True, None)
+        MobileBase.__init__(self, True, None)
 
     def Forward(self, meters, execute=True, direction=None, **kw_args):
         """
