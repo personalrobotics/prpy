@@ -82,7 +82,7 @@ class GreedyIKPlanner(BasePlanner):
                         raise PlanningError('Reached time limit.')
 
                     # Hypothesize new configuration as closest IK to current
-                    qcurr = robot.GetActiveDOFValues(active_dof_indices)
+                    qcurr = robot.GetDOFValues(active_dof_indices)
                     qnew = manip.FindIKSolution(
                                 openravepy.matrixFromPose(traj.Sample(t)[0:7]),
                                 ikf)
