@@ -30,9 +30,15 @@
 
 import openravepy
 
+
 class EndEffector(openravepy.Robot.Link):
     def __init__(self, manipulator):
         self.manipulator = manipulator
+
+    def CloneBindings(self, parent):
+        from ..clone import Cloned
+        EndEffector.__init__(self, Cloned(parent.manipulator,
+                                          into=self.GetParent().GetEnv()))
 
     def GetIndices(self):
         """Gets the DOF indicies associated with this end-effector.
