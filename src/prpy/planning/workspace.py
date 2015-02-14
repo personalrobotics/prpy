@@ -46,6 +46,41 @@ class GreedyIKPlanner(BasePlanner):
         return 'GreedyIKPlanner'
 
     @PlanningMethod
+    def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
+                              **kw_args):
+        """
+        Plan to an end effector pose by first creating a geodesic
+        trajectory in SE(3) from the starting end-effector pose to the goal
+        end-effector pose, and then attempting to follow it exactly
+        using PlanWorkspacePath.
+
+        @param robot
+        @param goal_pose desired end-effector pose
+        @return traj
+        """
+
+        with robot:
+            # Create geodesic trajectory in SE(3)
+            manip = robot.GetActiveManipulator()
+            start_pose = manip.GetEndEffectorTransform()
+            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            spec = openravepy.IkParameterization.\
+                GetConfigurationSpecificationFromType(
+                        openravepy.IkParameterizationType.Transform6D,
+                        'linear')
+            traj.Init(spec)
+            traj.Insert(traj.GetNumWaypoints(),
+                        openravepy.poseFromMatrix(start_pose))
+            traj.Insert(traj.GetNumWaypoints(),
+                        openravepy.poseFromMatrix(goal_pose))
+            openravepy.planningutils.RetimeAffineTrajectory(
+                        traj,
+                        maxvelocities=0.1*numpy.ones(7),
+                        maxaccelerations=0.1*numpy.ones(7))
+
+        return self.PlanWorkspacePath(robot, traj, timelimit)
+
+    @PlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
                           minWaypointIndex=None, **kw_args):
         """
