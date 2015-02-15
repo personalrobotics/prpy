@@ -31,13 +31,14 @@
 import copy, functools, numpy, openravepy
 from .. import bind, clone, planning
 
+
 class Manipulator(openravepy.Robot.Manipulator):
     def __init__(self):
         pass
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
         # Add planning methods to the tab-completion list.
@@ -47,7 +48,7 @@ class Manipulator(openravepy.Robot.Manipulator):
 
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
         delegate_method = getattr(self.GetRobot().planner, name)
 
@@ -56,14 +57,14 @@ class Manipulator(openravepy.Robot.Manipulator):
         if self.GetRobot().planner.has_planning_method(name):
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
-                return self._PlanWrapper(delegate_method, args, kw_args) 
+                return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
     def CloneBindings(self, parent):
-        self.__init__(self)
+        Manipulator.__init__(self)
 
     def GetIndices(self):
         """Gets the DOF indicies associated with this manipulaor.
