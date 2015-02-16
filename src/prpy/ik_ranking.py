@@ -74,4 +74,5 @@ class NominalConfiguration(object):
             L_inf = numpy.linalg.norm(ik_solutions - self.q_nominal,
                                       axis=1, ord=numpy.inf)
             L_2[L_inf > self.max_deviation] = numpy.inf
+
         return L_2
