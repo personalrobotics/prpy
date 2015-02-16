@@ -235,6 +235,9 @@ def SimplifyTrajectory(traj, robot):
     if traj.GetDuration() != 0.0:
         raise ValueError("Cannot handle timed trajectories yet!")
 
+    if traj.GetNumWaypoints() < 2:
+        return traj
+
     cspec = traj.GetConfigurationSpecification()
     dofs = robot.GetActiveDOFIndices()
     idxs = range(traj.GetNumWaypoints())
