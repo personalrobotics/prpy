@@ -80,64 +80,62 @@ class GreedyIKPlanner(BasePlanner):
 
         return self.PlanWorkspacePath(robot, traj, timelimit)
 
-        @PlanningMethod
-        def PlanToEndEffectorOffset(self, robot, direction, distance,
-                                    max_distance=None, timelimit=5.0,
-                                    **kw_args):
+    @PlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance,
+                                max_distance=None, timelimit=5.0,
+                                **kw_args):
 
-            """
-            Plan to a desired end-effector offset with move-hand-straight
-            constraint. movement less than distance will return failure.
-            The motion will not move further than max_distance.
-            @param robot
-            @param direction unit vector in the direction of motion
-            @param distance minimum distance in meters
-            @param max_distance maximum distance in meters
-            @param timelimit timeout in seconds
-            @return traj
-            """
+        """
+        Plan to a desired end-effector offset with move-hand-straight
+        constraint. movement less than distance will return failure.
+        The motion will not move further than max_distance.
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum distance in meters
+        @param max_distance maximum distance in meters
+        @param timelimit timeout in seconds
+        @return traj
+        """
 
-            if distance < 0:
-                raise ValueError('Distance must be non-negative.')
-            elif numpy.linalg.norm(direction) == 0:
-                raise ValueError('Direction must be non-zero')
-            elif max_distance is not None and max_distance < distance:
-                raise ValueError('Max distance is less than minimum distance.')
+        if distance < 0:
+            raise ValueError('Distance must be non-negative.')
+        elif numpy.linalg.norm(direction) == 0:
+            raise ValueError('Direction must be non-zero')
+        elif max_distance is not None and max_distance < distance:
+            raise ValueError('Max distance is less than minimum distance.')
 
-            # Normalize the direction vector.
-            direction = numpy.array(direction, dtype='float')
-            direction /= numpy.linalg.norm(direction)
+        # Normalize the direction vector.
+        direction = numpy.array(direction, dtype='float')
+        direction /= numpy.linalg.norm(direction)
 
-            with robot:
-                manip = robot.GetActiveManipulator()
-                start_pose = manip.GetEndEffectorTransform()
-                traj = openravepy.RaveCreateTrajectory(self.env, '')
-                spec = openravepy.IkParameterization.\
-                    GetConfigurationSpecificationFromType(
-                            openravepy.IkParameterizationType.Transform6D,
-                            'linear')
-                traj.Init(spec)
+        with robot:
+            manip = robot.GetActiveManipulator()
+            start_pose = manip.GetEndEffectorTransform()
+            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            spec = openravepy.IkParameterization.\
+                GetConfigurationSpecificationFromType(
+                        openravepy.IkParameterizationType.Transform6D,
+                        'linear')
+            traj.Init(spec)
+            traj.Insert(traj.GetNumWaypoints(),
+                        openravepy.poseFromMatrix(start_pose))
+            min_pose = start_pose
+            min_pose[0:3, 3] = min_pose[0:3, 3] + distance*direction
+            traj.Insert(traj.GetNumWaypoints(),
+                        openravepy.poseFromMatrix(min_pose))
+            if max_distance is not None:
+                max_pose = start_pose
+                max_pose[0:3, 3] = max_pose[0:3, 3] + \
+                    max_distance*direction
                 traj.Insert(traj.GetNumWaypoints(),
-                            openravepy.poseFromMatrix(start_pose))
-                min_pose = start_pose
-                min_pose[0:3, 3] = min_pose[0:3, 3] + distance*direction
-                traj.Insert(traj.GetNumWaypoints(),
-                            openravepy.poseFromMatrix(min_pose))
-                if max_distance is not None:
-                    max_pose = start_pose
-                    max_pose[0:3, 3] = max_pose[0:3, 3] + \
-                        max_distance*direction
-                    traj.Insert(traj.GetNumWaypoints(),
-                                openravepy.poseFromMatrix(max_pose))
-                openravepy.planningutils.RetimeAffineTrajectory(
-                            traj,
-                            maxvelocities=0.1*numpy.ones(7),
-                            maxaccelerations=0.1*numpy.ones(7))
+                            openravepy.poseFromMatrix(max_pose))
+            openravepy.planningutils.RetimeAffineTrajectory(
+                        traj,
+                        maxvelocities=0.1*numpy.ones(7),
+                        maxaccelerations=0.1*numpy.ones(7))
 
-            return self.PlanWorkspacePath(robot, traj,
-                                          timelimit, minWaypointIndex=1)
-
-
+        return self.PlanWorkspacePath(robot, traj,
+                                      timelimit, minWaypointIndex=1)
 
     @PlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
