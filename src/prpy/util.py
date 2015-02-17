@@ -263,7 +263,7 @@ def SimplifyTrajectory(traj, robot):
         errors = numpy.abs(f(times) - values)
 
         # TODO: Can this be a single call?
-        # Find  the extrema in the remaining waypoints.
+        # Find the extrema in the remaining waypoints.
         max_err_idx = numpy.argmax(errors, axis=0)
         max_err_vals = numpy.max(errors, axis=0)
 
@@ -287,7 +287,7 @@ def SimplifyTrajectory(traj, robot):
 
 def IsInCollision(traj, robot, selfcoll_only=False):
     report = openravepy.CollisionReport()
-    
+
     #get trajectory length
     NN = traj.GetNumWaypoints()
     ii = 0
@@ -305,7 +305,7 @@ def IsInCollision(traj, robot, selfcoll_only=False):
         openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
     total_time = traj.GetDuration()
     step_time = total_time*step_dist/total_dist
-    
+
     #check
     for time in numpy.arange(0.0,total_time,step_time):
         point = traj.Sample(time)
