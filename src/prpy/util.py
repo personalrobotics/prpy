@@ -282,43 +282,44 @@ def SimplifyTrajectory(traj, robot):
     return reduced_traj
 
 
-def IsInCollision(traj, robot, selfcoll_only=False):
+def IsInCollision(traj, robot, self_collision_only=False, step_dist=0.04):
     report = openravepy.CollisionReport()
-    
-    #get trajectory length
+
+    # Get trajectory length.
     NN = traj.GetNumWaypoints()
     ii = 0
+
+    # TODO: This is wildly incorrect for DOF ordering.
     total_dist = 0.0
+    total_dof = robot.GetActiveDOF()
     for ii in range(NN-1):
         point1 = traj.GetWaypoint(ii)
         point2 = traj.GetWaypoint(ii+1)
-        dist = 0.0
-        total_dof = robot.GetActiveDOF()
         for jj in range(total_dof):
-            dist += pow(point1[jj]-point2[jj],2)
-        total_dist += numpy.sqrt(dist)
-    step_dist = 0.04
-    if traj.GetDuration()<0.001:
-        openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
+            total_dist += numpy.linalg.norm(point1[jj] - point2[jj])
+
+    # Compute a timestep size based on path length.
     total_time = traj.GetDuration()
-    step_time = total_time*step_dist/total_dist
-    
-    #check
-    for time in numpy.arange(0.0,total_time,step_time):
-        point = traj.Sample(time)
-        collision = False
-        with robot.GetEnv():
-            robot.SetActiveDOFValues(point)
-            if robot.CheckSelfCollision(report):
-                collision = True
-            if not collision:
-                if  (not selfcoll_only) and robot.GetEnv().CheckCollision(robot,report):
-                    collision = True
-        if collision:
-            return True        
-                
-    return False    
-            
+    if traj.GetDuration() < 0.001:
+        openravepy.planningutils.RetimeActiveDOFTrajectory(traj, robot)
+    step_time = total_time * step_dist / total_dist
+
+    # Check for collisions.
+    env = robot.GetEnv()
+    with env:
+        with robot:
+            for t in numpy.arange(0.0, total_time, step_time):
+                point = traj.Sample(t)
+                robot.SetActiveDOFValues(point)
+
+                if robot.CheckSelfCollision(report):
+                    return True
+                if (not self_collision_only
+                        and env.CheckCollision(robot, report)):
+                    return
+
+    # If we reached here, there must not have been a collision.
+    return False
 
 
 class Recorder(object):
