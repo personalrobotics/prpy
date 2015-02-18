@@ -41,7 +41,7 @@ class Robot(openravepy.Robot):
         self.robot_name = robot_name
 
         try:
-            self.tsrlibrary = TSRLibrary(self, robot_name=self.robot_name)
+            self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
         except ValueError as e:
             self.tsrlibrary = None
             logger.warning('Failed creating TSRLibrary for robot "%s": %s',
