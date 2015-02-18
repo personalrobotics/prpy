@@ -28,17 +28,23 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import abc, logging, functools, openravepy
-from ..clone import Clone, Cloned
+import abc
+import functools
+import logging
+import openravepy
+from ..clone import Clone
 from ..util import CopyTrajectory
 
 logger = logging.getLogger('planning')
 
+
 class PlanningError(Exception):
     pass
 
+
 class UnsupportedPlanningError(PlanningError):
     pass
+
 
 class MetaPlanningError(PlanningError):
     def __init__(self, message, errors):
@@ -201,7 +207,8 @@ class Sequence(MetaPlanner):
         return 'Sequence({0:s})'.format(', '.join(map(str, self._planners)))
 
     def get_planners(self, method_name):
-        return [ planner for planner in self._planners if hasattr(planner, method_name) ]
+        return [planner for planner in self._planners
+                if hasattr(planner, method_name)]
 
     def plan(self, method, args, kw_args):
         errors = dict()
@@ -233,7 +240,8 @@ class Ranked(MetaPlanner):
         return 'Ranked({0:s})'.format(', '.join(map(str, self._planners)))
 
     def get_planners(self, method_name):
-        return [ planner for planner in self._planners if hasattr(planner, method_name) ]
+        return [planner for planner in self._planners
+                if hasattr(planner, method_name)]
 
     def plan(self, method, args, kw_args):
         all_planners = self._planners
