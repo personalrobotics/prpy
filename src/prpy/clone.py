@@ -89,7 +89,7 @@ class Clone(object):
 
             # Convenience method to get references from Clone environment.
             def ClonedWrapper(*instances):
-                return Cloned(*instances, clone_env=self.clone_env)
+                return Cloned(*instances, into=self.clone_env)
             setattr(self.clone_env, 'Cloned', ClonedWrapper)
 
     def __enter__(self):
