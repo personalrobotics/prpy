@@ -65,7 +65,6 @@ class Clone(object):
         @param unlock unlock the environment when exiting the with-block
         @param options bitmask of CloningOptions
         """
-
         self.clone_parent = parent_env
         self.options = options
 
@@ -84,8 +83,9 @@ class Clone(object):
 
         # Actually clone.
         with self.clone_env:
-            with self.clone_parent:
-                self.clone_env.Clone(self.clone_parent, self.options)
+            if self.clone_env != self.clone_parent:
+                with self.clone_parent:
+                    self.clone_env.Clone(self.clone_parent, self.options)
 
             # Required for InstanceDeduplicator to call CloneBindings for
             # PrPy-annotated classes.
@@ -111,8 +111,7 @@ class Clone(object):
                         .format(robot.GetName())
                     )
                 cloned_robot = self.clone_env.Cloned(robot)
-                with self.clone_env:
-                    cloned_robot.RegrabAll()
+                cloned_robot.RegrabAll()
 
     def __enter__(self):
         if self.lock:

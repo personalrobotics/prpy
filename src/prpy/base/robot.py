@@ -177,7 +177,7 @@ class Robot(openravepy.Robot):
                       PlannerStatus.InterruptedWithSolution]:
             return retimed_traj
         raise PrPyException("Path retimer failed with status '{:s}'"
-                            .format(status))
+                            .format(str(status)))
 
     def ExecuteTrajectory(self, traj, retime=True, timeout=None,
                           defer=False, executor=None, **kw_args):

@@ -28,7 +28,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import abc, logging, functools, openravepy
+import abc
+import functools
+import logging
+import openravepy
 from ..clone import Clone
 from ..util import CopyTrajectory
 
