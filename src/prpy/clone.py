@@ -61,7 +61,7 @@ class Clone(object):
         @param parent_env environment to clone
         @param clone_env environment to clone into (optional)
         @param destroy_on_exit whether to destroy the clone on __exit__
-        @param lock lock the cloned environment in the with-block
+        @param lock locks cloned environment in a with-block, default is True
         @param unlock unlock the environment when exiting the with-block
         @param options bitmask of CloningOptions
         """
