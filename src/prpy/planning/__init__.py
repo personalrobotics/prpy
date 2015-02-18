@@ -39,3 +39,4 @@ from ik import IKPlanner
 from sbpl import SBPLPlanner
 from openrave import BiRRTPlanner
 from tsr import TSRPlanner
+from workspace import GreedyIKPlanner
