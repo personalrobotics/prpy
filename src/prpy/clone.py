@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -28,16 +28,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import openravepy, threading
+import openravepy
+import threading
+
 
 class CloneException(Exception):
     pass
+
 
 class Clone(object):
     local = threading.local()
 
     def __init__(self, parent_env, clone_env=None, destroy_on_exit=None,
-                 lock=False, unlock=None, options=openravepy.CloningOptions.Bodies):
+                 lock=True, unlock=None,
+                 options=openravepy.CloningOptions.Bodies):
         """
         Context manager that clones the parent environment.
 
@@ -57,7 +61,7 @@ class Clone(object):
         @param parent_env environment to clone
         @param clone_env environment to clone into (optional)
         @param destroy_on_exit whether to destroy the clone on __exit__
-        @param lock lock the cloned environment in the with-block
+        @param lock locks cloned environment in a with-block, default is True
         @param unlock unlock the environment when exiting the with-block
         @param options bitmask of CloningOptions
         """
@@ -89,7 +93,7 @@ class Clone(object):
 
             # Convenience method to get references from Clone environment.
             def ClonedWrapper(*instances):
-                return Cloned(*instances, clone_env=self.clone_env)
+                return Cloned(*instances, into=self.clone_env)
             setattr(self.clone_env, 'Cloned', ClonedWrapper)
 
             # Due to a bug in the OpenRAVE clone API, we need to regrab
