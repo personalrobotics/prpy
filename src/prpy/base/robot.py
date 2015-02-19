@@ -38,6 +38,7 @@ logger = logging.getLogger('robot')
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
         self.planner = None
+        self.robot_name = robot_name
 
         try:
             self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
@@ -59,7 +60,7 @@ class Robot(openravepy.Robot):
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
         # Add planning methods to the tab-completion list.
@@ -69,7 +70,7 @@ class Robot(openravepy.Robot):
 
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
         delegate_method = getattr(self.planner, name)
 
@@ -77,23 +78,18 @@ class Robot(openravepy.Robot):
         if self.planner.has_planning_method(name):
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
-                return self._PlanWrapper(delegate_method, args, kw_args) 
+                return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
     def CloneBindings(self, parent):
+        Robot.__init__(self, parent.robot_name)
         self.planner = parent.planner
-        self.controllers = list()
         self.manipulators = [Cloned(manipulator, into=self.GetEnv())
                              for manipulator in parent.manipulators]
         self.configurations = parent.configurations
-        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
-        self.SetController(self.multicontroller)
-
-        self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
-        self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
@@ -182,7 +178,7 @@ class Robot(openravepy.Robot):
                       PlannerStatus.InterruptedWithSolution]:
             return retimed_traj
         raise PrPyException("Path retimer failed with status '{:s}'"
-                            .format(status))
+                            .format(str(status)))
 
     def ExecuteTrajectory(self, traj, retime=True, timeout=None,
                           defer=False, executor=None, **kw_args):
