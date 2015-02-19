@@ -45,7 +45,8 @@ class Robot(openravepy.Robot):
         except ValueError as e:
             self.tsrlibrary = None
             logger.warning('Failed creating TSRLibrary for robot "%s": %s',
-                           self.GetName(), e.message)
+                self.GetName(), e.message
+            )
 
         self.controllers = list()
         self.manipulators = list()
