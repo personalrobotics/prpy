@@ -38,3 +38,4 @@ from named import NamedPlanner
 from ik import IKPlanner
 from sbpl import SBPLPlanner
 from openrave import BiRRTPlanner
+from workspace import GreedyIKPlanner
