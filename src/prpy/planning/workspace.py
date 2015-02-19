@@ -74,9 +74,10 @@ class GreedyIKPlanner(BasePlanner):
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(goal_pose))
             openravepy.planningutils.RetimeAffineTrajectory(
-                        traj,
-                        maxvelocities=0.1*numpy.ones(7),
-                        maxaccelerations=0.1*numpy.ones(7))
+                traj,
+                maxvelocities=0.1*numpy.ones(7),
+                maxaccelerations=0.1*numpy.ones(7)
+            )
 
         return self.PlanWorkspacePath(robot, traj, timelimit)
 
@@ -119,54 +120,58 @@ class GreedyIKPlanner(BasePlanner):
             traj.Init(spec)
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(start_pose))
-            min_pose = start_pose
-            min_pose[0:3, 3] = min_pose[0:3, 3] + distance*direction
+            min_pose = numpy.copy(start_pose)
+            min_pose[0:3, 3] += distance*direction
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(min_pose))
             if max_distance is not None:
-                max_pose = start_pose
-                max_pose[0:3, 3] = max_pose[0:3, 3] + \
-                    max_distance*direction
+                max_pose = numpy.copy(start_pose)
+                max_pose[0:3, 3] += max_distance*direction
                 traj.Insert(traj.GetNumWaypoints(),
                             openravepy.poseFromMatrix(max_pose))
             openravepy.planningutils.RetimeAffineTrajectory(
-                        traj,
-                        maxvelocities=0.1*numpy.ones(7),
-                        maxaccelerations=0.1*numpy.ones(7))
+                traj,
+                maxvelocities=0.1*numpy.ones(7),
+                maxaccelerations=0.1*numpy.ones(7)
+            )
 
         return self.PlanWorkspacePath(robot, traj,
-                                      timelimit, minWaypointIndex=1)
+                                      timelimit, min_waypoint_index=1)
 
     @PlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
-                          minWaypointIndex=None, **kw_args):
+                          min_waypoint_index=None, **kw_args):
         """
         Plan a configuration space path given a workspace path.
         All timing information is ignored.
         @param robot
         @param traj workspace trajectory
                     represented as OpenRAVE AffineTrajectory
-        @param minWaypointIndex minimum waypoint index to reach
+        @param min_waypoint_index minimum waypoint index to reach
         @param timelimit timeout in seconds
         @return qtraj configuration space path
         """
 
         with robot:
             manip = robot.GetActiveManipulator()
+            robot.SetActiveDOFs(manip.GetArmIndices())
+
+            # Create a new trajectory starting at current robot location.
             qtraj = openravepy.RaveCreateTrajectory(self.env, '')
             qtraj.Init(manip.GetArmConfigurationSpecification())
+            qtraj.Insert(0, robot.GetActiveDOFValues())
 
-            active_dof_indices = manip.GetArmIndices()
-            # Initial guess for workspace path timing
+            # Initial search for workspace path timing: one huge step.
+            t = 0.
             dt = traj.GetDuration()
+
             # Smallest CSpace step at which to give up
-            MIN_STEP = min(robot.GetDOFResolutions())/100
-            ikf = openravepy.IkFilterOptions.CheckEnvCollisions
+            min_step = min(robot.GetDOFResolutions())/100.
+            ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
 
             start_time = time.time()
-            t = 0.0
             try:
-                while t < traj.GetDuration():
+                while not numpy.isclose(t, traj.GetDuration()):
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
@@ -174,40 +179,46 @@ class GreedyIKPlanner(BasePlanner):
                         raise PlanningError('Reached time limit.')
 
                     # Hypothesize new configuration as closest IK to current
-                    qcurr = robot.GetDOFValues(active_dof_indices)
+                    qcurr = robot.GetActiveDOFValues()  # Configuration at t.
                     qnew = manip.FindIKSolution(
-                                openravepy.matrixFromPose(traj.Sample(t)[0:7]),
-                                ikf)
-                    infeasibleStep = True
+                        openravepy.matrixFromPose(traj.Sample(t+dt)[0:7]),
+                        ik_options
+                    )
+
+                    # Check if the step was within joint DOF resolution.
+                    infeasible_step = True
                     if qnew is not None:
                         # Found an IK
                         step = abs(qnew - qcurr)
-                        if (max(step) < MIN_STEP) and qtraj:
+                        if (max(step) < min_step) and qtraj:
                             raise PlanningError('Not making progress.')
-                        infeasibleStep = any(step -
-                                             robot.GetDOFResolutions() > 0.)
-                    if infeasibleStep:
-                        # backtrack and try half the step
-                        t = t - dt
+                        infeasible_step = any(step > robot.GetDOFResolutions())
+                    if infeasible_step:
+                        # Backtrack and try half the step
                         dt = dt/2.0
                     else:
-                        robot.SetDOFValues(qnew, active_dof_indices)
+                        # Move forward to new trajectory time.
+                        robot.SetActiveDOFValues(qnew)
                         qtraj.Insert(qtraj.GetNumWaypoints(), qnew)
+                        t = min(t + dt, traj.GetDuration())
                         dt = dt*2.0
-                    t = t + dt
+
             except PlanningError as e:
-                # Throw an error if we haven't reached the minimum waypoint
-                if minWaypointIndex is None:
-                    minWaypointIndex = traj.GetNumWaypoints()
+                # Compute the min acceptable time from the min waypoint index.
+                if min_waypoint_index is None:
+                    min_waypoint_index = traj.GetNumWaypoints()
                 cspec = traj.GetConfigurationSpecification()
-                wpts = [traj.GetWaypoint(i) for i in range(minWaypointIndex)]
+                wpts = [traj.GetWaypoint(i) for i in range(min_waypoint_index)]
                 dts = [cspec.ExtractDeltaTime(wpt) for wpt in wpts]
-                minTime = numpy.sum(dts)
-                if t < minTime:
+                min_time = numpy.sum(dts)
+
+                # Throw an error if we haven't reached the minimum waypoint.
+                if t < min_time:
                     raise
                 # Otherwise we'll gracefully terminate.
                 else:
                     logger.warning('Terminated early at time %f < %f: %s',
                                    t, traj.GetDuration(), e.message)
 
+        # Return as much of the trajectory as we have solved.
         return qtraj
