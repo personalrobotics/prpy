@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, scipy.misc, time, threading, math
+import scipy.optimize
 
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
