@@ -45,7 +45,8 @@ class Robot(openravepy.Robot):
         except ValueError as e:
             self.tsrlibrary = None
             logger.warning('Failed creating TSRLibrary for robot "%s": %s',
-                           self.GetName(), e.message)
+                self.GetName(), e.message
+            )
 
         self.controllers = list()
         self.manipulators = list()
@@ -86,7 +87,8 @@ class Robot(openravepy.Robot):
     def CloneBindings(self, parent):
         Robot.__init__(self, parent.robot_name)
         self.planner = parent.planner
-        self.manipulators = [ Cloned(manipulator) for manipulator in parent.manipulators ]
+        self.manipulators = [Cloned(manipulator, into=self.GetEnv())
+                             for manipulator in parent.manipulators]
         self.configurations = parent.configurations
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
@@ -195,9 +197,11 @@ class Robot(openravepy.Robot):
         # If the planning call is deferred, submit the call to the executor.
         if defer is True:
             from trollius.executor import get_default_executor
+            from trollius.futures import wrap_future
             executor = executor or get_default_executor()
-            return executor.submit(self.ExecuteTrajectory, traj, retime,
-                                   timeout, defer=False, **kw_args)
+            return wrap_future(executor.submit(self.ExecuteTrajectory,
+                                               traj, retime, timeout,
+                                               defer=False, **kw_args))
 
         # Check if this is a base trajectory.
         has_base = hasattr(self, 'base')
@@ -312,14 +316,26 @@ class Robot(openravepy.Robot):
             else:
                 return traj
 
-        # Perform postprocessing on a future trajectory.
-        def defer_trajectory(traj_future, kw_args):
-            return postprocess_trajectory(traj_future.result(), kw_args)
-
         # Return either the trajectory result or a future to the result.
         if 'defer' in kw_args and kw_args['defer'] is True:
-            from trollius.executor import get_default_executor
-            executor = kw_args.get('executor') or get_default_executor()
-            return executor.submit(defer_trajectory, result, kw_args)
+            import trollius
+
+            # Perform postprocessing on a future trajectory.
+            @trollius.coroutine
+            def defer_trajectory(traj_future, kw_args):
+                # Wait for the planner to complete.
+                traj = yield trollius.From(traj_future)
+
+                # Submit a new task to postprocess the trajectory.
+                from trollius.executor import get_default_executor
+                executor = kw_args.get('executor') or get_default_executor()
+                f = executor.submit(postprocess_trajectory, traj, kw_args)
+
+                # Wait for the postprocessed trajectory to be completed.
+                from trollius.futures import wrap_future
+                processed_traj = yield trollius.From(wrap_future(f))
+                raise trollius.Return(processed_traj)
+
+            return trollius.Task(defer_trajectory(result, kw_args))
         else:
             return postprocess_trajectory(result, kw_args)

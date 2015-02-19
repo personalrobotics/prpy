@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -28,16 +28,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import openravepy, threading
+import openravepy
+import threading
+
 
 class CloneException(Exception):
     pass
+
 
 class Clone(object):
     local = threading.local()
 
     def __init__(self, parent_env, clone_env=None, destroy_on_exit=None,
-                 lock=False, unlock=None, options=openravepy.CloningOptions.Bodies):
+                 lock=True, unlock=None,
+                 options=openravepy.CloningOptions.Bodies):
         """
         Context manager that clones the parent environment.
 
@@ -57,7 +61,7 @@ class Clone(object):
         @param parent_env environment to clone
         @param clone_env environment to clone into (optional)
         @param destroy_on_exit whether to destroy the clone on __exit__
-        @param lock lock the cloned environment in the with-block
+        @param lock locks cloned environment in a with-block, default is True
         @param unlock unlock the environment when exiting the with-block
         @param options bitmask of CloningOptions
         """
@@ -86,6 +90,11 @@ class Clone(object):
             # Required for InstanceDeduplicator to call CloneBindings for
             # PrPy-annotated classes.
             setattr(self.clone_env, 'clone_parent', self.clone_parent)
+
+            # Convenience method to get references from Clone environment.
+            def ClonedWrapper(*instances):
+                return Cloned(*instances, into=self.clone_env)
+            setattr(self.clone_env, 'Cloned', ClonedWrapper)
 
             # Due to a bug in the OpenRAVE clone API, we need to regrab
             # objects in cloned environments because they might have
@@ -152,7 +161,23 @@ class Clone(object):
 
 
 def Cloned(*instances, **kwargs):
-    clone_env = kwargs.get('clone_env') or Clone.get_env()
+    """
+    Retrieve corresponding OpenRAVE object instances(s) in another environment.
+
+    Given an OpenRAVE object or list of objects, Cloned searches for similarly
+    named objects in a cloned environment, and returns references to these
+    matching objects.  Currently supports Robot, KinBody, and Link.
+
+    The instances are resolved within the Environment specified by the
+    'into' parameter, or the most recently cloned environment, if none is
+    specified.
+
+    @param instances an OpenRAVE object or list of objects
+    @returns matching object instance(s) from the other environment
+    @raises CloneException if the object has an unsupported type or a matching
+                           object cannot be found
+    """
+    clone_env = kwargs.get('into') or Clone.get_env()
     clone_instances = list()
 
     for instance in instances:
@@ -161,10 +186,10 @@ def Cloned(*instances, **kwargs):
         elif isinstance(instance, openravepy.KinBody):
             clone_instance = clone_env.GetKinBody(instance.GetName())
         elif isinstance(instance, openravepy.KinBody.Link):
-            clone_instance = (Cloned(instance.GetParent(), clone_env=clone_env)
+            clone_instance = (Cloned(instance.GetParent(), into=clone_env)
                               .GetLink(instance.GetName()))
         elif isinstance(instance, openravepy.Robot.Manipulator):
-            clone_instance = (Cloned(instance.GetRobot(), clone_env=clone_env)
+            clone_instance = (Cloned(instance.GetRobot(), into=clone_env)
                               .GetManipulator(instance.GetName()))
         else:
             raise CloneException('Unable to clone object of type {0:s}.'

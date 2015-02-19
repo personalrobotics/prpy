@@ -64,7 +64,7 @@ class PlanningMethod(object):
 
         with Clone(env, clone_env=instance.env,
                    lock=True, unlock=False) as cloned_env:
-            cloned_robot = Cloned(robot)
+            cloned_robot = cloned_env.Cloned(robot)
 
             def call_planner():
                 try:
@@ -76,8 +76,9 @@ class PlanningMethod(object):
 
             if defer is True:
                 from trollius.executor import get_default_executor
+                from trollius.futures import wrap_future
                 executor = kw_args.get('executor') or get_default_executor()
-                return executor.submit(call_planner)
+                return wrap_future(executor.submit(call_planner))
             else:
                 return call_planner()
 
@@ -157,8 +158,10 @@ class MetaPlanner(Planner):
 
             if defer is True:
                 from trollius.executor import get_default_executor
+                from trollius.futures import wrap_future
                 executor = kw_args.get('executor') or get_default_executor()
-                return executor.submit(self.plan, method_name, args, kw_args)
+                return wrap_future(executor.submit(self.plan, method_name,
+                                                   args, kw_args))
             else:
                 return self.plan(method_name, args, kw_args)
 
@@ -275,10 +278,11 @@ class Ranked(MetaPlanner):
         # Call every planners in parallel using a concurrent executor and
         # return the first non-error result in the ordering when available.
         from trollius.executor import get_default_executor
+        from trollius.futures import wrap_future
         from trollius.tasks import as_completed
 
         executor = kw_args.get('executor') or get_default_executor()
-        futures = [executor.submit(call_planner, planner)
+        futures = [wrap_future(executor.submit(call_planner, planner))
                    for planner in planners]
 
         # Each time a planner completes, check if we have a valid result

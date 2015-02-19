@@ -142,19 +142,25 @@ class Manipulator(openravepy.Robot.Manipulator):
         self.GetRobot().SetDOFAccelerationLimits(or_accel_limits)
 
     def _PlanWrapper(self, planning_method, args, kw_args):
-        from prpy.clone import Clone, Cloned
+        from prpy.clone import Clone
         robot = self.GetRobot()
-        with Clone(robot.GetEnv()):
-            Cloned(self).SetActive()
+        with Clone(robot.GetEnv()) as cloned_env:
+            cloned_env.Cloned(self).SetActive()
+            cloned_robot = cloned_env.Cloned(robot)
             cloned_args = copy.copy(kw_args)
             cloned_args['execute'] = False
-            cloned_traj = Cloned(robot)._PlanWrapper(planning_method, args, cloned_args)
+            cloned_traj = cloned_robot._PlanWrapper(planning_method,
+                                                    args, cloned_args)
 
             # Strip inactive DOFs from the trajectory.
-            config_spec = Cloned(robot).GetActiveConfigurationSpecification()
-            openravepy.planningutils.ConvertTrajectorySpecification(cloned_traj, config_spec)
-            traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), cloned_traj.GetXMLId())
-            traj.Clone(cloned_traj, 0)
+            config_spec = cloned_robot.GetActiveConfigurationSpecification()
+            openravepy.planningutils.ConvertTrajectorySpecification(
+                cloned_traj, config_spec
+            )
+
+            # Copy the trajectory back to the original environment.
+            from ..util import CopyTrajectory
+            traj = CopyTrajectory(cloned_traj, env=robot.GetEnv())
 
         # Optionally execute the trajectory.
         if 'execute' not in kw_args or kw_args['execute']:
