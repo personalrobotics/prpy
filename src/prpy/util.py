@@ -427,6 +427,8 @@ def quadraticObjective(dq, *args):
     @param dq joint velocity
     @param args[0]Jacobian
     @param args[1] desired twist
+    @return objective the objective function
+    @return gradient the analytical gradient of the objective
     '''
     J = args[0]
     dx = args[1]
@@ -450,6 +452,9 @@ def ComputeJointVelocityFromTwist(robot, twist,
             defaults to quadraticObjective
     @params dq_init optional initial guess for optimal joint velocity
             defaults to robot.GetActiveDOFVelocities()
+    @return dq_opt optimal joint velocity
+    @return twist_opt actual achieved twist
+            can be different from desired twist due to constraints
     '''
     manip = robot.GetActiveManipulator()
     robot.SetActiveDOFs(manip.GetArmIndices())
@@ -478,8 +483,6 @@ def ComputeJointVelocityFromTwist(robot, twist,
                                        bounds=dq_bounds, approx_grad=False)
 
     dq_opt = opt[0]
-    if opt[1] > 0:
-        print "Unable to produce desired twist."
     twist_opt = numpy.dot(jacobian, dq_opt)
 
     return dq_opt, twist_opt
