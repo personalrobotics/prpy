@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, scipy.misc, time, threading, math
+import scipy.optimize
 
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
@@ -421,11 +422,18 @@ class Timer(object):
 
 
 def quadraticObjective(dq, *args):
-    import numpy
+    '''
+    Quadratic objective function for SciPy's optimization.
+    @param dq joint velocity
+    @param args[0]Jacobian
+    @param args[1] desired twist
+    '''
     J = args[0]
     dx = args[1]
     error = (numpy.dot(J, dq) - dx)
-    return numpy.dot(numpy.transpose(error), error)
+    objective = 0.5*numpy.dot(numpy.transpose(error), error)
+    gradient = numpy.dot(numpy.transpose(J), error)
+    return objective, gradient
 
 
 def ComputeJointVelocityFromTwist(robot, twist,
@@ -443,7 +451,6 @@ def ComputeJointVelocityFromTwist(robot, twist,
     @params dq_init optional initial guess for optimal joint velocity
             defaults to robot.GetActiveDOFVelocities()
     '''
-
     manip = robot.GetActiveManipulator()
     robot.SetActiveDOFs(manip.GetArmIndices())
 
@@ -466,9 +473,9 @@ def ComputeJointVelocityFromTwist(robot, twist,
     if dq_init is None:
         dq_init = robot.GetActiveDOFVelocities()
 
-    opt = scipy.optimize.fmin_l_bfgs_b(objective, dq_init,
+    opt = scipy.optimize.fmin_l_bfgs_b(objective, dq_init, fprime=None,
                                        args=(jacobian_active, twist_active),
-                                       bounds=dq_bounds, approx_grad=True)
+                                       bounds=dq_bounds, approx_grad=False)
 
     dq_opt = opt[0]
     if opt[1] > 0:
