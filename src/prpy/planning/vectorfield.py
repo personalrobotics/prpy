@@ -38,12 +38,12 @@ import prpy.util
 logger = logging.getLogger('planning')
 
 
-class VectorfieldPlanner(BasePlanner):
+class VectorFieldPlanner(BasePlanner):
     def __init__(self):
-        super(VectorfieldPlanner, self).__init__()
+        super(VectorFieldPlanner, self).__init__()
 
     def __str__(self):
-        return 'VectorfieldPlanner'
+        return 'VectorFieldPlanner'
 
     def _geodesictwist(t1, t2):
         '''
@@ -74,14 +74,7 @@ class VectorfieldPlanner(BasePlanner):
         @param dq_tol velocity tolerance for termination
         @return traj
         """
-
         start_time = time.time()
-
-        # save all active bodies so we only check collision with those
-        active_bodies = []
-        for body in self.env.GetBodies():
-            if body.IsEnabled():
-                active_bodies.append(body)
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -97,15 +90,14 @@ class VectorfieldPlanner(BasePlanner):
                         current_time - start_time > timelimit):
                     raise PlanningError('Reached time limit.')
 
-                q_curr = robot.GetActiveDOFValues()
                 # Check for collisions.
-                for body in active_bodies:
-                    if self.env.CheckCollision(robot, body):
-                        raise PlanningError('Encountered collision.')
+                if self.env.CheckCollision(robot):
+                    raise PlanningError('Encountered collision.')
                 if robot.CheckSelfCollision():
                     raise PlanningError('Encountered self-collision.')
 
                 # Add to trajectory
+                q_curr = robot.GetActiveDOFValues()
                 qtraj.Insert(qtraj.GetNumWaypoints(), q_curr)
 
                 t_curr = manip.GetEndEffectorTransform()
