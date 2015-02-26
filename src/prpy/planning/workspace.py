@@ -192,7 +192,7 @@ class GreedyIKPlanner(BasePlanner):
                         step = abs(qnew - qcurr)
                         if (max(step) < min_step) and qtraj:
                             raise PlanningError('Not making progress.')
-                        infeasible_step = any(step > robot.GetDOFResolutions())
+                        infeasible_step = any(step > robot.GetActiveDOFResolutions())
                     if infeasible_step:
                         # Backtrack and try half the step
                         dt = dt/2.0
