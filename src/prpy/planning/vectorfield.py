@@ -79,9 +79,16 @@ class VectorFieldPlanner(BasePlanner):
         with robot:
             manip = robot.GetActiveManipulator()
             robot.SetActiveDOFs(manip.GetArmIndices())
-            qtraj = openravepy.RaveCreateTrajectory(self.env, '')
-            qtraj.Init(manip.GetArmConfigurationSpecification())
+            # Populate joint positions and joint velocities
+            cspec = manip.GetArmConfigurationSpecification('quadratic')
+            cspec.AddDerivativeGroups(1, False)
+            cspec.AddDeltaTimeGroup()
+            cspec.ResetGroupOffsets()
+            qtraj = openravepy.RaveCreateTrajectory(self.env,
+                                                    'GenericTrajectory')
+            qtraj.Init(cspec)
 
+            dqout = robot.GetActiveDOFVelocities()
             dt = min(robot.GetDOFResolutions()/robot.GetDOFVelocityLimits())
             while True:
                 # Check for a timeout.
@@ -97,8 +104,13 @@ class VectorFieldPlanner(BasePlanner):
                     raise PlanningError('Encountered self-collision.')
 
                 # Add to trajectory
+                waypoint = []
                 q_curr = robot.GetActiveDOFValues()
-                qtraj.Insert(qtraj.GetNumWaypoints(), q_curr)
+                waypoint.append(q_curr)  # joint position
+                waypoint.append(dqout)   # joint velocity
+                waypoint.append([dt])    # delta time
+                waypoint = numpy.concatenate(waypoint)
+                qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
 
                 t_curr = manip.GetEndEffectorTransform()
                 twist = self._geodesictwist(t_curr, goal_pose)
