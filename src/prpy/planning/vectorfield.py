@@ -45,7 +45,7 @@ class VectorFieldPlanner(BasePlanner):
     def __str__(self):
         return 'VectorFieldPlanner'
 
-    def _geodesictwist(t1, t2):
+    def _geodesictwist(self, t1, t2):
         '''
         Computes the twist in global coordinates that corresponds
         to the gradient of the geodesic distance between two transforms.
