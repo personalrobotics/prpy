@@ -202,7 +202,6 @@ class Robot(openravepy.Robot):
         raise PrPyException("Path retimer failed with status '{:s}'"
                             .format(str(status)))
 
-<<<<<<< HEAD
     def ExecutePath(self, path, simplify=True, smooth=True, timeout=1.,
                     **kwargs):
         # TODO: Verify that the path is untimed.
@@ -222,7 +221,7 @@ class Robot(openravepy.Robot):
         # TODO: Check if this trajectory contains the base.
 
         needs_base = False
-=======
+
     def ExecuteTrajectory(self, traj, retime=True, timeout=None,
                           defer=False, executor=None, **kw_args):
         """
@@ -342,13 +341,8 @@ class Robot(openravepy.Robot):
 
     def _PlanWrapper(self, planning_method, args, kw_args):
 
-<<<<<<< HEAD
-        # Strip inactive DOFs from the trajectory.
-        config_spec = self.GetActiveConfigurationSpecification('linear')
-        openravepy.planningutils.ConvertTrajectorySpecification(traj, config_spec)
-=======
         # Call the planner.
-        config_spec = self.GetActiveConfigurationSpecification()
+        config_spec = self.GetActiveConfigurationSpecification('linear')
         result = planning_method(self, *args, **kw_args)
 
         # Define the post processing steps for the trajectory.
@@ -385,7 +379,6 @@ class Robot(openravepy.Robot):
                 from trollius.futures import wrap_future
                 processed_traj = yield trollius.From(wrap_future(f))
                 raise trollius.Return(processed_traj)
->>>>>>> master
 
             return trollius.Task(defer_trajectory(result, kw_args))
         else:
