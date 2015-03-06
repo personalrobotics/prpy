@@ -165,7 +165,7 @@ class Robot(openravepy.Robot):
         # TODO: Verify that the path is untimed.
 
         if defer:
-            from trollius import coroutine, From, Return, Task
+            from trollius import async, coroutine, From, Return, Task
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
@@ -184,17 +184,17 @@ class Robot(openravepy.Robot):
                 )
                 print 'EXECUTING TRAJECTORY'
                 executed_traj = yield From(
-                    self.ExecuteTrajectory(traj, defer=True, **kwargs)
+                    self.ExecuteTrajectory(timed_traj, defer=True, **kwargs)
                 )
                 raise Return(executed_traj)
 
             print 'RETURNING TASK'
 
             executor = kwargs.get('executor', get_default_executor())
-            return executor.submit(do_execute, 
+            return do_execute(
                 path, simplify=simplify, smooth=smooth, timeout=timeout,
                 **kwargs
-            )
+            )                
         else:
             if simplify:
                 path = self.simplifier.ShortcutPath(
