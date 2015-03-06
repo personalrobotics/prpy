@@ -166,7 +166,7 @@ class GreedyIKPlanner(BasePlanner):
             dt = traj.GetDuration()
 
             # Smallest CSpace step at which to give up
-            min_step = min(robot.GetDOFResolutions())/100.
+            min_step = min(robot.GetActiveDOFResolutions())/100.
             ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
 
             start_time = time.time()
