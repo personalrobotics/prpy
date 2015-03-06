@@ -40,7 +40,7 @@ class OpenRAVERetimer(BasePlanner):
         self.algorithm = algorithm
 
     @PlanningMethod
-    def RetimeTrajectory(self, robot, path):
+    def RetimeTrajectory(self, robot, path, **kw_args):
         RetimeTrajectory = openravepy.planningutils.RetimeTrajectory
 
         cspec = path.GetConfigurationSpecification()

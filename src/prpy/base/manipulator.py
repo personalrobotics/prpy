@@ -164,6 +164,6 @@ class Manipulator(openravepy.Robot.Manipulator):
 
         # Optionally execute the trajectory.
         if 'execute' not in kw_args or kw_args['execute']:
-            return self.GetRobot().ExecuteTrajectory(traj, **kw_args)
+            return self.GetRobot().ExecutePath(traj, **kw_args)
         else:
             return traj

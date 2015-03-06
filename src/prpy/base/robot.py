@@ -113,6 +113,7 @@ class Robot(openravepy.Robot):
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
         self.ompl_simplifier = OMPLSimplifier()
 
+
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
         Create and attach a controller to a subset of this robot's DOFs. If
@@ -157,51 +158,6 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
-    def RetimeTrajectory(self, path, smooth=True, **kw_args):
-        """Compute timing information for a trajectory.
-
-        This function computes timing information for a trajectory, populating
-        the trajectory's deltatime group. Timing information is necessary for
-        successful execution in simulation.
-
-        Note that this method does NOT modify the trajectory in-place, but
-        instead returns a timed version of the trajectory.
-
-        @param path input path
-        @return timed output trajectory
-        """
-        from openravepy import PlannerStatus
-        from prpy.exceptions import PrPyException
-        from prpy.util import CopyTrajectory, SimplifyTrajectory
-
-        # Simplify the trajectory before performing retiming.
-        if path.GetDuration() == 0.0:
-            path = SimplifyTrajectory(path, self)
-
-        # Attempt smoothing with the Parabolic Retimer first.
-        smooth_path = CopyTrajectory(path)
-        status = openravepy.planningutils.SmoothTrajectory(
-            smooth_path, 0.99, 0.99, 'ParabolicSmoother', '')
-        if status in [PlannerStatus.HasSolution,
-                      PlannerStatus.InterruptedWithSolution]:
-            return smooth_path
-
-        # If this fails, fall back on the Linear Retimer.
-        # (Linear retiming should always work, but will produce a
-        # slower path where the robot stops at each waypoint.)
-        logger.warning(
-            "SmoothTrajectory failed, using ParabolicTrajectoryRetimer. "
-            "Robot will stop at each waypoint: {:d}"
-            .format(path.GetNumWaypoints()))
-        retimed_traj = CopyTrajectory(path)
-        status = openravepy.planningutils.RetimeTrajectory(
-            retimed_traj, False, 1., 1., 'ParabolicTrajectoryRetimer', '')
-        if status in [PlannerStatus.HasSolution,
-                      PlannerStatus.InterruptedWithSolution]:
-            return retimed_traj
-        raise PrPyException("Path retimer failed with status '{:s}'"
-                            .format(str(status)))
-
     def ExecutePath(self, path, simplify=True, smooth=True, timeout=1.,
                     **kwargs):
         # TODO: Verify that the path is untimed.
@@ -221,53 +177,6 @@ class Robot(openravepy.Robot):
         # TODO: Check if this trajectory contains the base.
 
         needs_base = False
-
-    def ExecuteTrajectory(self, traj, retime=True, timeout=None,
-                          defer=False, executor=None, **kw_args):
-        """
-        Executes a trajectory and optionally waits for it to finish.
-
-        Passing `defer=True` to this function submits it for background
-        execution, and returns a Future which contains the result.
-
-        @param traj input trajectory
-        @param retime optionally retime the trajectory before executing it
-        @param timeout duration to wait for execution
-        @param defer return a future to this function and run in the background
-        @returns final executed trajectory or a Future to this result
-        """
-        # If the planning call is deferred, submit the call to the executor.
-        if defer is True:
-            from trollius.executor import get_default_executor
-            from trollius.futures import wrap_future
-            executor = executor or get_default_executor()
-            return wrap_future(executor.submit(self.ExecuteTrajectory,
-                                               traj, retime, timeout,
-                                               defer=False, **kw_args))
-
-        # Check if this is a base trajectory.
-        has_base = hasattr(self, 'base')
-        needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
-        if needs_base and not has_base:
-            raise ValueError('Unable to execute affine DOF trajectory; '
-                             'robot does not have a MobileBase.')
-
-        # TODO: Throw an error if the trajectory contains both normal DOFs and
-        # affine DOFs.
-
-        if retime:
-            # Retime a manipulator trajectory.
-            if not needs_base:
-                traj = self.RetimeTrajectory(traj)
-            # Retime a base trajectory.
-            else:
-                max_vel = [self.GetAffineTranslationMaxVels()[0],
-                           self.GetAffineTranslationMaxVels()[1],
-                           self.GetAffineRotationAxisMaxVels()[2]]
-                max_accel = [3.*v for v in max_vel]
-                openravepy.planningutils.RetimeAffineTrajectory(
-                    traj, max_vel, max_accel, False)
->>>>>>> master
 
         self.GetController().SetPath(traj)
 
@@ -356,7 +265,7 @@ class Robot(openravepy.Robot):
             # Optionally execute the trajectory.
             if 'execute' not in kw_args or kw_args['execute']:
                 kw_args['defer'] = False
-                return self.ExecuteTrajectory(traj, **kw_args)
+                return self.ExecutePath(traj, **kw_args)
             else:
                 return traj
 
