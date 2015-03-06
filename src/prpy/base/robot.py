@@ -158,23 +158,56 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
-    def ExecutePath(self, path, simplify=True, smooth=True, timeout=1.,
-                    **kwargs):
+    def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
+                    timeout=1., **kwargs):
+        retimer = self.smoother if smooth else self.retimer
+
         # TODO: Verify that the path is untimed.
 
-        # Simplify the path. This is a purely geometric operation.
-        if simplify:
-            path = self.simplifier.ShortcutPath(self, path, timeout=timeout)
+        if defer:
+            from trollius import coroutine, From, Return, Task
+            from trollius.executor import get_default_executor
+            from trollius.futures import wrap_future
 
-        # Convert the path to a timed trajectory.
-        retimer = self.smoother if smooth else self.retimer
-        traj = retimer.RetimeTrajectory(self, path, **kwargs)
+            @coroutine
+            def do_execute(path, simplify, smooth, timeout, **kwargs):
+                if simplify:
+                    print 'SIMPLYFING TRAJECTORY'
+                    path = yield From(
+                        self.simplifier.ShortcutPath(self, path, defer=True,
+                                                     timeout=timeout, **kwargs)
+                    )
 
-        return self.ExecuteTrajectory(traj, **kwargs)
+                print 'TIMING TRAJECTORY'
+                timed_traj = yield From(
+                    retimer.RetimeTrajectory(self, path, defer=True, **kwargs)
+                )
+                print 'EXECUTING TRAJECTORY'
+                executed_traj = yield From(
+                    self.ExecuteTrajectory(traj, defer=True, **kwargs)
+                )
+                raise Return(executed_traj)
 
-    def ExecuteTrajectory(self, traj, timeout=None, **kw_args):
+            print 'RETURNING TASK'
+
+            executor = kwargs.get('executor', get_default_executor())
+            return executor.submit(do_execute, 
+                path, simplify=simplify, smooth=smooth, timeout=timeout,
+                **kwargs
+            )
+        else:
+            if simplify:
+                path = self.simplifier.ShortcutPath(
+                    self, path, timeout=timeout, **kwargs)
+
+            traj = retimer.RetimeTrajectory(self, path, **kwargs)
+
+            return self.ExecuteTrajectory(traj, **kwargs)
+
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, **kw_args):
         # TODO: Verify that the trajectory is timed.
         # TODO: Check if this trajectory contains the base.
+        # TODO: Implement defer=True
 
         needs_base = False
 
@@ -188,7 +221,8 @@ class Robot(openravepy.Robot):
         ]
 
         if needs_base:
-            active_controllers.append(self.base.controller)
+            if hasattr(self, 'base') and hasattr(self.base, 'controller'):
+                active_controllers.append(self.base.controller)
 
         util.WaitForControllers(active_controllers, timeout=timeout)
         return traj
