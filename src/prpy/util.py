@@ -28,7 +28,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, numpy, openravepy, scipy.misc, time, threading
+import logging, numpy, openravepy, scipy.misc, time, threading, math
+import scipy.optimize
 
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
@@ -200,16 +201,18 @@ def AdaptTrajectory(traj, new_start, new_goal, robot):
     new_traj = MatrixToTraj(new_traj_matrix,cs,dof,robot)
     return new_traj
 
+
 def CopyTrajectory(traj, env=None):
     """
     Create a new copy of a trajectory using its Clone() operator.
+
     @param traj input trajectory
+    @param env optional environment used to initialize a trajectory
     @return copy of the trajectory
     """
-    if env is None:
-        env = traj.GetEnv()
 
-    copy_traj = openravepy.RaveCreateTrajectory(env, traj.GetXMLId())
+    copy_traj = openravepy.RaveCreateTrajectory(env or traj.GetEnv(),
+                                                traj.GetXMLId())
     copy_traj.Clone(traj, 0)
     return copy_traj
 
@@ -233,6 +236,9 @@ def SimplifyTrajectory(traj, robot):
 
     if traj.GetDuration() != 0.0:
         raise ValueError("Cannot handle timed trajectories yet!")
+
+    if traj.GetNumWaypoints() < 2:
+        return traj
 
     cspec = traj.GetConfigurationSpecification()
     dofs = robot.GetActiveDOFIndices()
@@ -259,7 +265,7 @@ def SimplifyTrajectory(traj, robot):
         errors = numpy.abs(f(times) - values)
 
         # TODO: Can this be a single call?
-        # Find  the extrema in the remaining waypoints.
+        # Find the extrema in the remaining waypoints.
         max_err_idx = numpy.argmax(errors, axis=0)
         max_err_vals = numpy.max(errors, axis=0)
 
@@ -282,7 +288,7 @@ def SimplifyTrajectory(traj, robot):
 
 def IsInCollision(traj, robot, selfcoll_only=False):
     report = openravepy.CollisionReport()
-    
+
     #get trajectory length
     NN = traj.GetNumWaypoints()
     ii = 0
@@ -300,7 +306,7 @@ def IsInCollision(traj, robot, selfcoll_only=False):
         openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
     total_time = traj.GetDuration()
     step_time = total_time*step_dist/total_dist
-    
+
     #check
     for time in numpy.arange(0.0,total_time,step_time):
         point = traj.Sample(time)
@@ -420,3 +426,66 @@ class Timer(object):
     def get_duration(self):
         return self.end - self.start
 
+
+def quadraticObjective(dq, *args):
+    '''
+    Quadratic objective function for SciPy's optimization.
+    @param dq joint velocity
+    @param args[0]Jacobian
+    @param args[1] desired twist
+    '''
+    J = args[0]
+    dx = args[1]
+    error = (numpy.dot(J, dq) - dx)
+    objective = 0.5*numpy.dot(numpy.transpose(error), error)
+    gradient = numpy.dot(numpy.transpose(J), error)
+    return objective, gradient
+
+
+def ComputeJointVelocityFromTwist(robot, twist,
+                                  objective=quadraticObjective,
+                                  dq_init=None):
+    '''
+    Computes the optimal joint velocity given a twist by formulating
+    the problem as a quadratic optimization with box constraints and
+    using SciPy's L-BFGS-B solver.
+    @params robot the robot
+    @params twist the desired twist in se(3)
+            with float('NaN') for dimensions we don't care about
+    @params objective optional objective function to optimize
+            defaults to quadraticObjective
+    @params dq_init optional initial guess for optimal joint velocity
+            defaults to robot.GetActiveDOFVelocities()
+    '''
+    manip = robot.GetActiveManipulator()
+    robot.SetActiveDOFs(manip.GetArmIndices())
+
+    jacobian_spatial = manip.CalculateJacobian()
+    jacobian_angular = manip.CalculateAngularVelocityJacobian()
+    jacobian = numpy.vstack((jacobian_spatial, jacobian_angular))
+
+    rows = [i for i, x in enumerate(twist) if math.isnan(x) is False]
+    twist_active = twist[rows]
+    jacobian_active = jacobian[rows, :]
+
+    bounds = [(-x, x) for x in robot.GetActiveDOFMaxVel()]
+    # Check for joint limits
+    q_curr = robot.GetActiveDOFValues()
+    q_min, q_max = robot.GetActiveDOFLimits()
+    dq_bounds = [(0, max) if (numpy.isclose(q_curr[i], q_min[i])) else
+                 (min, 0) if (numpy.isclose(q_curr[i], q_max[i])) else
+                 (min, max) for i, (min, max) in enumerate(bounds)]
+
+    if dq_init is None:
+        dq_init = robot.GetActiveDOFVelocities()
+
+    opt = scipy.optimize.fmin_l_bfgs_b(objective, dq_init, fprime=None,
+                                       args=(jacobian_active, twist_active),
+                                       bounds=dq_bounds, approx_grad=False)
+
+    dq_opt = opt[0]
+    if opt[1] > 0:
+        print "Unable to produce desired twist."
+    twist_opt = numpy.dot(jacobian, dq_opt)
+
+    return dq_opt, twist_opt

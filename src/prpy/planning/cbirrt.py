@@ -35,9 +35,9 @@ import prpy.kin, prpy.tsr
 class CBiRRTPlanner(BasePlanner):
     def __init__(self):
         super(CBiRRTPlanner, self).__init__()
-        try:
-            self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
-        except openravepy.openrave_exception:
+        self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
+
+        if self.problem is None:
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
     def __str__(self):

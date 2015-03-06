@@ -31,13 +31,14 @@
 import copy, functools, numpy, openravepy
 from .. import bind, clone, planning
 
+
 class Manipulator(openravepy.Robot.Manipulator):
     def __init__(self):
         pass
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
         # Add planning methods to the tab-completion list.
@@ -47,7 +48,7 @@ class Manipulator(openravepy.Robot.Manipulator):
 
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
-        # __methods__ bypass __getattribute__. 
+        # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
         delegate_method = getattr(self.GetRobot().planner, name)
 
@@ -56,14 +57,14 @@ class Manipulator(openravepy.Robot.Manipulator):
         if self.GetRobot().planner.has_planning_method(name):
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
-                return self._PlanWrapper(delegate_method, args, kw_args) 
+                return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
     def CloneBindings(self, parent):
-        self.__init__(self)
+        Manipulator.__init__(self)
 
     def GetIndices(self):
         """Gets the DOF indicies associated with this manipulaor.
@@ -141,19 +142,25 @@ class Manipulator(openravepy.Robot.Manipulator):
         self.GetRobot().SetDOFAccelerationLimits(or_accel_limits)
 
     def _PlanWrapper(self, planning_method, args, kw_args):
-        from prpy.clone import Clone, Cloned
+        from prpy.clone import Clone
         robot = self.GetRobot()
-        with Clone(robot.GetEnv()):
-            Cloned(self).SetActive()
+        with Clone(robot.GetEnv()) as cloned_env:
+            cloned_env.Cloned(self).SetActive()
+            cloned_robot = cloned_env.Cloned(robot)
             cloned_args = copy.copy(kw_args)
             cloned_args['execute'] = False
-            cloned_traj = Cloned(robot)._PlanWrapper(planning_method, args, cloned_args)
+            cloned_traj = cloned_robot._PlanWrapper(planning_method,
+                                                    args, cloned_args)
 
             # Strip inactive DOFs from the trajectory.
-            config_spec = Cloned(robot).GetActiveConfigurationSpecification('linear')
-            openravepy.planningutils.ConvertTrajectorySpecification(cloned_traj, config_spec)
-            traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), cloned_traj.GetXMLId())
-            traj.Clone(cloned_traj, 0)
+            config_spec = cloned_robot.GetActiveConfigurationSpecification('linear')
+            openravepy.planningutils.ConvertTrajectorySpecification(
+                cloned_traj, config_spec
+            )
+
+            # Copy the trajectory back to the original environment.
+            from ..util import CopyTrajectory
+            traj = CopyTrajectory(cloned_traj, env=robot.GetEnv())
 
         # Optionally execute the trajectory.
         if 'execute' not in kw_args or kw_args['execute']:

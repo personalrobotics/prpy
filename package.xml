@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>prpy</name>
-  <version>0.1.0</version>
+  <version>0.3.1</version>
   <description>
     Python utilities used by the Personal Robotics Laboratory.
   </description>

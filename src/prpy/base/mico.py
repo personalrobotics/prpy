@@ -30,7 +30,7 @@
 
 import numpy, openravepy, rospy
 from manipulator import Manipulator
-from prpy.clone import Clone, Cloned
+from prpy.clone import Clone
 from .. import util
 from .. import exceptions
 from IPython import embed
@@ -139,21 +139,23 @@ class Mico(Manipulator):
         robot = self.GetRobot()
         saved_dof_indices, saved_dof_values = robot.configurations.get_configuration(name)
 
-        with Clone(robot.GetEnv()):
-            Cloned(self).SetActive()
-            arm_dof_indices = Cloned(robot).GetActiveDOFIndices()
-            arm_dof_values = Cloned(robot).GetActiveDOFValues()
+        with Clone(robot.GetEnv()) as cloned_env:
+            cloned_env.Cloned(self).SetActive()
+            cloned_robot = cloned_env.Cloned(robot)
+
+            arm_dof_indices = cloned_robot.GetActiveDOFIndices()
+            arm_dof_values = cloned_robot.GetActiveDOFValues()
 
             for arm_dof_index, arm_dof_value in zip(saved_dof_indices, saved_dof_values):
                 if arm_dof_index in arm_dof_indices:
                     i = list(arm_dof_indices).index(arm_dof_index)
                     arm_dof_values[i] = arm_dof_value
 
-            traj = Cloned(robot).PlanToConfiguration(arm_dof_values, execute=False, **kw_args)
+            traj = cloned_robot.PlanToConfiguration(arm_dof_values, execute=False, **kw_args)
 
-            # Clone the trajectory back into the live environment
-            live_traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), traj.GetXMLId())
-            live_traj.Clone(traj, 0)
+            # Copy the trajectory back to the original environment.
+            from ..util import CopyTrajectory
+            live_traj = CopyTrajectory(traj, env=robot.GetEnv())
 
         if execute:
             return robot.ExecuteTrajectory(live_traj, **kw_args)
@@ -254,5 +256,3 @@ class Mico(Manipulator):
         """
         if not manipulator.simulated:
             manipulator.controller.SendCommand('ClearStatus')
-
-    

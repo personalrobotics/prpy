@@ -30,7 +30,7 @@
 
 import numpy, openravepy
 from manipulator import Manipulator
-from prpy.clone import Clone, Cloned
+from prpy.clone import Clone
 from .. import util
 from .. import exceptions
 
