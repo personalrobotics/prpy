@@ -88,7 +88,15 @@ class WAMRobot(Robot):
         # Fall back on the standard OpenRAVE retimer if MacTrajectory is not
         # available.
         if self.mac_retimer is None:
-            return Robot.RetimeTrajectory(self, traj, **kw_args)
+            active_manipulators = self.GetTrajectoryManipulators(traj)
+            sim_flags = [ manip.simulated for manip in active_manipulators ]
+
+            if all(sim_flags):
+                return Robot.RetimeTrajectory(self, traj, **kw_args)
+            elif not any(sim_flags):
+                return prpy.util.CopyTrajectory(traj)
+            else:
+                raise ValueError('Mixed simulated and real manipulators is not supported.')
 
         # check the number of 
         num_waypoints = traj.GetNumWaypoints()
@@ -172,6 +180,7 @@ class WAMRobot(Robot):
         @param retime flag for retiming the trajectory before execution
         @return executed_traj including blending and retiming
         """
+
         # Query the active manipulators based on which DOF indices are
         # included in the trajectory.
         active_manipulators = self.GetTrajectoryManipulators(traj)
@@ -219,6 +228,7 @@ class WAMRobot(Robot):
 
                 first_waypoint = traj.GetWaypoint(0)
                 cspec = traj.GetConfigurationSpecification()
+
                 first_dof_values = cspec.ExtractJointValues(first_waypoint, self, active_indices, 0)
                 lower_limits, upper_limits = self.GetActiveDOFLimits()
 
@@ -236,7 +246,7 @@ class WAMRobot(Robot):
 
                 # This must be last because MacTrajectories are immutable.
                 # TODO: This may break if the retimer clamps DOF values to the joint limits.
-                if retime:
+                if retime: 
                     traj = self.RetimeTrajectory(traj, synchronize=needs_synchronization, **kw_args)
 
         if needs_base:
