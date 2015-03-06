@@ -306,10 +306,15 @@ resolve multiple objects in one statement:
 ## Concurrent Execution
 
 PrPy has native support for [futures](http://en.wikipedia.org/wiki/Futures_and_promises) and
-[coroutines](http://en.wikipedia.org/wiki/Coroutine) to simplify concurrent programming. We use
-the concurrency primitives provided by
-[Trollius](http://trollius.readthedocs.org/en/latest/using.html), which is a Python 2
+[coroutines](http://en.wikipedia.org/wiki/Coroutine) to simplify concurrent programming. A
+_future_ encapsulates the execution of a long-running task. For example, `ExecuteTrajectory`
+returns a future that can query whether execution has completed or wait until it does. A
+_coroutine_ allows you to write efficient, procedural-like code that interacts with futures.
+
+We use the concurrency primitives provided by the
+[`trollius` module](http://trollius.readthedocs.org/en/latest/using.html), which is a Python 2
 backport of the [`asyncio` module](https://docs.python.org/3/library/asyncio.html) from Python 3.
+
 
 ## Method Binding
 
