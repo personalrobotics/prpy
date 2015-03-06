@@ -303,6 +303,14 @@ resolve multiple objects in one statement:
 ```
 
 
+## Concurrent Execution
+
+PrPy has native support for [futures](http://en.wikipedia.org/wiki/Futures_and_promises) and
+[coroutines](http://en.wikipedia.org/wiki/Coroutine) to simplify concurrent programming. We use
+the concurrency primitives provided by
+[Trollius](http://trollius.readthedocs.org/en/latest/using.html), which is a Python 2
+backport of the [`asyncio` module](https://docs.python.org/3/library/asyncio.html) from Python 3.
+
 ## Method Binding
 
 Finally, PrPy offers helper functions for binding custom methods on (i.e.
