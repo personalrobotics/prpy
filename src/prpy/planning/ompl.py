@@ -193,7 +193,7 @@ class OMPLSimplifier(BasePlanner):
         return 'OMPL Simplifier'
 
     @PlanningMethod
-    def ShortcutPath(self, robot, path, timeout=1.):
+    def ShortcutPath(self, robot, path, timeout=1., **kwargs):
         # The planner operates in-place, so we need to copy the input path. We
         # also need to copy the trajectory into the planning environment.
         output_path = CopyTrajectory(path, env=self.env)
