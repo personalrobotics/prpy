@@ -332,7 +332,7 @@ def do_plan(robot):
     raise Return(path1, path2)
 
 loop = trollius.get_event_loop()
-path = loop.run_until_complete(do_plan)
+path = loop.run_until_complete(do_plan(robot))
 ```
 
 ## Method Binding
