@@ -184,10 +184,9 @@ class Robot(openravepy.Robot):
             return do_execute(path, simplify=simplify, smooth=smooth,
                               timeout=timeout, **kwargs)
 
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, **kw_args):
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kw_args):
         # TODO: Verify that the trajectory is timed.
         # TODO: Check if this trajectory contains the base.
-        # TODO: Implement defer=True
 
         needs_base = False
 
@@ -204,7 +203,28 @@ class Robot(openravepy.Robot):
             if hasattr(self, 'base') and hasattr(self.base, 'controller'):
                 active_controllers.append(self.base.controller)
 
-        util.WaitForControllers(active_controllers, timeout=timeout)
+        if defer:
+            import time
+            import trollius
+
+            @trollius.coroutine
+            def do_poll():
+                time_stop = time.time() + (timeout if timeout else numpy.inf)
+
+                while time.time() <= time_stop:
+                    is_done = all(controller.IsDone()
+                                  for controller in active_controllers)
+                    if is_done:
+                        raise trollius.Return(traj)
+
+                    yield trollius.From(trollius.sleep(period))
+
+                raise trollius.Return(None)
+
+            return trollius.async(do_poll())
+        else:
+            util.WaitForControllers(active_controllers, timeout=timeout)
+
         return traj
 
     def ViolatesVelocityLimits(self, traj):
