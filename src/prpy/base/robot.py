@@ -160,49 +160,28 @@ class Robot(openravepy.Robot):
 
     def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
                     timeout=1., **kwargs):
-        retimer = self.smoother if smooth else self.retimer
+        def do_execute(path, simplify, smooth, timeout, **kwargs):
+            if simplify:
+                path = self.simplifier.ShortcutPath(self, path, defer=False,
+                                                    timeout=timeout, **kwargs)
 
-        # TODO: Verify that the path is untimed.
+            retimer = self.smoother if smooth else self.retimer
+            timed_traj = retimer.RetimeTrajectory(self, path, defer=False, **kwargs)
+            return self.ExecuteTrajectory(timed_traj, defer=False, **kwargs)
 
         if defer:
-            from trollius import async, coroutine, From, Return, Task
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
-            @coroutine
-            def do_execute(path, simplify, smooth, timeout, **kwargs):
-                if simplify:
-                    print 'SIMPLYFING TRAJECTORY'
-                    path = yield From(
-                        self.simplifier.ShortcutPath(self, path, defer=True,
-                                                     timeout=timeout, **kwargs)
-                    )
-
-                print 'TIMING TRAJECTORY'
-                timed_traj = yield From(
-                    retimer.RetimeTrajectory(self, path, defer=True, **kwargs)
-                )
-                print 'EXECUTING TRAJECTORY'
-                executed_traj = yield From(
-                    self.ExecuteTrajectory(timed_traj, defer=True, **kwargs)
-                )
-                raise Return(executed_traj)
-
-            print 'RETURNING TASK'
-
             executor = kwargs.get('executor', get_default_executor())
-            return do_execute(
-                path, simplify=simplify, smooth=smooth, timeout=timeout,
-                **kwargs
-            )                
+            return \
+                executor.submit(do_execute,
+                    path, simplify=simplify, smooth=smooth, timeout=timeout,
+                    **kwargs
+                )
         else:
-            if simplify:
-                path = self.simplifier.ShortcutPath(
-                    self, path, timeout=timeout, **kwargs)
-
-            traj = retimer.RetimeTrajectory(self, path, **kwargs)
-
-            return self.ExecuteTrajectory(traj, **kwargs)
+            return do_execute(path, simplify=simplify, smooth=smooth,
+                              timeout=timeout, **kwargs)
 
     def ExecuteTrajectory(self, traj, defer=False, timeout=None, **kw_args):
         # TODO: Verify that the trajectory is timed.
