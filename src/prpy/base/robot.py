@@ -173,12 +173,13 @@ class Robot(openravepy.Robot):
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
-            executor = kwargs.get('executor', get_default_executor())
-            return \
+            executor = kwargs.get('executor') or get_default_executor()
+            return wrap_future(
                 executor.submit(do_execute,
                     path, simplify=simplify, smooth=smooth, timeout=timeout,
                     **kwargs
                 )
+            )
         else:
             return do_execute(path, simplify=simplify, smooth=smooth,
                               timeout=timeout, **kwargs)
@@ -262,28 +263,19 @@ class Robot(openravepy.Robot):
         return False
 
     def _PlanWrapper(self, planning_method, args, kw_args):
+        config_spec = self.GetActiveConfigurationSpecification('linear')
 
         # Call the planner.
-        config_spec = self.GetActiveConfigurationSpecification('linear')
         result = planning_method(self, *args, **kw_args)
 
-        # Define the post processing steps for the trajectory.
-        def postprocess_trajectory(traj, kw_args):
-
+        def postprocess_trajectory(traj):
             # Strip inactive DOFs from the trajectory.
             openravepy.planningutils.ConvertTrajectorySpecification(
                 traj, config_spec
             )
 
-            # Optionally execute the trajectory.
-            if 'execute' not in kw_args or kw_args['execute']:
-                kw_args['defer'] = False
-                return self.ExecutePath(traj, **kw_args)
-            else:
-                return traj
-
         # Return either the trajectory result or a future to the result.
-        if 'defer' in kw_args and kw_args['defer'] is True:
+        if kw_args.get('defer', False):
             import trollius
 
             # Perform postprocessing on a future trajectory.
@@ -292,16 +284,24 @@ class Robot(openravepy.Robot):
                 # Wait for the planner to complete.
                 traj = yield trollius.From(traj_future)
 
-                # Submit a new task to postprocess the trajectory.
-                from trollius.executor import get_default_executor
-                executor = kw_args.get('executor') or get_default_executor()
-                f = executor.submit(postprocess_trajectory, traj, kw_args)
+                postprocess_trajectory(traj)
 
-                # Wait for the postprocessed trajectory to be completed.
-                from trollius.futures import wrap_future
-                processed_traj = yield trollius.From(wrap_future(f))
-                raise trollius.Return(processed_traj)
+                # Optionally execute the trajectory.
+                if kw_args.get('execute', True):
+                    # We know defer = True if we're in this function, so we
+                    # don't have to set it explicitly.
+                    traj = yield trollius.From(
+                        self.ExecutePath(traj, **kw_args)
+                    )
+
+                raise trollius.Return(traj)
 
             return trollius.Task(defer_trajectory(result, kw_args))
         else:
-            return postprocess_trajectory(result, kw_args)
+            postprocess_trajectory(result)
+
+            # Optionally execute the trajectory.
+            if kw_args.get('execute', True):
+                result = self.ExecutePath(result, **kw_args)
+
+            return result
