@@ -487,3 +487,48 @@ def ComputeJointVelocityFromTwist(robot, twist,
     twist_opt = numpy.dot(jacobian, dq_opt)
 
     return dq_opt, twist_opt
+
+
+def GeodesicTwist(t1, t2):
+    '''
+    Computes the twist in global coordinates that corresponds
+    to the gradient of the geodesic distance between two transforms.
+
+    @param t1 current transform
+    @param t2 goal transform
+    @return twist in se(3)
+    '''
+    trel = numpy.dot(numpy.linalg.inv(t1), t2)
+    trans = numpy.dot(t1[0:3, 0:3], trel[0:3, 3])
+    omega = numpy.dot(t1[0:3, 0:3],
+                      openravepy.axisAngleFromRotationMatrix(
+                        trel[0:3, 0:3]))
+    return numpy.hstack((trans, omega))
+
+
+def GeodesicError(t1, t2):
+    '''
+    Computes the error in global coordinates between two transforms
+
+    @param t1 current transform
+    @param t2 goal transform
+    @return a 4-vector of [dx, dy, dz, solid angle]
+    '''
+    trel = numpy.dot(numpy.linalg.inv(t1), t2)
+    trans = numpy.dot(t1[0:3, 0:3], trel[0:3, 3])
+    omega = openravepy.axisAngleFromRotationMatrix(trel[0:3, 0:3])
+    angle = numpy.linalg.norm(omega)
+    return numpy.hstack((trans, angle))
+
+
+def GeodesicDistance(t1, t2, r=1.0):
+    '''
+    Computes the geodesic distance between two transforms
+
+    @param t1 current transform
+    @param t2 goal transform
+    @param r in units of meters/radians converts radians to meters
+    '''
+    error = GeodesicError(t1, t2)
+    error[3] = r*error[3]
+    return numpy.linalg.norm(error)

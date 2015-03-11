@@ -45,25 +45,9 @@ class VectorFieldPlanner(BasePlanner):
     def __str__(self):
         return 'VectorFieldPlanner'
 
-    def _geodesictwist(self, t1, t2):
-        '''
-        Computes the twist in global coordinates that corresponds
-        to the gradient of the geodesic distance between two transforms.
-
-        @param t1 current transform
-        @param t2 goal transform
-        @return twist in se(3)
-        '''
-        trel = numpy.dot(numpy.linalg.inv(t1), t2)
-        trans = numpy.dot(t1[0:3, 0:3], trel[0:3, 3])
-        omega = numpy.dot(t1[0:3, 0:3],
-                          openravepy.axisAngleFromRotationMatrix(
-                            trel[0:3, 0:3]))
-        return numpy.hstack((trans, omega))
-
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
-                              dq_tol=0.0001, **kw_args):
+                              pose_error_tol=0.01, **kw_args):
         """
         Plan to an end effector pose by following a geodesic loss function
         in SE(3) via an optimized Jacobian.
@@ -71,7 +55,48 @@ class VectorFieldPlanner(BasePlanner):
         @param robot
         @param goal_pose desired end-effector pose
         @param timelimit time limit before giving up
+        @param pose_error_tol in meters
+        @return traj
+        """
+
+        def vf_geodesic(robot, goal_pose):
+            manip = robot.GetActiveManipulator()
+            return prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
+                                           goal_pose)
+
+        qtraj = self.FollowVectorField(robot, vf_geodesic, timelimit,
+                                       goal_pose=goal_pose)
+
+        # Check if the last waypoint is at the goal
+        with robot:
+            cspec = qtraj.GetConfigurationSpecification()
+            waypoint_end = qtraj.GetWaypoint(qtraj.GetNumWaypoints()-1)
+            qend = cspec.ExtractJointValues(waypoint_end,
+                                            robot,
+                                            range(robot.GetDOF()),
+                                            0)
+            robot.SetActiveDOFValues(qend)
+            manip = robot.GetActiveManipulator()
+            pose_error = prpy.util.GeodesicDistance(
+                                    manip.GetEndEffectorTransform(),
+                                    goal_pose)
+            if pose_error > pose_error_tol:
+                raise PlanningError('Local minimum: \
+                    unable to reach goal pose: ')
+        return qtraj
+
+    @PlanningMethod
+    def FollowVectorField(self, robot, fn_vectorfield, timelimit=5.0,
+                          dq_tol=0.0001, **kw_args):
+        """
+        Plan to an end effector pose by following a geodesic loss function
+        in SE(3) via an optimized Jacobian.
+
+        @param robot
+        @param fn_vectorfield inputs robot, kw_args and outputs velocity twist
+        @param timelimit time limit before giving up
         @param dq_tol velocity tolerance for termination
+        @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
         start_time = time.time()
@@ -111,9 +136,7 @@ class VectorFieldPlanner(BasePlanner):
                 waypoint.append([dt])    # delta time
                 waypoint = numpy.concatenate(waypoint)
                 qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
-
-                t_curr = manip.GetEndEffectorTransform()
-                twist = self._geodesictwist(t_curr, goal_pose)
+                twist = fn_vectorfield(robot, **kw_args)
                 dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
                                 robot, twist)
                 if (numpy.linalg.norm(dqout) < dq_tol):
