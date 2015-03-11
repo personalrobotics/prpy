@@ -206,9 +206,9 @@ class GreedyIKPlanner(BasePlanner):
             except PlanningError as e:
                 # Compute the min acceptable time from the min waypoint index.
                 if min_waypoint_index is None:
-                    min_waypoint_index = traj.GetNumWaypoints()
+                    min_waypoint_index = traj.GetNumWaypoints()-1
                 cspec = traj.GetConfigurationSpecification()
-                wpts = [traj.GetWaypoint(i) for i in range(min_waypoint_index)]
+                wpts = [traj.GetWaypoint(i) for i in range(min_waypoint_index+1)]
                 dts = [cspec.ExtractDeltaTime(wpt) for wpt in wpts]
                 min_time = numpy.sum(dts)
 
