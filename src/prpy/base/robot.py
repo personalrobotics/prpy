@@ -160,13 +160,27 @@ class Robot(openravepy.Robot):
 
     def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
                     timeout=1., **kwargs):
-        def do_execute(path, simplify, smooth, timeout, **kwargs):
-            if simplify:
-                path = self.simplifier.ShortcutPath(self, path, defer=False,
-                                                    timeout=timeout, **kwargs)
 
-            retimer = self.smoother if smooth else self.retimer
-            timed_traj = retimer.RetimeTrajectory(self, path, defer=False, **kwargs)
+        logger.debug('Begin ExecutePath')
+
+        def do_execute(path, simplify, smooth, timeout, **kwargs):
+
+            with Clone(self.GetEnv()) as cloned_env:
+                traj_dofs = prpy.util.GetTrajectoryIndices(path)
+                cloned_env.Cloned(self).SetActiveDOFs(traj_dofs)
+                cloned_robot = cloned_env.Cloned(self)
+
+                if simplify:
+                    path = self.simplifier.ShortcutPath(cloned_robot, path, defer=False,
+                                                        timeout=timeout, **kwargs)
+
+                retimer = self.smoother if smooth else self.retimer
+                cloned_timed_traj = retimer.RetimeTrajectory(cloned_robot, path, defer=False, **kwargs)
+
+                # Copy the trajectory back to the original environment.
+                from ..util import CopyTrajectory
+                timed_traj = CopyTrajectory(cloned_timed_traj, env=self.GetEnv())
+
             return self.ExecuteTrajectory(timed_traj, defer=False, **kwargs)
 
         if defer:
@@ -188,6 +202,7 @@ class Robot(openravepy.Robot):
         # TODO: Verify that the trajectory is timed.
         # TODO: Check if this trajectory contains the base.
 
+        logger.debug('Begin ExecuteTrajectory')
         needs_base = False
 
         self.GetController().SetPath(traj)
@@ -223,7 +238,9 @@ class Robot(openravepy.Robot):
 
             return trollius.async(do_poll())
         else:
-            util.WaitForControllers(active_controllers, timeout=timeout)
+            import prpy.viz
+            with prpy.viz.RenderTrajectory(self, traj):
+                util.WaitForControllers(active_controllers, timeout=timeout)
 
         return traj
 
