@@ -166,7 +166,7 @@ class Robot(openravepy.Robot):
         def do_execute(path, simplify, smooth, timeout, **kwargs):
 
             with Clone(self.GetEnv()) as cloned_env:
-                traj_dofs = prpy.util.GetTrajectoryIndices(path)
+                traj_dofs = util.GetTrajectoryIndices(path)
                 cloned_env.Cloned(self).SetActiveDOFs(traj_dofs)
                 cloned_robot = cloned_env.Cloned(self)
 
@@ -203,7 +203,7 @@ class Robot(openravepy.Robot):
         # TODO: Check if this trajectory contains the base.
 
         logger.debug('Begin ExecuteTrajectory')
-        needs_base = False
+        needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
 
@@ -238,9 +238,7 @@ class Robot(openravepy.Robot):
 
             return trollius.async(do_poll())
         else:
-            import prpy.viz
-            with prpy.viz.RenderTrajectory(self, traj):
-                util.WaitForControllers(active_controllers, timeout=timeout)
+            util.WaitForControllers(active_controllers, timeout=timeout)
 
         return traj
 

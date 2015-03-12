@@ -29,8 +29,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, os, tempfile
-from ..util import CopyTrajectory, SimplifyTrajectory
-from base import BasePlanner, PlanningError, PlanningMethod
+from ..util import CopyTrajectory, SimplifyTrajectory, HasAffineDOFs
+from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
 from openravepy import PlannerStatus 
 
 
@@ -44,6 +44,9 @@ class OpenRAVERetimer(BasePlanner):
         RetimeTrajectory = openravepy.planningutils.RetimeTrajectory
 
         cspec = path.GetConfigurationSpecification()
+        if HasAffineDOFs(cspec):
+            raise UnsupportedPlanningError('OpenRAVERetimer does not support paths with affine DOFs')
+
         """
         group = cspec.GetGroupFromName('joint_values')
         if group.interpolation != 'linear':
@@ -83,3 +86,53 @@ class ParabolicRetimer(OpenRAVERetimer):
 class ParabolicSmoother(OpenRAVERetimer):
     def __init__(self):
         super(ParabolicSmoother, self).__init__('HauserParabolicSmoother')
+
+class OpenRAVEAffineRetimer(BasePlanner):
+
+    def __init__(self,):
+        super(OpenRAVEAffineRetimer, self).__init__()
+
+    @PlanningMethod
+    def RetimeTrajectory(self, robot, path, **kw_args):
+
+        RetimeTrajectory = openravepy.planningutils.RetimeAffineTrajectory
+
+        cspec = path.GetConfigurationSpecification()
+
+        # Check for anything other than affine dofs in the traj
+        # TODO: Better way to do this?
+        affine_groups = ['affine_transform',
+                         'affine_velocities',
+                         'affine_accelerations']
+
+        for group in cspec.GetGroups():
+            found = False
+            for group_name in affine_groups:
+                if group_name in group.name: # group.name contains more stuff than just the name
+                    found = True
+                    break
+
+            if not found:
+                raise UnsupportedPlanningError('OpenRAVEAffineRetimer only supports untimed paths with affine DOFs. Found group: %s' % group.name)
+
+
+
+        # Copy the input trajectory into the planning environment. This is
+        # necessary for two reasons: (1) the input trajectory may be in another
+        # environment and/or (2) the retimer modifies the trajectory in-place.
+        output_traj = CopyTrajectory(path, env=self.env)
+
+        # Compute the timing. This happens in-place.
+        max_velocities = [robot.GetAffineTranslationMaxVels()[0],
+                          robot.GetAffineTranslationMaxVels()[1],
+                          robot.GetAffineRotationAxisMaxVels()[2]]
+        max_accelerations = [3.*v for v in max_velocities]
+        status = RetimeTrajectory(output_traj, max_velocities, max_accelerations,
+                                  False)
+
+        if status not in [ PlannerStatus.HasSolution,
+                           PlannerStatus.InterruptedWithSolution ]:
+            raise PlanningError('Retimer returned with status {0:s}.'.format(
+                                str(status)))
+
+        return output_traj
