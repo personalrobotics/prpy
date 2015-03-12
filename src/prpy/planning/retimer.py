@@ -82,4 +82,4 @@ class ParabolicRetimer(OpenRAVERetimer):
 
 class ParabolicSmoother(OpenRAVERetimer):
     def __init__(self):
-        super(ParabolicSmoother, self).__init__('ParabolicSmoother')
+        super(ParabolicSmoother, self).__init__('HauserParabolicSmoother')
