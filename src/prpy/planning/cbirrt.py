@@ -137,7 +137,7 @@ class CBiRRTPlanner(BasePlanner):
             psample=0.1,
             tsr_chains=[goal_tsr_chain, traj_tsr_chain],
             # Smooth since this is a constrained trajectory.
-            smoothingitrs=smoothingitrs
+            smoothingitrs=smoothingitrs,
             **kw_args
         )
 
@@ -160,7 +160,7 @@ class CBiRRTPlanner(BasePlanner):
             if chain.sample_start or chain.sample_goal:
                 psample = 0.1
 
-            if chain.constrian:
+            if chain.constrain:
                 is_constrained = True
 
         # Only smooth constrained trajectories.
