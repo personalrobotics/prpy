@@ -3,17 +3,22 @@ class PrPyException(Exception):
     Generic PrPy exception.
     """
 
-class TrajectoryAborted(PrPyException):
+class TrajectoryExecutionFailed(PrPyException):
+    """
+    Trajectory execution failed.
+    """
+
+class TrajectoryAborted(TrajectoryExecutionFailed):
     """
     Trajectory was aborted.
     """
 
-class TrajectoryStalled(PrPyException):
+class TrajectoryStalled(TrajectoryExecutionFailed):
     """
     Trajectory stalled.
     """
 
-class SynchronizationException(PrPyException):
+class SynchronizationException(TrajectoryExecutionFailed):
     """
     Controller synchronization failed.
     """
