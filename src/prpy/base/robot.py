@@ -30,8 +30,13 @@
 
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, planning, util
-from prpy.clone import Clone, Cloned
-from prpy.tsr.tsrlibrary import TSRLibrary
+import prpy.util
+from ..clone import Clone, Cloned
+from ..tsr.tsrlibrary import TSRLibrary
+from ..planning.base import Sequence 
+from ..planning.ompl import OMPLSimplifier
+from ..planning.retimer import ParabolicRetimer, ParabolicSmoother
+from ..planning.mac_smoother import MacSmoother
 
 logger = logging.getLogger('robot')
 
@@ -57,6 +62,16 @@ class Robot(openravepy.Robot):
         # Standard, commonly-used OpenRAVE plugins.
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+
+        # Path post-processing for execution. This includes simplification of
+        # the geometric path, retiming a path into a trajectory, and smoothing
+        # (joint simplificaiton and retiming).
+        self.simplifier = OMPLSimplifier()
+        self.retimer = ParabolicRetimer()
+        self.smoother = Sequence(
+            ParabolicSmoother(),
+            self.retimer
+        )
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
@@ -90,6 +105,14 @@ class Robot(openravepy.Robot):
         self.manipulators = [Cloned(manipulator, into=self.GetEnv())
                              for manipulator in parent.manipulators]
         self.configurations = parent.configurations
+
+        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
+        self.SetController(self.multicontroller)
+
+        self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
+        self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+        self.ompl_simplifier = OMPLSimplifier()
+
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
@@ -135,109 +158,88 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
-    def RetimeTrajectory(self, traj, **kw_args):
-        """Compute timing information for a trajectory.
+    def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
+                    timeout=1., **kwargs):
 
-        This function computes timing information for a trajectory, populating
-        the trajectory's deltatime group. Timing information is necessary for
-        successful execution in simulation.
+        logger.debug('Begin ExecutePath')
 
-        Note that this method does NOT modify the trajectory in-place, but
-        instead returns a timed version of the trajectory.
+        def do_execute(path, simplify, smooth, timeout, **kwargs):
 
-        @param traj input trajectory
-        @return timed output trajectory
-        """
-        from openravepy import PlannerStatus
-        from prpy.exceptions import PrPyException
-        from prpy.util import CopyTrajectory, SimplifyTrajectory
+            with Clone(self.GetEnv()) as cloned_env:
+                traj_dofs = util.GetTrajectoryIndices(path)
+                cloned_env.Cloned(self).SetActiveDOFs(traj_dofs)
+                cloned_robot = cloned_env.Cloned(self)
 
-        # Simplify the trajectory before performing retiming.
-        if traj.GetDuration() == 0.0:
-            traj = SimplifyTrajectory(traj, self)
+                if simplify:
+                    path = self.simplifier.ShortcutPath(cloned_robot, path, defer=False,
+                                                        timeout=timeout, **kwargs)
 
-        # Attempt smoothing with the Parabolic Retimer first.
-        smooth_traj = CopyTrajectory(traj)
-        status = openravepy.planningutils.SmoothTrajectory(
-            smooth_traj, 0.99, 0.99, 'ParabolicSmoother', '')
-        if status in [PlannerStatus.HasSolution,
-                      PlannerStatus.InterruptedWithSolution]:
-            return smooth_traj
+                retimer = self.smoother if smooth else self.retimer
+                cloned_timed_traj = retimer.RetimeTrajectory(cloned_robot, path, defer=False, **kwargs)
 
-        # If this fails, fall back on the Linear Retimer.
-        # (Linear retiming should always work, but will produce a
-        # slower path where the robot stops at each waypoint.)
-        logger.warning(
-            "SmoothTrajectory failed, using ParabolicTrajectoryRetimer. "
-            "Robot will stop at each waypoint: {:d}"
-            .format(traj.GetNumWaypoints()))
-        retimed_traj = CopyTrajectory(traj)
-        status = openravepy.planningutils.RetimeTrajectory(
-            retimed_traj, False, 1., 1., 'ParabolicTrajectoryRetimer', '')
-        if status in [PlannerStatus.HasSolution,
-                      PlannerStatus.InterruptedWithSolution]:
-            return retimed_traj
-        raise PrPyException("Path retimer failed with status '{:s}'"
-                            .format(str(status)))
+                # Copy the trajectory back to the original environment.
+                from ..util import CopyTrajectory
+                timed_traj = CopyTrajectory(cloned_timed_traj, env=self.GetEnv())
 
-    def ExecuteTrajectory(self, traj, retime=True, timeout=None,
-                          defer=False, executor=None, **kw_args):
-        """
-        Executes a trajectory and optionally waits for it to finish.
+            return self.ExecuteTrajectory(timed_traj, defer=False, **kwargs)
 
-        Passing `defer=True` to this function submits it for background
-        execution, and returns a Future which contains the result.
-
-        @param traj input trajectory
-        @param retime optionally retime the trajectory before executing it
-        @param timeout duration to wait for execution
-        @param defer return a future to this function and run in the background
-        @returns final executed trajectory or a Future to this result
-        """
-        # If the planning call is deferred, submit the call to the executor.
-        if defer is True:
+        if defer:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
-            executor = executor or get_default_executor()
-            return wrap_future(executor.submit(self.ExecuteTrajectory,
-                                               traj, retime, timeout,
-                                               defer=False, **kw_args))
 
-        # Check if this is a base trajectory.
-        has_base = hasattr(self, 'base')
+            executor = kwargs.get('executor') or get_default_executor()
+            return wrap_future(
+                executor.submit(do_execute,
+                    path, simplify=simplify, smooth=smooth, timeout=timeout,
+                    **kwargs
+                )
+            )
+        else:
+            return do_execute(path, simplify=simplify, smooth=smooth,
+                              timeout=timeout, **kwargs)
+
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kw_args):
+        # TODO: Verify that the trajectory is timed.
+        # TODO: Check if this trajectory contains the base.
+
+        logger.debug('Begin ExecuteTrajectory')
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
-        if needs_base and not has_base:
-            raise ValueError('Unable to execute affine DOF trajectory; '
-                             'robot does not have a MobileBase.')
-
-        # TODO: Throw an error if the trajectory contains both normal DOFs and
-        # affine DOFs.
-
-        if retime:
-            # Retime a manipulator trajectory.
-            if not needs_base:
-                traj = self.RetimeTrajectory(traj)
-            # Retime a base trajectory.
-            else:
-                max_vel = [self.GetAffineTranslationMaxVels()[0],
-                           self.GetAffineTranslationMaxVels()[1],
-                           self.GetAffineRotationAxisMaxVels()[2]]
-                max_accel = [3.*v for v in max_vel]
-                openravepy.planningutils.RetimeAffineTrajectory(
-                    traj, max_vel, max_accel, False)
 
         self.GetController().SetPath(traj)
 
         active_manipulators = self.GetTrajectoryManipulators(traj)
-        active_controllers = []
-        for active_manipulator in active_manipulators:
-            if hasattr(active_manipulator, 'controller'):
-                active_controllers.append(active_manipulator.controller)
+        active_controllers = [
+            active_manipulator.controller \
+            for active_manipulator in active_manipulators \
+            if hasattr(active_manipulator, 'controller')
+        ]
 
         if needs_base:
-            active_controllers.append(self.base.controller)
+            if hasattr(self, 'base') and hasattr(self.base, 'controller'):
+                active_controllers.append(self.base.controller)
 
-        util.WaitForControllers(active_controllers, timeout=timeout)
+        if defer:
+            import time
+            import trollius
+
+            @trollius.coroutine
+            def do_poll():
+                time_stop = time.time() + (timeout if timeout else numpy.inf)
+
+                while time.time() <= time_stop:
+                    is_done = all(controller.IsDone()
+                                  for controller in active_controllers)
+                    if is_done:
+                        raise trollius.Return(traj)
+
+                    yield trollius.From(trollius.sleep(period))
+
+                raise trollius.Return(None)
+
+            return trollius.async(do_poll())
+        else:
+            util.WaitForControllers(active_controllers, timeout=timeout)
+
         return traj
 
     def ViolatesVelocityLimits(self, traj):
@@ -296,28 +298,19 @@ class Robot(openravepy.Robot):
         return False
 
     def _PlanWrapper(self, planning_method, args, kw_args):
+        config_spec = self.GetActiveConfigurationSpecification('linear')
 
         # Call the planner.
-        config_spec = self.GetActiveConfigurationSpecification()
         result = planning_method(self, *args, **kw_args)
 
-        # Define the post processing steps for the trajectory.
-        def postprocess_trajectory(traj, kw_args):
-
+        def postprocess_trajectory(traj):
             # Strip inactive DOFs from the trajectory.
             openravepy.planningutils.ConvertTrajectorySpecification(
                 traj, config_spec
             )
 
-            # Optionally execute the trajectory.
-            if 'execute' not in kw_args or kw_args['execute']:
-                kw_args['defer'] = False
-                return self.ExecuteTrajectory(traj, **kw_args)
-            else:
-                return traj
-
         # Return either the trajectory result or a future to the result.
-        if 'defer' in kw_args and kw_args['defer'] is True:
+        if kw_args.get('defer', False):
             import trollius
 
             # Perform postprocessing on a future trajectory.
@@ -326,16 +319,24 @@ class Robot(openravepy.Robot):
                 # Wait for the planner to complete.
                 traj = yield trollius.From(traj_future)
 
-                # Submit a new task to postprocess the trajectory.
-                from trollius.executor import get_default_executor
-                executor = kw_args.get('executor') or get_default_executor()
-                f = executor.submit(postprocess_trajectory, traj, kw_args)
+                postprocess_trajectory(traj)
 
-                # Wait for the postprocessed trajectory to be completed.
-                from trollius.futures import wrap_future
-                processed_traj = yield trollius.From(wrap_future(f))
-                raise trollius.Return(processed_traj)
+                # Optionally execute the trajectory.
+                if kw_args.get('execute', True):
+                    # We know defer = True if we're in this function, so we
+                    # don't have to set it explicitly.
+                    traj = yield trollius.From(
+                        self.ExecutePath(traj, **kw_args)
+                    )
+
+                raise trollius.Return(traj)
 
             return trollius.Task(defer_trajectory(result, kw_args))
         else:
-            return postprocess_trajectory(result, kw_args)
+            postprocess_trajectory(result)
+
+            # Optionally execute the trajectory.
+            if kw_args.get('execute', True):
+                result = self.ExecutePath(result, **kw_args)
+
+            return result

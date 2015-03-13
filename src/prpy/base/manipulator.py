@@ -153,7 +153,7 @@ class Manipulator(openravepy.Robot.Manipulator):
                                                     args, cloned_args)
 
             # Strip inactive DOFs from the trajectory.
-            config_spec = cloned_robot.GetActiveConfigurationSpecification()
+            config_spec = cloned_robot.GetActiveConfigurationSpecification('linear')
             openravepy.planningutils.ConvertTrajectorySpecification(
                 cloned_traj, config_spec
             )
@@ -164,6 +164,6 @@ class Manipulator(openravepy.Robot.Manipulator):
 
         # Optionally execute the trajectory.
         if 'execute' not in kw_args or kw_args['execute']:
-            return self.GetRobot().ExecuteTrajectory(traj, **kw_args)
+            return self.GetRobot().ExecutePath(traj, **kw_args)
         else:
             return traj

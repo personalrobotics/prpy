@@ -187,10 +187,13 @@ class CHOMPPlanner(BasePlanner):
             cspec.InsertDeltaTime(waypoint, .1)
             traj.Insert(i, waypoint, True)
         
-        run = self.module.create(robot=robot, starttraj=traj, lambda_=lambda_)
-        self.module.iterate(n_iter=n_iter, run=run)
-        self.module.destroy(run=run)
-        return traj
+        try:
+            run = self.module.create(robot=robot, starttraj=traj, lambda_=lambda_)
+            self.module.iterate(n_iter=n_iter, run=run)
+            self.module.destroy(run=run)
+            return traj
+        except Exception as e:
+            raise PlanningError(str(e))
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15, **kw_args):
