@@ -58,14 +58,16 @@ class VectorFieldPlanner(BasePlanner):
         @param pose_error_tol in meters
         @return traj
         """
+        manip = robot.GetActiveManipulator()
 
-        def vf_geodesic(robot, goal_pose):
-            manip = robot.GetActiveManipulator()
-            return prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
-                                           goal_pose)
+        def vf_geodesic():
+            twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
+                                            goal_pose)
+            dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
+                                robot, twist)
+            return dqout
 
-        qtraj = self.FollowVectorField(robot, vf_geodesic, timelimit,
-                                       goal_pose=goal_pose)
+        qtraj = self.FollowVectorField(robot, vf_geodesic, timelimit)
 
         # Check if the last waypoint is at the goal
         with robot:
@@ -136,9 +138,7 @@ class VectorFieldPlanner(BasePlanner):
                 waypoint.append([dt])    # delta time
                 waypoint = numpy.concatenate(waypoint)
                 qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
-                twist = fn_vectorfield(robot, **kw_args)
-                dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
-                                robot, twist)
+                dqout = fn_vectorfield()
                 if (numpy.linalg.norm(dqout) < dq_tol):
                     break
                 qnew = q_curr + dqout*dt
