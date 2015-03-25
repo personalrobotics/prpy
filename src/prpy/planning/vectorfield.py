@@ -75,13 +75,8 @@ class VectorFieldPlanner(BasePlanner):
                 return True
             return False
 
-        qtraj, terminate = self.FollowVectorField(robot, vf_geodesic,
-                                                  timelimit, CloseEnough)
-
-        if not terminate:
-            raise PlanningError('Local minimum: unable to reach goal pose: ')
-
-        return qtraj
+        return self.FollowVectorField(robot, vf_geodesic,
+                                      CloseEnough, timelimit)
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
@@ -139,7 +134,7 @@ class VectorFieldPlanner(BasePlanner):
             '''
             Tnow = manip.GetEndEffectorTransform()
             error = prpy.util.GeodesicError(Tstart, Tnow)
-            if error[3] > angular_tolerance:
+            if numpy.fabs(error[3]) > angular_tolerance:
                 raise PlanningError('Deviated from orientation constraint.')
             distance_moved = numpy.dot(error[0:3], direction)
             position_deviation = numpy.linalg.norm(error[0:3] -
@@ -151,19 +146,14 @@ class VectorFieldPlanner(BasePlanner):
                 return True
             return False
 
-        qtraj, terminate = self.FollowVectorField(robot, vf_straightline,
-                                                  timelimit, TerminateMove)
-
-        if not terminate:
-            raise PlanningError('Local minimum: unable to reach goal pose: ')
-
-        return qtraj
+        return self.FollowVectorField(robot, vf_straightline,
+                                      TerminateMove, timelimit)
 
     @PlanningMethod
-    def FollowVectorField(self, robot, fn_vectorfield, timelimit=5.0,
-                          fn_terminate=None, dq_tol=0.0001, **kw_args):
+    def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
+                          timelimit=5.0, dq_tol=0.0001, **kw_args):
         """
-        Follow a joint space vectorfield to local minimum or termination.
+        Follow a joint space vectorfield to termination.
 
         @param robot
         @param fn_vectorfield a vectorfield of joint velocities
@@ -175,10 +165,6 @@ class VectorFieldPlanner(BasePlanner):
         @return terminate a Boolean that returns the final fn_terminate
         """
         start_time = time.time()
-
-        if fn_terminate is None:
-            def fn_terminate():
-                return False
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -216,10 +202,11 @@ class VectorFieldPlanner(BasePlanner):
                 waypoint = numpy.concatenate(waypoint)
                 qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
                 dqout = fn_vectorfield()
-                terminate = fn_terminate()
-                if (numpy.linalg.norm(dqout) < dq_tol) or terminate:
+                if (numpy.linalg.norm(dqout) < dq_tol):
+                    raise PlanningError('Local minimum, unable to progress')
+                if fn_terminate():
                     break
                 qnew = q_curr + dqout*dt
                 robot.SetActiveDOFValues(qnew)
 
-        return qtraj, terminate
+        return qtraj
