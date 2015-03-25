@@ -67,41 +67,42 @@ class VectorFieldPlanner(BasePlanner):
                                 robot, twist)
             return dqout
 
-        qtraj = self.FollowVectorField(robot, vf_geodesic, timelimit)
-
-        # Check if the last waypoint is at the goal
-        with robot:
-            cspec = qtraj.GetConfigurationSpecification()
-            waypoint_end = qtraj.GetWaypoint(qtraj.GetNumWaypoints()-1)
-            qend = cspec.ExtractJointValues(waypoint_end,
-                                            robot,
-                                            range(robot.GetDOF()),
-                                            0)
-            robot.SetActiveDOFValues(qend)
-            manip = robot.GetActiveManipulator()
+        def CloseEnough():
             pose_error = prpy.util.GeodesicDistance(
-                                    manip.GetEndEffectorTransform(),
-                                    goal_pose)
-            if pose_error > pose_error_tol:
-                raise PlanningError('Local minimum: \
-                    unable to reach goal pose: ')
+                        manip.GetEndEffectorTransform(),
+                        goal_pose)
+            if pose_error < pose_error_tol:
+                return True
+            return False
+
+        qtraj, terminate = self.FollowVectorField(robot, vf_geodesic,
+                                                  timelimit, CloseEnough)
+
+        if not terminate:
+            raise PlanningError('Local minimum: unable to reach goal pose: ')
+
         return qtraj
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, timelimit=5.0,
-                          dq_tol=0.0001, **kw_args):
+                          fn_terminate=None, dq_tol=0.0001, **kw_args):
         """
-        Plan to an end effector pose by following a geodesic loss function
-        in SE(3) via an optimized Jacobian.
+        Follow a joint space vectorfield to local minimum or termination.
 
         @param robot
-        @param fn_vectorfield inputs robot, kw_args and outputs velocity twist
+        @param fn_vectorfield a vectorfield of joint velocities
+        @param fn_terminate custom termination condition
         @param timelimit time limit before giving up
         @param dq_tol velocity tolerance for termination
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
+        @return terminate a Boolean that returns the final fn_terminate
         """
         start_time = time.time()
+
+        if fn_terminate is None:
+            def fn_terminate():
+                return False
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -139,9 +140,10 @@ class VectorFieldPlanner(BasePlanner):
                 waypoint = numpy.concatenate(waypoint)
                 qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
                 dqout = fn_vectorfield()
-                if (numpy.linalg.norm(dqout) < dq_tol):
+                terminate = fn_terminate()
+                if (numpy.linalg.norm(dqout) < dq_tol) or terminate:
                     break
                 qnew = q_curr + dqout*dt
                 robot.SetActiveDOFValues(qnew)
 
-        return qtraj
+        return qtraj, terminate
