@@ -84,6 +84,82 @@ class VectorFieldPlanner(BasePlanner):
         return qtraj
 
     @PlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance,
+                                max_distance=None, timelimit=5.0,
+                                position_tolerance=0.01,
+                                angular_tolerance=0.15,
+                                **kw_args):
+        """
+        Plan to a desired end-effector offset with move-hand-straight
+        constraint. movement less than distance will return failure. The motion
+        will not move further than max_distance.
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum distance in meters
+        @param max_distance maximum distance in meters
+        @param timelimit timeout in seconds
+        @param position_tolerance constraint tolerance in meters
+        @param angular_tolerance constraint tolerance in radians
+        @return traj
+        """
+        if distance < 0:
+            raise ValueError('Distance must be non-negative.')
+        elif numpy.linalg.norm(direction) == 0:
+            raise ValueError('Direction must be non-zero')
+        elif max_distance is not None and max_distance < distance:
+            raise ValueError('Max distance is less than minimum distance.')
+        elif position_tolerance < 0:
+            raise ValueError('Position tolerance must be non-negative.')
+        elif angular_tolerance < 0:
+            raise ValueError('Angular tolerance must be non-negative.')
+
+        # Normalize the direction vector.
+        direction = numpy.array(direction, dtype='float')
+        direction /= numpy.linalg.norm(direction)
+
+        # Default to moving an exact distance.
+        if max_distance is None:
+            max_distance = distance
+
+        manip = robot.GetActiveManipulator()
+        Tstart = manip.GetEndEffectorTransform()
+
+        def vf_straightline():
+            twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
+                                            Tstart)
+            twist[0:3] = direction
+            dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
+                    robot, twist)
+            return dqout
+
+        def TerminateMove():
+            '''
+            Fail if deviation larger than position and angular tolerance.
+            Succeed if distance moved is larger than max_distance
+            '''
+            Tnow = manip.GetEndEffectorTransform()
+            error = prpy.util.GeodesicError(Tstart, Tnow)
+            if error[3] > angular_tolerance:
+                raise PlanningError('Deviated from orientation constraint.')
+            distance_moved = numpy.dot(error[0:3], direction)
+            position_deviation = numpy.linalg.norm(error[0:3] -
+                                                   distance_moved*direction)
+            if position_deviation > position_tolerance:
+                raise PlanningError('Deviated from straight line constraint.')
+
+            if distance_moved > max_distance:
+                return True
+            return False
+
+        qtraj, terminate = self.FollowVectorField(robot, vf_straightline,
+                                                  timelimit, TerminateMove)
+
+        if not terminate:
+            raise PlanningError('Local minimum: unable to reach goal pose: ')
+
+        return qtraj
+
+    @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, timelimit=5.0,
                           fn_terminate=None, dq_tol=0.0001, **kw_args):
         """
