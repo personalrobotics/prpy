@@ -118,6 +118,8 @@ class VectorFieldPlanner(BasePlanner):
 
         manip = robot.GetActiveManipulator()
         Tstart = manip.GetEndEffectorTransform()
+        # This is a list simply because of Python scoping madness
+        distance_moved = [0.0]
 
         def vf_straightline():
             twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
@@ -136,18 +138,32 @@ class VectorFieldPlanner(BasePlanner):
             error = prpy.util.GeodesicError(Tstart, Tnow)
             if numpy.fabs(error[3]) > angular_tolerance:
                 raise PlanningError('Deviated from orientation constraint.')
-            distance_moved = numpy.dot(error[0:3], direction)
+            distance_moved[0] = numpy.dot(error[0:3], direction)
             position_deviation = numpy.linalg.norm(error[0:3] -
-                                                   distance_moved*direction)
+                                                   distance_moved[0]*direction)
             if position_deviation > position_tolerance:
                 raise PlanningError('Deviated from straight line constraint.')
 
-            if distance_moved > max_distance:
+            print distance_moved[0], max_distance, position_deviation
+
+            if distance_moved[0] > max_distance:
                 return True
             return False
 
-        return self.FollowVectorField(robot, vf_straightline,
-                                      TerminateMove, timelimit)
+        try:
+            traj = self.FollowVectorField(robot, vf_straightline,
+                                          TerminateMove, timelimit)
+        except PlanningError as e:
+                # Throw an error if we haven't reached the minimum distance.
+                print distance_moved[0]
+                if distance_moved[0] < distance:
+                    raise
+                # Otherwise we'll gracefully terminate.
+                else:
+                    logger.warning('Terminated early at distance %f < %f: %s',
+                                   distance_moved[0], max_distance, e.message)
+
+        return traj
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
