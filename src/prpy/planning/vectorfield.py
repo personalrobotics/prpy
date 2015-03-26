@@ -155,11 +155,11 @@ class VectorFieldPlanner(BasePlanner):
             if position_deviation > position_tolerance:
                 raise PlanningError('Deviated from straight line constraint.')
 
-            if distance_moved > distance:
-                return Status.CACHE_AND_CONTINUE
-
             if distance_moved > max_distance:
                 return Status.TERMINATE
+
+            if distance_moved > distance:
+                return Status.CACHE_AND_CONTINUE
 
             return Status.CONTINUE
 
