@@ -34,8 +34,21 @@ import openravepy
 import time
 from base import BasePlanner, PlanningError, PlanningMethod
 import prpy.util
+from enum import Enum
 
 logger = logging.getLogger('planning')
+
+
+class Status(Enum):
+    '''
+    TERMINATE - stop, exit gracefully, and return current trajectory
+    CACHE_AND_CONTINUE - save the current trajectory and CONTINUE.
+                         return the saved trajectory if Exception.
+    CONTINUE - keep going
+    '''
+    TERMINATE = -1
+    CACHE_AND_CONTINUE = 0
+    CONTINUE = 1
 
 
 class VectorFieldPlanner(BasePlanner):
@@ -72,8 +85,8 @@ class VectorFieldPlanner(BasePlanner):
                         manip.GetEndEffectorTransform(),
                         goal_pose)
             if pose_error < pose_error_tol:
-                return True
-            return False
+                return Status.TERMINATE
+            return Status.CONTINUE
 
         return self.FollowVectorField(robot, vf_geodesic,
                                       CloseEnough, timelimit)
@@ -118,8 +131,6 @@ class VectorFieldPlanner(BasePlanner):
 
         manip = robot.GetActiveManipulator()
         Tstart = manip.GetEndEffectorTransform()
-        # This is a list simply because of Python scoping madness
-        distance_moved = [0.0]
 
         def vf_straightline():
             twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
@@ -138,32 +149,22 @@ class VectorFieldPlanner(BasePlanner):
             error = prpy.util.GeodesicError(Tstart, Tnow)
             if numpy.fabs(error[3]) > angular_tolerance:
                 raise PlanningError('Deviated from orientation constraint.')
-            distance_moved[0] = numpy.dot(error[0:3], direction)
+            distance_moved = numpy.dot(error[0:3], direction)
             position_deviation = numpy.linalg.norm(error[0:3] -
-                                                   distance_moved[0]*direction)
+                                                   distance_moved*direction)
             if position_deviation > position_tolerance:
                 raise PlanningError('Deviated from straight line constraint.')
 
-            print distance_moved[0], max_distance, position_deviation
+            if distance_moved > distance:
+                return Status.CACHE_AND_CONTINUE
 
-            if distance_moved[0] > max_distance:
-                return True
-            return False
+            if distance_moved > max_distance:
+                return Status.TERMINATE
 
-        try:
-            traj = self.FollowVectorField(robot, vf_straightline,
-                                          TerminateMove, timelimit)
-        except PlanningError as e:
-                # Throw an error if we haven't reached the minimum distance.
-                print distance_moved[0]
-                if distance_moved[0] < distance:
-                    raise
-                # Otherwise we'll gracefully terminate.
-                else:
-                    logger.warning('Terminated early at distance %f < %f: %s',
-                                   distance_moved[0], max_distance, e.message)
+            return Status.CONTINUE
 
-        return traj
+        return self.FollowVectorField(robot, vf_straightline,
+                                      TerminateMove, timelimit)
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
@@ -182,47 +183,65 @@ class VectorFieldPlanner(BasePlanner):
         """
         start_time = time.time()
 
-        with robot:
-            manip = robot.GetActiveManipulator()
-            robot.SetActiveDOFs(manip.GetArmIndices())
-            # Populate joint positions and joint velocities
-            cspec = manip.GetArmConfigurationSpecification('quadratic')
-            cspec.AddDerivativeGroups(1, False)
-            cspec.AddDeltaTimeGroup()
-            cspec.ResetGroupOffsets()
-            qtraj = openravepy.RaveCreateTrajectory(self.env,
-                                                    'GenericTrajectory')
-            qtraj.Init(cspec)
+        try:
+            with robot:
+                manip = robot.GetActiveManipulator()
+                robot.SetActiveDOFs(manip.GetArmIndices())
+                # Populate joint positions and joint velocities
+                cspec = manip.GetArmConfigurationSpecification('quadratic')
+                cspec.AddDerivativeGroups(1, False)
+                cspec.AddDeltaTimeGroup()
+                cspec.ResetGroupOffsets()
+                qtraj = openravepy.RaveCreateTrajectory(self.env,
+                                                        'GenericTrajectory')
+                qtraj.Init(cspec)
+                cached_traj = None
 
-            dqout = robot.GetActiveDOFVelocities()
-            dt = min(robot.GetDOFResolutions()/robot.GetDOFVelocityLimits())
-            while True:
-                # Check for a timeout.
-                current_time = time.time()
-                if (timelimit is not None and
-                        current_time - start_time > timelimit):
-                    raise PlanningError('Reached time limit.')
+                dqout = robot.GetActiveDOFVelocities()
+                dt = min(robot.GetDOFResolutions() /
+                         robot.GetDOFVelocityLimits())
+                while True:
+                    # Check for a timeout.
+                    current_time = time.time()
+                    if (timelimit is not None and
+                            current_time - start_time > timelimit):
+                        raise PlanningError('Reached time limit.')
 
-                # Check for collisions.
-                if self.env.CheckCollision(robot):
-                    raise PlanningError('Encountered collision.')
-                if robot.CheckSelfCollision():
-                    raise PlanningError('Encountered self-collision.')
+                    # Check for collisions.
+                    if self.env.CheckCollision(robot):
+                        raise PlanningError('Encountered collision.')
+                    if robot.CheckSelfCollision():
+                        raise PlanningError('Encountered self-collision.')
 
-                # Add to trajectory
-                waypoint = []
-                q_curr = robot.GetActiveDOFValues()
-                waypoint.append(q_curr)  # joint position
-                waypoint.append(dqout)   # joint velocity
-                waypoint.append([dt])    # delta time
-                waypoint = numpy.concatenate(waypoint)
-                qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
-                dqout = fn_vectorfield()
-                if (numpy.linalg.norm(dqout) < dq_tol):
-                    raise PlanningError('Local minimum, unable to progress')
-                if fn_terminate():
-                    break
-                qnew = q_curr + dqout*dt
-                robot.SetActiveDOFValues(qnew)
+                    # Add to trajectory
+                    waypoint = []
+                    q_curr = robot.GetActiveDOFValues()
+                    waypoint.append(q_curr)  # joint position
+                    waypoint.append(dqout)   # joint velocity
+                    waypoint.append([dt])    # delta time
+                    waypoint = numpy.concatenate(waypoint)
+                    qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
+                    dqout = fn_vectorfield()
+                    if (numpy.linalg.norm(dqout) < dq_tol):
+                        raise PlanningError('Local minimum, \
+                                             unable to progress')
+
+                    status = fn_terminate()
+
+                    if status == Status.CACHE_AND_CONTINUE:
+                        cached_traj = prpy.util.CopyTrajectory(qtraj)
+
+                    if status == Status.TERMINATE:
+                        break
+
+                    qnew = q_curr + dqout*dt
+                    robot.SetActiveDOFValues(qnew)
+
+        except PlanningError as e:
+            if cached_traj is not None:
+                logger.warning('Terminated early: %s', e.message)
+                return cached_traj
+            else:
+                raise
 
         return qtraj
