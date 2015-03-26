@@ -149,7 +149,8 @@ class VectorFieldPlanner(BasePlanner):
         def TerminateMove():
             '''
             Fail if deviation larger than position and angular tolerance.
-            Succeed if distance moved is larger than max_distance
+            Succeed if distance moved is larger than max_distance.
+            Cache and continue if distance moved is larger than distance.
             '''
             Tnow = manip.GetEndEffectorTransform()
             error = prpy.util.GeodesicError(Tstart, Tnow)
@@ -185,7 +186,6 @@ class VectorFieldPlanner(BasePlanner):
         @param dq_tol velocity tolerance for termination
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
-        @return terminate a Boolean that returns the final fn_terminate
         """
         start_time = time.time()
 
