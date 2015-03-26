@@ -78,6 +78,9 @@ class VectorFieldPlanner(BasePlanner):
                                             goal_pose)
             dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
                                 robot, twist)
+            # Go as fast as possible
+            dqout = min(abs(robot.GetDOFVelocityLimits()/dqout))*dqout
+
             return dqout
 
         def CloseEnough():
@@ -138,6 +141,9 @@ class VectorFieldPlanner(BasePlanner):
             twist[0:3] = direction
             dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
                     robot, twist)
+
+            # Go as fast as possible
+            dqout = min(abs(robot.GetDOFVelocityLimits()/dqout))*dqout
             return dqout
 
         def TerminateMove():
