@@ -3,10 +3,11 @@
 # Copyright (c) 2013, Carnegie Mellon University
 # All rights reserved.
 # Authors: Michael Koval <mkoval@cs.cmu.edu>
+# Authors: Siddhartha Srinivasa <siddh@cs.cmu.edu>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +16,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -433,6 +434,8 @@ def quadraticObjective(dq, *args):
     @param dq joint velocity
     @param args[0]Jacobian
     @param args[1] desired twist
+    @return objective the objective function
+    @return gradient the analytical gradient of the objective
     '''
     J = args[0]
     dx = args[1]
@@ -456,6 +459,9 @@ def ComputeJointVelocityFromTwist(robot, twist,
             defaults to quadraticObjective
     @params dq_init optional initial guess for optimal joint velocity
             defaults to robot.GetActiveDOFVelocities()
+    @return dq_opt optimal joint velocity
+    @return twist_opt actual achieved twist
+            can be different from desired twist due to constraints
     '''
     manip = robot.GetActiveManipulator()
     robot.SetActiveDOFs(manip.GetArmIndices())
@@ -484,8 +490,51 @@ def ComputeJointVelocityFromTwist(robot, twist,
                                        bounds=dq_bounds, approx_grad=False)
 
     dq_opt = opt[0]
-    if opt[1] > 0:
-        print "Unable to produce desired twist."
     twist_opt = numpy.dot(jacobian, dq_opt)
 
     return dq_opt, twist_opt
+
+
+def GeodesicTwist(t1, t2):
+    '''
+    Computes the twist in global coordinates that corresponds
+    to the gradient of the geodesic distance between two transforms.
+
+    @param t1 current transform
+    @param t2 goal transform
+    @return twist in se(3)
+    '''
+    trel = numpy.dot(numpy.linalg.inv(t1), t2)
+    trans = numpy.dot(t1[0:3, 0:3], trel[0:3, 3])
+    omega = numpy.dot(t1[0:3, 0:3],
+                      openravepy.axisAngleFromRotationMatrix(
+                        trel[0:3, 0:3]))
+    return numpy.hstack((trans, omega))
+
+
+def GeodesicError(t1, t2):
+    '''
+    Computes the error in global coordinates between two transforms
+
+    @param t1 current transform
+    @param t2 goal transform
+    @return a 4-vector of [dx, dy, dz, solid angle]
+    '''
+    trel = numpy.dot(numpy.linalg.inv(t1), t2)
+    trans = numpy.dot(t1[0:3, 0:3], trel[0:3, 3])
+    omega = openravepy.axisAngleFromRotationMatrix(trel[0:3, 0:3])
+    angle = numpy.linalg.norm(omega)
+    return numpy.hstack((trans, angle))
+
+
+def GeodesicDistance(t1, t2, r=1.0):
+    '''
+    Computes the geodesic distance between two transforms
+
+    @param t1 current transform
+    @param t2 goal transform
+    @param r in units of meters/radians converts radians to meters
+    '''
+    error = GeodesicError(t1, t2)
+    error[3] = r*error[3]
+    return numpy.linalg.norm(error)
