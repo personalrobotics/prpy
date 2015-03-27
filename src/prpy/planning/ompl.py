@@ -29,7 +29,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, os, tempfile
+from ..util import CopyTrajectory
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from openravepy import PlannerStatus 
 
 logger = logging.getLogger('pypy.planning.ompl')
 
@@ -42,9 +44,8 @@ class OMPLPlanner(BasePlanner):
 
         try:
             self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_' + algorithm)
-            self.simplifier = openravepy.RaveCreatePlanner(self.env, 'OMPL_Simplifier')
         except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create OMPL module.')
+            raise UnsupportedPlanningError('Unable to create OMPL planner.')
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
@@ -77,7 +78,7 @@ class OMPLPlanner(BasePlanner):
 
         if ompl_args is not None:
             for key,value in ompl_args.iteritems():
-                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k = str(key), v = str(value))
+                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(k=str(key), v=str(value))
 
         if formatted_extra_params is not None:
             extraParams += formatted_extra_params
@@ -90,34 +91,19 @@ class OMPLPlanner(BasePlanner):
 
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
+        # Plan. We manually lock and unlock the environment because the context
+        # manager is currently broken on cloned environments.
+        self.env.Lock()
         try:
-            self.env.Lock()
-
-            # Plan.
-            if (not continue_planner) or not self.setup:
+            if (not continue_planner) or (not self.setup):
                 self.planner.InitPlan(robot, params)
                 self.setup = True
 
             status = self.planner.PlanPath(traj, releasegil=True)
-            from openravepy import PlannerStatus
             if status not in [ PlannerStatus.HasSolution,
                                PlannerStatus.InterruptedWithSolution ]:
                 raise PlanningError('Planner returned with status {0:s}.'.format(
                                     str(status)))
-
-            # Shortcut.
-            params = openravepy.Planner.PlannerParameters()
-            params.SetExtraParameters(
-                '<time_limit>{:f}</time_limit>'.format(shortcut_timeout)
-            )
-            self.simplifier.InitPlan(robot, params)
-            status = self.simplifier.PlanPath(traj, releasegil=True)
-            if status not in [ PlannerStatus.HasSolution,
-                               PlannerStatus.InterruptedWithSolution ]:
-                raise PlanningError('Simplifier returned with status {0:s}.'.format(
-                                    str(status)))
-        except Exception as e:
-            raise PlanningError('Planning failed with error: {0:s}'.format(e))
         finally:
             self.env.Unlock()
 
@@ -193,3 +179,39 @@ class RRTConnect(OMPLPlanner):
         ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
         return self._TSRPlan(robot, tsrchains, ompl_args=ompl_args, **kw_args)
 
+
+class OMPLSimplifier(BasePlanner):
+    def __init__(self):
+        super(OMPLSimplifier, self).__init__()
+
+        try:
+            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_Simplifier')
+        except openravepy.openrave_exception:
+            raise UnsupportedPlanningError('Unable to create OMPL planner.')
+
+    def __str__(self):
+        return 'OMPL Simplifier'
+
+    @PlanningMethod
+    def ShortcutPath(self, robot, path, timeout=1., **kwargs):
+        # The planner operates in-place, so we need to copy the input path. We
+        # also need to copy the trajectory into the planning environment.
+        output_path = CopyTrajectory(path, env=self.env)
+
+        extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
+        
+        params = openravepy.Planner.PlannerParameters()
+        params.SetRobotActiveJoints(robot)
+        params.SetExtraParameters(extraParams)
+
+        # TODO: It would be nice to call planningutils.SmoothTrajectory here,
+        # but we can't because it passes a NULL robot to InitPlan. This is an
+        # issue that needs to be fixed in or_ompl.
+        self.planner.InitPlan(robot, params)
+        status = self.planner.PlanPath(output_path, releasegil=True)
+        if status not in [ PlannerStatus.HasSolution,
+                           PlannerStatus.InterruptedWithSolution ]:
+            raise PlanningError('Simplifier returned with status {0:s}.'.format(
+                                str(status)))
+
+        return output_path

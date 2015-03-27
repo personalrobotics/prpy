@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, numpy, openravepy, os, tempfile
+import copy, logging, numpy, openravepy, os, tempfile
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 import prpy.kin, prpy.tsr
 
@@ -39,120 +39,66 @@ class CBiRRTPlanner(BasePlanner):
 
         if self.problem is None:
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
-    
-    def setupEnv(self, env):
-        self.env = env
-        try:
-            self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
-        except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
     def __str__(self):
         return 'CBiRRT'
 
-    def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
-             start_config=None, extra_args=None, **kw_args):
-        # Take a snapshot of the source environment for planning.
-        self.env.LoadProblem(self.problem, robot.GetName())
-
-        args = [ 'RunCBiRRT' ]
-        if extra_args is not None:
-            args += extra_args
-        if smoothingitrs is not None:
-            args += [ 'smoothingitrs', str(smoothingitrs) ]
-        if timelimit is not None:
-            args += [ 'timelimit', str(timelimit) ]
-        if allowlimadj is not None:
-            args += [ 'allowlimadj', str(int(allowlimadj)) ]
-        if start_config is not None:
-            args += [ 'jointstarts', str(len(start_config)), ' '.join([ str(x) for x in start_config ]) ]
-
-        # FIXME: Why can't we write to anything other than cmovetraj.txt or
-        # /tmp/cmovetraj.txt with CBiRRT?
-        traj_path = 'cmovetraj.txt'
-        args += [ 'filename', traj_path ]
-        args_str = ' '.join(args)
-
-        response = self.problem.SendCommand(args_str, True)
-        if not response.strip().startswith('1'):
-            raise PlanningError('Unknown error: ' + response)
-         
-        with open(traj_path, 'rb') as traj_file:
-            traj_xml = traj_file.read()
-            traj = openravepy.RaveCreateTrajectory(self.env, '')
-            traj.deserialize(traj_xml)
-
-        return traj
-
-    def PlanToGoals(self, robot, goals, **kw_args):
-        """
-        Helper method to allow PlanToConfiguration and PlanToConfigurations to use same code
-        without going back through PlanWrapper logic.
-        @param robot 
-        @param goals A list of goal configurations
-        """
-        extra_args = list()
-        for goal in goals:
-            goal_array = numpy.array(goal)
-            
-            if len(goal_array) != robot.GetActiveDOF():
-                logging.error('Incorrect number of DOFs in goal configuration; expected {0:d}, got {1:d}'.format(
-                        robot.GetActiveDOF(), len(goal_array)))
-                raise PlanningError('Incorrect number of DOFs in goal configuration.')
-            
-
-            extra_args += [ 'jointgoals',  str(len(goal_array)), ' '.join([ str(x) for x in goal_array ]) ]
-        return self.Plan(robot, extra_args=extra_args, **kw_args)
-
     @PlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
-        Plan to a configuraiton wtih multi-goal CBiRRT. This adds each goal in goals
-        as a goal for the planner and returns path that achieves one of the goals.
+        Plan to multiple goal configurations with CBiRRT. This adds each goal
+        in goals as a root node in the tree and returns a path that reaches one
+        of the goals.
         @param robot
-        @param goals A list of goal configurations
+        @param goals list of goal configurations
+        @return traj output path
         """
-        return self.PlanToGoals(robot, goals, **kw_args)
+        return self.Plan(robot, jointgoals=goals, smoothingitrs=0, **kw_args)
 
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
-        Plan to a single configuration with single-goal CBiRRT.
+        Plan to a single goal configuration with CBiRRT.
         @param robot
         @param goal goal configuration
+        @return traj output path
         """
-        return self.PlanToGoals(robot, [goal], **kw_args)
+        return self.Plan(robot, jointgoals=[goal], smoothingitrs=0, **kw_args)
 
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, psample=0.1, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Plan to a desired end-effector pose.
         @param robot
         @param goal desired end-effector pose
         @param psample probability of sampling a goal
-        @return traj
+        @return traj output path
         """
         manipulator_index = robot.GetActiveManipulatorIndex()
         goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
 
-        extra_args  = [ 'TSRChain', tsr_chain.serialize() ]
-        extra_args += [ 'psample', str(psample) ]
-        return self.Plan(robot, extra_args=extra_args, **kw_args)
+        return self.Plan(robot, tsr_chains=[tsr_chain], psample=0.1,
+                         smoothingitrs=0, **kw_args)
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
-                                timelimit=5.0, smoothingitrs=250, **kw_args):
+                                smoothingitrs=100, **kw_args):
         """
         Plan to a desired end-effector offset.
         @param robot
         @param direction unit vector in the direction of motion
         @param distance minimum distance in meters
-        @param timelimit timeout in seconds
-        @param smoothingitrs number of smoothing iterations
-        @return traj
+        @param smoothingitrs number of smoothing iterations to run
+        @return traj output path
         """
+        if direction.shape != (3,):
+            raise ValueError('Direction must be a three-dimensional vector.')
+        if not (distance >= 0):
+            raise ValueError('Distance must be non-negative; got {:f}.'.format(
+                             distance))
+
         with robot:
             manip = robot.GetActiveManipulator()
             H_world_ee = manip.GetEndEffectorTransform()
@@ -185,32 +131,137 @@ class CBiRRTPlanner(BasePlanner):
                                    Tw_e = H_w_ee, 
                                    Bw = Bw, 
                                    manip = robot.GetActiveManipulatorIndex())
-            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True, TSRs=[ trajtsr ])
+            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True, TSRs=[trajtsr])
         
-        extra_args = ['psample', '0.1']
-        extra_args += [ 'TSRChain', goal_tsr_chain.serialize() ]
-        extra_args += [ 'TSRChain', traj_tsr_chain.serialize() ]
-        return self.Plan(robot, allowlimadj=True, timelimit=timelimit,
-                         smoothingitrs=smoothingitrs,
-                         extra_args=extra_args, **kw_args)
+        return self.Plan(robot,
+            psample=0.1,
+            tsr_chains=[goal_tsr_chain, traj_tsr_chain],
+            # Smooth since this is a constrained trajectory.
+            smoothingitrs=smoothingitrs,
+            **kw_args
+        )
 
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, **kw_args):
+    def PlanToTSR(self, robot, tsr_chains, smoothingitrs=100, **kw_args):
         """
-        Plan to a goal TSR.
+        Plan to a goal specified as a list of TSR chains. CBiRRT supports an
+        arbitrary list of start, goal, and/or constraint TSR chains. The path
+        will be smoothed internally by CBiRRT if one or more constraint TSR
+        chains are specified.
         @param robot
-        @param tsrchains goal TSR chain
-        @return traj
+        @param tsr_chains list of TSR chains
+        @param smoothingitrs number of smoothing iterations to run
+        @return traj output path
         """
-        extra_args = list()
-        
-        use_psample = False
-        for chain in tsrchains:
-            extra_args += [ 'TSRChain', chain.serialize() ]
+        psample = None
+        is_constrained = False
+
+        for chain in tsr_chains:
             if chain.sample_start or chain.sample_goal:
-                use_psample = True
+                psample = 0.1
 
-        if use_psample:
-            extra_args += ['psample', '0.1']
+            if chain.constrain:
+                is_constrained = True
 
-        return self.Plan(robot, extra_args=extra_args, **kw_args)
+        # Only smooth constrained trajectories.
+        if not is_constrained:
+            smoothingitrs = 0
+
+        return self.Plan(robot,
+            psample=psample,
+            smoothingitrs=smoothingitrs,
+            tsr_chains=tsr_chains,
+            **kw_args
+        )
+
+    def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
+             jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
+             extra_args=None, **kw_args):
+        self.env.LoadProblem(self.problem, robot.GetName())
+
+        args = [ 'RunCBiRRT' ]
+
+        if extra_args is not None:
+            args += extra_args
+
+        if smoothingitrs is not None:
+            if smoothingitrs < 0:
+                raise ValueError('Invalid number of smoothing iterations. Value'
+                                 'must be non-negative; got  {:d}.'.format(
+                                    smoothingitrs))
+
+            args += [ 'smoothingitrs', str(smoothingitrs) ]
+
+        if timelimit is not None:
+            if not (timelimit > 0):
+                raise ValueError('Invalid value for "timelimit". Limit must be'
+                                 ' non-negative; got {:f}.'.format(timelimit))
+
+            args += [ 'timelimit', str(timelimit) ]
+
+        if allowlimadj is not None:
+            args += [ 'allowlimadj', str(int(allowlimadj)) ]
+
+        if psample is not None:
+            if not (0 <= psample <= 1):
+                raise ValueError('Invalid value for "psample". Value must be in'
+                                 ' the range [0, 1]; got {:f}.'.format(psample))
+
+            args += [ 'psample', str(psample) ]
+
+        if jointstarts is not None:
+            for start_config in jointstarts:
+                if len(start_config) != robot.GetActiveDOF():
+                    raise ValueError(
+                        'Incorrect number of DOFs in start configuration;'
+                        ' expected {:d}, got {:d}'.format(
+                            robot.GetActiveDOF(), len(start_config)
+                        )
+                    )
+                
+                args += ['jointstarts'] + self.serialize_dof_values(start_config)
+
+        if jointgoals is not None:
+            for goal_config in jointgoals:
+                if len(goal_config) != robot.GetActiveDOF():
+                    raise ValueError(
+                        'Incorrect number of DOFs in goal configuration;'
+                        ' expected {:d}, got {:d}'.format(
+                            robot.GetActiveDOF(), len(goal_config)
+                        )
+                    )
+            
+                args += ['jointgoals'] + self.serialize_dof_values(goal_config)
+
+        if tsr_chains is not None:
+            for tsr_chain in tsr_chains:
+                args += [ 'TSRChain', tsr_chain.serialize() ]
+
+        # FIXME: Why can't we write to anything other than cmovetraj.txt or
+        # /tmp/cmovetraj.txt with CBiRRT?
+        traj_path = 'cmovetraj.txt'
+        args += [ 'filename', traj_path ]
+        args_str = ' '.join(args)
+
+        response = self.problem.SendCommand(args_str, True)
+        if not response.strip().startswith('1'):
+            raise PlanningError('Unknown error: ' + response)
+         
+        # Construct the output trajectory.
+        with open(traj_path, 'rb') as traj_file:
+            traj_xml = traj_file.read()
+            traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+            traj.deserialize(traj_xml)
+
+        # Strip extraneous groups from the output trajectory.
+        # TODO: Where are these groups coming from!?
+        cspec = robot.GetActiveConfigurationSpecification()
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
+
+        return traj
+
+    @staticmethod
+    def serialize_dof_values(dof_values):
+        return [ str(len(dof_values)), 
+                 ' '.join([ str(x) for x in dof_values]) ]
+

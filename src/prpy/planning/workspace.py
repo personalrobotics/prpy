@@ -166,7 +166,7 @@ class GreedyIKPlanner(BasePlanner):
             dt = traj.GetDuration()
 
             # Smallest CSpace step at which to give up
-            min_step = min(robot.GetDOFResolutions())/100.
+            min_step = min(robot.GetActiveDOFResolutions())/100.
             ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
 
             start_time = time.time()
@@ -192,7 +192,7 @@ class GreedyIKPlanner(BasePlanner):
                         step = abs(qnew - qcurr)
                         if (max(step) < min_step) and qtraj:
                             raise PlanningError('Not making progress.')
-                        infeasible_step = any(step > robot.GetDOFResolutions())
+                        infeasible_step = any(step > robot.GetActiveDOFResolutions())
                     if infeasible_step:
                         # Backtrack and try half the step
                         dt = dt/2.0
@@ -206,9 +206,9 @@ class GreedyIKPlanner(BasePlanner):
             except PlanningError as e:
                 # Compute the min acceptable time from the min waypoint index.
                 if min_waypoint_index is None:
-                    min_waypoint_index = traj.GetNumWaypoints()
+                    min_waypoint_index = traj.GetNumWaypoints()-1
                 cspec = traj.GetConfigurationSpecification()
-                wpts = [traj.GetWaypoint(i) for i in range(min_waypoint_index)]
+                wpts = [traj.GetWaypoint(i) for i in range(min_waypoint_index+1)]
                 dts = [cspec.ExtractDeltaTime(wpt) for wpt in wpts]
                 min_time = numpy.sum(dts)
 
