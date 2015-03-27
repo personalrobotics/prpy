@@ -101,7 +101,9 @@ class TSRPlanner(BasePlanner):
             ik_param = IkParameterization(
                 tsrchain.sample(), IkParameterizationType.Transform6D)
             ik_solution = manipulator.FindIKSolutions(
-                ik_param, IkFilterOptions.CheckEnvCollisions)
+                ik_param, IkFilterOptions.CheckEnvCollisions,
+                ikreturn=False, releasegil=True
+            )
             if ik_solution.shape[0] > 0:
                 ik_solutions.append(ik_solution)
 
