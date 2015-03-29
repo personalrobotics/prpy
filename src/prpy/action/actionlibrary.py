@@ -19,6 +19,12 @@ class ActionLibrary(object):
         all_actions = self.get_actions()
         return name in all_actions
 
+    def get_action(self, name):
+        for a in self.actions:
+            if a.__name__ == name:
+                return a
+        return None
+
     def get_actions(self):
         """
         Return all the action names registered

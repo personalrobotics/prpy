@@ -75,10 +75,11 @@ class RenderTSRList(object):
     @param env The OpenRAVE environment
     @param num_samples The number of samples to render
     '''
-    def __init__(self, tsr_list, env, num_samples=25):
+    def __init__(self, tsr_list, env, num_samples=25, length=0.2):
         self.env = env
         self.tsr_list = tsr_list
         self.num_samples = num_samples
+        self.length = length
 
     def __enter__(self):
         import random
@@ -87,7 +88,7 @@ class RenderTSRList(object):
             tsr_chain_idx = random.randint(0, len(self.tsr_list) - 1)
             tsr_chain = self.tsr_list[tsr_chain_idx]
             ee_sample = tsr_chain.sample()
-            self.handles.append(openravepy.misc.DrawAxes(self.env, ee_sample, dist=0.2))
+            self.handles.append(openravepy.misc.DrawAxes(self.env, ee_sample, dist=self.length))
 
     def __exit__(self, exc_type, exc_value, traceback):
         pass

@@ -98,6 +98,12 @@ class Robot(openravepy.Robot):
                 return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
+        elif self.actionlibrary.has_action(name):
+            delegate_method = self.actionlibrary.get_action(name)
+            @functools.wraps(delegate_method)
+            def wrapper_method(obj, *args, **kw_args):
+                return delegate_method(self, obj, *args, **kw_args)
+            return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
