@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.0 (2015-03-30)
+------------------
 * Planning with vector fields.
 * Documentation update
 * Go as fast as possible!
