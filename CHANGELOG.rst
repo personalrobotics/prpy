@@ -2,6 +2,110 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Planning with vector fields.
+* Documentation update
+* Go as fast as possible!
+* Fixed status logic bug
+* Added caching
+* Added exception handling for min distance
+* More code refactoring and testing of end effector offset
+* First pass at plan to end effector offset
+* Added termination function
+* Trajectory execution refactor
+* Modify OptimizeTrajectory in chomp to catch generic exceptions and raise them as PlanningError
+* Adding support for execution of base trajectories
+* Fixing two typos in cbirrt that cause failures
+* Changing parabolic smoother to use HauserParabolicSmoother by default
+* Adding logic to clone the environment eshen simplifying and smoothing a path. This allows us to set the dofs in the trajectory as active.
+* Refactored vectorfield planner to input function pointer
+* Implemented defer=True on ExecuteTrajectory.
+* Eat kwargs in OMPLSimplifier.
+* Added defer=True support to ExecutePath.
+* Fixed typo in vectorfield planner
+* Fixed bug when getting DOF resolutions
+* Added a few cleanups for syntax and simplicity.
+* First pass at vector field planner to end effector transform
+* Cleaned up optimized joint velocity computation
+* Added gradient for objective function
+* Implemented and tested ComputeJointVelocityFromTwist in util
+* Added workspace planner to prpy.planning __init__.py
+* Fixed a number of bugs related to workspace planner.
+  This commit addresses several major bugs unmasked by the workspace planner.
+  1) Fixed a bug in cloning an environment into itself
+  (needed for recursive `@PlanningMethod`s)
+  2) Fixed a bug in incorrect formatting of RetimeTrajectory error messages.
+  3) Fixed numerous small issues in the workspace planner:
+  a) Returning a 1-waypoint trajectory when started in-contact with an object.
+  b) Fixed max_distance calculation error from missing `numpy.copy()`
+  c) Simplified some of the workspace planning logic.
+* Changed Clone() to lock by default.
+  This emulates the functions of `with env:` more closely,
+  which is useful because the call `with Clone(env):` looks
+  extremely similar.
+* Added workspace planner to prpy.planning init.py
+  This just adds the new workspace planner to __init__.py so it can be imported from `prpy.planning`.
+* Bugfixes for SimplifyTrajectory and NominalConfiguration.
+  - SimplifyTrajectory has been modified to gracefully return if passed a trajectory with only one waypoint.
+  - NominalConfiguration optionally takes a maximum allowable DOF range, which allows robots with fully redundant configurations (i.e. multiple rotation joints) to ignore IK configurations for which a closer solution must exist.
+* Changed default chunksize of tsr_planner to be 1.
+* Added PlanToEndEffectorOffset method. Untested.
+* Added fix to make ik_ranking default to ignoring multirotation IK solutions.
+* Added fix for SimplifyTrajectory to handle 1-waypoint trajectories.
+* Added patch for correctly cloning grabbed objects.
+  Due to a bug in OpenRAVE, cloned grabbed objects may have incorrect
+  adjacency properties, causing them to not be evaluated correctly
+  for self collisions (with the robot).  This bugfix forces cloned
+  environments to regrab all objects, which resets these incorrect links.
+* Added PlanToEndEffectorPose method that creates a geodesic workspace trajectory from start to goal and sends it off to PlanWorkspacePath
+* Added default 1 rotation offset to nominal configuration.
+* Fixed missing and child-referencing constructors in CloneBindings.
+* Changed Cloned(clone_env=...) to Cloned(into=...).  Also added docs.
+* Enabled syntax highlighting.
+* Added a new subsection.
+* Added InstanceDeduplicator examples.
+* Improved the planning README (thanks @cdellin).
+* First pass at greedy IK planner
+* Added numerous bugfixes for cloning and deferred planning.
+  * Deferred planning now consistently returns trollius.futures.Future
+  * Fixed bug in robot PlanWrapper that caused deferred planning to terminate early.
+  * Cloned() references are now explicitly passed their clone environment.
+  * .Cloned() helper method added to environments created by Clone(env)
+  * Existing clone references consolidated to minimize Cloned() lookups.
+* Stripped WAMRobot to the bare basics.
+* Fixed indexing bug in IK ranking function.
+* Generalized the nominalconfiguration ranker to accept angle bounds.
+* Adjusted default chunk size for tsr sampler and removed unused param.
+* Added multirotation filtering to nominal configuration IK ranker.
+* Added a MacSmoother test.
+* Simplify the trajectory in MacSmoother.
+* Made the Timer log message optional.
+* Fixed the ParabolicSmoother wrapper class.
+* Call SimplifyTrajectory before an OpenRAVE retimer.
+* Fixed argument names in robot.SimplifyPath.
+* Modified _PlanWrapper to set linear interpolation.
+* Added MacSmoother to wrap or_pr_spline.
+* Update README.md
+* More planner documentation.
+* Switched fallback retimer from linear to parabolic.
+* Added env lock to get active manipulator and DOF values at start.
+* Fixed incorrect swapping between Arm DOF Indices and Robot DOF Indices.
+* Implemented TsrPlanner as standalone from IkPlanner.
+* Added explicit chunk size parameter.
+* Added restructured IK and TSR planners that can do multiple goals.
+* Wrapped OpenRAVE retimers in the planning pipeline.
+* Added SimplifyPath tests.
+* Added SimplifyPath method using OMPL.
+* Fixed NamedPlanner in cloned environments.
+* Added PlanToEndEffectorPose tests.
+* Added more PlanToConfiguration tests.
+* Strip extraneous groups from the CBiRRT output.
+* Added basic planning unit tests.
+* Disabled smoothing in OMPL.
+* Disabled smoothing in CBiRRT.
+* Contributors: Jennifer King, Michael Koval, Pras, Pras Velagapudi, Siddhartha Srinivasa, Stefanos Nikolaidis
+
 0.3.1 (2015-02-10)
 ------------------
 * Added fix for error caused by clone_env being set to None.
