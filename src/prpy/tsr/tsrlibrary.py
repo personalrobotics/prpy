@@ -54,6 +54,7 @@ class TSRFactory(object):
 
 class TSRLibrary(object):
     all_factories = collections.defaultdict(lambda: collections.defaultdict(dict))
+    generic_kinbody_key = "_*"  # Something that is unlikely to be an actual kinbody name
     
     def __init__(self, robot, robot_name=None):
         """
@@ -83,12 +84,19 @@ class TSRLibrary(object):
             kinbody_name = self.get_object_type(kinbody)
             logger.debug('Inferred KinBody name "%s" for TSR.', kinbody_name)
 
+        f = None
         try:
             f = self.all_factories[self.robot_name][kinbody_name][action_name]
-        except KeyError:
-            raise KeyError('There is no TSR factory registered for action "{:s}"'
-                           ' with robot "{:s}" and object "{:s}".'.format(
-                           action_name, self.robot_name, kinbody_name))
+        except KeyError, ignored:
+            pass
+
+        if f is None:
+            try:
+                f = self.all_factories[self.robot_name][self.generic_kinbody_key][action_name]
+            except KeyError:
+                raise KeyError('There is no TSR factory registered for action "{:s}"'
+                               ' with robot "{:s}" and object "{:s}".'.format(
+                        action_name, self.robot_name, kinbody_name))
 
         return f(self.robot, kinbody, *args, **kw_args)
 
@@ -165,6 +173,9 @@ class TSRLibrary(object):
         """
         logger.debug('Adding TSRLibrary factory for robot "%s", object "%s", action "%s".',
             robot_name, object_name, action_name)
+
+        if object_name is None:
+            object_name = cls.generic_kinbody_key
 
         if action_name in cls.all_factories[robot_name][object_name]:
             logger.warning('Overwriting duplicate TSR factory for action "%s"'
