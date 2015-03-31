@@ -91,7 +91,7 @@ class RenderTSRList(object):
             self.handles.append(openravepy.misc.DrawAxes(self.env, ee_sample, dist=self.length))
 
     def __exit__(self, exc_type, exc_value, traceback):
-        pass
+        self.handles = []
 
 class RenderVector(object):
     '''
@@ -110,4 +110,4 @@ class RenderVector(object):
         self.h = self.env.drawarrow(self.start_point, self.end_point)
 
     def __exit__(self, exc_type, exc_value, traceback):
-        pass
+        self.h = []
