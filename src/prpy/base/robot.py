@@ -81,7 +81,7 @@ class Robot(openravepy.Robot):
         # Add planning and action methods to the tab-completion list.
         method_names = set(self.__dict__.keys())
         method_names.update(self.planner.get_planning_method_names())
-        method_names.update(self.actionlibrary.get_actions())
+        method_names.update(self.actions.get_actions())
         return list(method_names)
 
     def __getattr__(self, name):
@@ -98,8 +98,8 @@ class Robot(openravepy.Robot):
                 return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
-        elif self.actionlibrary.has_action(name):
-            delegate_method = self.actionlibrary.get_action(name)
+        elif self.actions.has_action(name):
+            delegate_method = self.actions.get_action(name)
             @functools.wraps(delegate_method)
             def wrapper_method(obj, *args, **kw_args):
                 return delegate_method(self, obj, *args, **kw_args)

@@ -44,7 +44,7 @@ class Manipulator(openravepy.Robot.Manipulator):
         # Add planning methods to the tab-completion list.
         method_names = set(self.__dict__.keys())
         method_names.update(self.GetRobot().planner.get_planning_method_names())
-        method_names.update(self.GetRobot().actionlibrary.get_actions())
+        method_names.update(self.GetRobot().actions.get_actions())
         return list(method_names)
 
     def __getattr__(self, name):
@@ -60,8 +60,8 @@ class Manipulator(openravepy.Robot.Manipulator):
             def wrapper_method(*args, **kw_args):
                 return self._PlanWrapper(delegate_method, args, kw_args)
             return wrapper_method
-        elif self.GetRobot().actionlibrary.has_action(name):
-            delegate_method = self.GetRobot().actionlibrary.get_action(name)
+        elif self.GetRobot().actions.has_action(name):
+            delegate_method = self.GetRobot().actions.get_action(name)
             @functools.wraps(delegate_method)
             def wrapper_method(obj, *args, **kw_args):
                 return delegate_method(self.GetRobot(), obj,
