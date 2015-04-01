@@ -199,6 +199,7 @@ class CHOMPPlanner(BasePlanner):
         cspec = traj.GetConfigurationSpecification()
         cspec.AddDeltaTimeGroup()
         openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
+
         for i in xrange(traj.GetNumWaypoints()):
             waypoint = traj.GetWaypoint(i)
             cspec.InsertDeltaTime(waypoint, .1)
@@ -208,9 +209,11 @@ class CHOMPPlanner(BasePlanner):
             run = self.module.create(robot=robot, starttraj=traj, lambda_=lambda_)
             self.module.iterate(n_iter=n_iter, run=run)
             self.module.destroy(run=run)
-            return traj
         except Exception as e:
             raise PlanningError(str(e))
+
+        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        return traj
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15,
@@ -225,11 +228,14 @@ class CHOMPPlanner(BasePlanner):
         self.distance_fields.sync(robot)
 
         try:
-            return self.module.runchomp(robot=robot, adofgoal=goal,
+            traj = self.module.runchomp(robot=robot, adofgoal=goal,
                                         lambda_=lambda_, n_iter=n_iter,
                                         releasegil=True, **kw_args)
         except Exception as e:
             raise PlanningError(str(e))
+
+        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        return traj
 
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0,
@@ -280,6 +286,7 @@ class CHOMPPlanner(BasePlanner):
                 'CHOMP deviated from the goal pose by {0:f} meters.'.format(
                     goal_distance))
 
+        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
         return traj
 
     # JK - Disabling. This is not working reliably.

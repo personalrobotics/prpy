@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import copy, logging, numpy, openravepy, os, tempfile
+from ..util import SetTrajectoryTags
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 import prpy.kin, prpy.tsr
 
@@ -252,6 +253,10 @@ class CBiRRTPlanner(BasePlanner):
             traj_xml = traj_file.read()
             traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
+
+        # Tag the trajectory as constrained if a constraint TSR is present.
+        if any(tsr_chain.constrain for tsr_chain in tsr_chains):
+            SetTrajectoryTags(traj, {'constrained': 'true'}, append=True)
 
         # Strip extraneous groups from the output trajectory.
         # TODO: Where are these groups coming from!?

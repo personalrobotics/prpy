@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 import numpy
 import openravepy
+from ..util import SetTrajectoryTags
 from base import BasePlanner, PlanningError, PlanningMethod
 
 class SnapPlanner(BasePlanner):
@@ -128,4 +129,6 @@ class SnapPlanner(BasePlanner):
 
         traj.Init(cspec)
         traj.Insert(0, waypoints.ravel())
+
+        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
         return traj

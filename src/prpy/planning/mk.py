@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, time
+from ..util import SetTrajectoryTags
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 logger = logging.getLogger('planning')
@@ -216,4 +217,5 @@ class MKPlanner(BasePlanner):
                     logger.warning('Terminated early at distance %f < %f: %s',
                                    current_distance, max_distance, e.message)
 
+        SetTrajectoryTags(output_traj, {'constrained': 'true'}, append=True)
         return traj

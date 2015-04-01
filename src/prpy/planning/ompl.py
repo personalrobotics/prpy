@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, os, tempfile
-from ..util import CopyTrajectory
+from ..util import CopyTrajectory, SetTrajectoryTags
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 from openravepy import PlannerStatus 
 
@@ -214,4 +214,5 @@ class OMPLSimplifier(BasePlanner):
             raise PlanningError('Simplifier returned with status {0:s}.'.format(
                                 str(status)))
 
+        SetTrajectoryTags(output_path, {'optimized': 'true'}, append=True)
         return output_path

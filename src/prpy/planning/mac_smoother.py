@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from ..util import CopyTrajectory, SimplifyTrajectory
+from ..util import CopyTrajectory, SimplifyTrajectory, SetTrajectoryTags
 from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
 from openravepy import Planner, PlannerStatus, RaveCreatePlanner, openrave_exception
 
@@ -84,5 +84,6 @@ class MacSmoother(BasePlanner):
         except openrave_exception as e:
             raise PlanningError('Timing trajectory failed: ' + str(e))
 
+        SetTrajectoryTags(output_traj, {'optimized': 'true'}, append=True)
         return output_traj
 
