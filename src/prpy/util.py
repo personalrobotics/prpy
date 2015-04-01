@@ -218,6 +218,69 @@ def CopyTrajectory(traj, env=None):
     return copy_traj
 
 
+def GetTrajectoryTags(traj):
+    """ Read key/value pairs from a trajectory.
+
+    The metadata is can be set by SetTrajectoryTags; see that function for
+    details. If no metadata is set, this function returns an empty dictionary.
+
+    @param traj input trajectory
+    @return dictionary of string key/value pairs
+    """
+    from collections import OrderedDict
+    import lxml.etree
+
+    tags = OrderedDict()
+
+    description = traj.GetDescription()
+    if not description:
+        return tags
+
+    root_ele = lxml.etree.fromstring(description)
+
+    for tag_ele in root_ele.getchildren():
+        key = tag_ele.get('key')
+        value = tag_ele.get('value')
+
+        if key is not None and value is not None:
+            tags[key] = value
+        else:
+            raise ValueError('<tag> element is missing key or value.')
+
+    return tags
+
+
+def SetTrajectoryTags(traj, tags, append=False):
+    """ Tag a trajectory with a dictionary of key/value pairs.
+
+    If append = True, then the dictionary of tags is added to any existing tags
+    on the trajectory. Otherwise, all existing tags will be replaced. This
+    metadata can be accessed by GetTrajectoryTags. Currently, the metadata is
+    stored as XML in the trajectory's description.
+
+    @param traj input trajectory
+    @param append if true, retain existing tags on the trajectory
+    """
+    import lxml.etree
+
+    if append:
+        all_tags = GetTrajectoryTags(traj)
+        all_tags.update(tags)
+    else:
+        all_tags = tags
+
+    root_ele = lxml.etree.Element(_tag='tags')
+
+    for key, value in all_tags.iteritems():
+        lxml.etree.SubElement(
+            _parent=root_ele, _tag='tag',
+            attrib={'key': key, 'value': value}
+        )
+
+    description = lxml.etree.tostring(root_ele)
+    traj.SetDescription(description)
+
+
 def SimplifyTrajectory(traj, robot):
     """
     Re-interpolate trajectory as minimal set of linear segments.
