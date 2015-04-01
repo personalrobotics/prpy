@@ -28,8 +28,9 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import contextlib, collections, logging, numpy, openravepy, rospkg, warnings
-import prpy.tsr
+import collections, logging, numpy, openravepy
+from .. import tsr
+from ..util import SetTrajectoryTags
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 logger = logging.getLogger('prpy.planning.chomp')
@@ -257,8 +258,8 @@ class CHOMPPlanner(BasePlanner):
 
         return traj
 
+    # JK - Disabling. This is not working reliably.
     '''
-    JK - Disabling. This is not working reliably.
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, lambda_=100.0, n_iter=100, goal_tolerance=0.01, **kw_args):
         """
