@@ -35,6 +35,7 @@ import time
 from base import BasePlanner, PlanningError, PlanningMethod
 import prpy.util
 from enum import Enum
+import math
 
 logger = logging.getLogger('planning')
 
@@ -175,7 +176,7 @@ class VectorFieldPlanner(BasePlanner):
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
-                          timelimit=5.0, dq_tol=0.0001, **kw_args):
+                          timelimit=5.0, dt_multiplier=1.0, **kw_args):
         """
         Follow a joint space vectorfield to termination.
 
@@ -183,7 +184,10 @@ class VectorFieldPlanner(BasePlanner):
         @param fn_vectorfield a vectorfield of joint velocities
         @param fn_terminate custom termination condition
         @param timelimit time limit before giving up
-        @param dq_tol velocity tolerance for termination
+        @param dt_multiplier multiplier of the minimum resolution at which
+               the vector field will be followed. Defaults to 1.0.
+               Any larger value means the vectorfield will be re-evaluated
+               floor(dt_multiplier) steps
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
@@ -203,45 +207,49 @@ class VectorFieldPlanner(BasePlanner):
                 qtraj.Init(cspec)
                 cached_traj = None
 
-                dqout = robot.GetActiveDOFVelocities()
-                dt = min(robot.GetDOFResolutions() /
-                         robot.GetDOFVelocityLimits())
-                while True:
+                dt_step = min(robot.GetDOFResolutions() /
+                              robot.GetDOFVelocityLimits())
+                dt_step *= dt_multiplier
+                status = fn_terminate()
+                while status != Status.TERMINATE:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
                         raise PlanningError('Reached time limit.')
 
-                    # Check for collisions.
-                    if self.env.CheckCollision(robot):
-                        raise PlanningError('Encountered collision.')
-                    if robot.CheckSelfCollision():
-                        raise PlanningError('Encountered self-collision.')
-
-                    # Add to trajectory
-                    waypoint = []
-                    q_curr = robot.GetActiveDOFValues()
-                    waypoint.append(q_curr)  # joint position
-                    waypoint.append(dqout)   # joint velocity
-                    waypoint.append([dt])    # delta time
-                    waypoint = numpy.concatenate(waypoint)
-                    qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
                     dqout = fn_vectorfield()
-                    if (numpy.linalg.norm(dqout) < dq_tol):
-                        raise PlanningError('Local minimum, \
-                                             unable to progress')
+                    numsteps = int(math.floor(max(
+                        dqout*dt_step/robot.GetDOFResolutions()
+                        )))
+                    if numsteps == 0:
+                        raise PlanningError('Step size too small, '
+                                            'unable to progress')
+                    dt = dt_step/numsteps
 
-                    status = fn_terminate()
+                    for step in xrange(numsteps):
+                        # Check for collisions.
+                        if self.env.CheckCollision(robot):
+                            raise PlanningError('Encountered collision.')
+                        if robot.CheckSelfCollision():
+                            raise PlanningError('Encountered self-collision.')
 
-                    if status == Status.CACHE_AND_CONTINUE:
-                        cached_traj = prpy.util.CopyTrajectory(qtraj)
+                        status = fn_terminate()
+                        if status == Status.CACHE_AND_CONTINUE:
+                            cached_traj = prpy.util.CopyTrajectory(qtraj)
+                        if status == Status.TERMINATE:
+                            break
 
-                    if status == Status.TERMINATE:
-                        break
-
-                    qnew = q_curr + dqout*dt
-                    robot.SetActiveDOFValues(qnew)
+                        # Add to trajectory
+                        waypoint = []
+                        q_curr = robot.GetActiveDOFValues()
+                        waypoint.append(q_curr)       # joint position
+                        waypoint.append(dqout)        # joint velocity
+                        waypoint.append([dt])    # delta time
+                        waypoint = numpy.concatenate(waypoint)
+                        qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
+                        qnew = q_curr + dt*dqout
+                        robot.SetActiveDOFValues(qnew)
 
         except PlanningError as e:
             if cached_traj is not None:
