@@ -47,6 +47,15 @@ class TSRPlanner(BasePlanner):
         return 'TSRPlanner'
 
     @PlanningMethod
+    def PlanToIK(self, robot, goal_pose, **kw_args):
+        from ..tsr import TSR, TSRChain
+
+        tsr = TSR(T0_w=goal_pose, Tw_e=numpy.eye(4), Bw=numpy.zeros((6,2)))
+        tsr_chain = TSRChain(sample_goal=True, TSR=tsr)
+
+        return self.PlanToTSR(robot, [tsr_chain], **kw_args)
+
+    @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=2.0,
                   num_attempts=3, chunk_size=1, ranker=None,
                   max_deviation=2*numpy.pi, **kw_args):
