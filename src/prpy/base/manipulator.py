@@ -36,6 +36,9 @@ class Manipulator(openravepy.Robot.Manipulator):
     def __init__(self):
         pass
 
+    def CloneBindings(self, parent):
+        pass
+
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
@@ -62,9 +65,6 @@ class Manipulator(openravepy.Robot.Manipulator):
             return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
-
-    def CloneBindings(self, parent):
-        Manipulator.__init__(self)
 
     def GetIndices(self):
         """Gets the DOF indicies associated with this manipulaor.
