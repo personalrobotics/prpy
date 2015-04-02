@@ -267,6 +267,6 @@ class VectorFieldPlanner(BasePlanner):
                 raise
 
         # TODO: Flag this trajectory as timed.
-        SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: 'true'}, append=True)
+        util.SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: 'true'}, append=True)
 
         return qtraj

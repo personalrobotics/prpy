@@ -36,6 +36,7 @@ from .. import tsr
 from ..util import SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   PlanningMethod, Tags)
+import prpy.tsr
 
 logger = logging.getLogger('prpy.planning.chomp')
 
@@ -266,6 +267,8 @@ class CHOMPPlanner(BasePlanner):
             )
             traj = openravepy.planningutils.ReverseTrajectory(traj)
         except RuntimeError as e:
+            raise PlanningError(str(e))
+        except openravepy.openrave_exception as e:
             raise PlanningError(str(e))
 
         # Verify that CHOMP didn't converge to the wrong goal. This is a

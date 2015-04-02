@@ -114,6 +114,18 @@ class BiRRTPlanner(OpenRAVEPlanner):
         OpenRAVEPlanner.__init__(self, algorithm='birrt')
 
     @PlanningMethod
+    def PlanToConfiguration(self, robot, goal, **kw_args):
+        """
+        Plan to a desired configuration with OpenRAVE. This will invoke the
+        OpenRAVE planner specified in the OpenRAVEPlanner constructor.
+        @param robot the robot whose active DOFs will be used
+        @param goal the desired robot joint configuration
+        @return traj a trajectory from current configuration to specified goal
+        """
+
+        return self._Plan(robot, goal, **kw_args)
+
+    @PlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to one of many configuration with OpenRAVE's BiRRT planner.
