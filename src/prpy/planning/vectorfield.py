@@ -32,8 +32,8 @@ import logging
 import numpy
 import openravepy
 import time
+from .. import util
 from base import BasePlanner, PlanningError, PlanningMethod
-import prpy.util
 from enum import Enum
 import math
 
@@ -75,9 +75,9 @@ class VectorFieldPlanner(BasePlanner):
         manip = robot.GetActiveManipulator()
 
         def vf_geodesic():
-            twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
+            twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             goal_pose)
-            dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
+            dqout, tout = util.ComputeJointVelocityFromTwist(
                                 robot, twist)
             # Go as fast as possible
             dqout = min(abs(robot.GetDOFVelocityLimits()/dqout))*dqout
@@ -85,15 +85,20 @@ class VectorFieldPlanner(BasePlanner):
             return dqout
 
         def CloseEnough():
-            pose_error = prpy.util.GeodesicDistance(
+            pose_error = util.GeodesicDistance(
                         manip.GetEndEffectorTransform(),
                         goal_pose)
             if pose_error < pose_error_tol:
                 return Status.TERMINATE
             return Status.CONTINUE
 
-        return self.FollowVectorField(robot, vf_geodesic,
-                                      CloseEnough, timelimit)
+        traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
+                                      timelimit)
+
+        # Flag this trajectory as unconstrained. This overwrites the
+        # constrained flag set by FollowVectorField.
+        util.SetTrajectoryTags(traj, {'constrained': 'false'}, append=True)
+        return traj
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
@@ -137,10 +142,10 @@ class VectorFieldPlanner(BasePlanner):
         Tstart = manip.GetEndEffectorTransform()
 
         def vf_straightline():
-            twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
+            twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             Tstart)
             twist[0:3] = direction
-            dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
+            dqout, tout = util.ComputeJointVelocityFromTwist(
                     robot, twist)
 
             # Go as fast as possible
@@ -154,7 +159,7 @@ class VectorFieldPlanner(BasePlanner):
             Cache and continue if distance moved is larger than distance.
             '''
             Tnow = manip.GetEndEffectorTransform()
-            error = prpy.util.GeodesicError(Tstart, Tnow)
+            error = util.GeodesicError(Tstart, Tnow)
             if numpy.fabs(error[3]) > angular_tolerance:
                 raise PlanningError('Deviated from orientation constraint.')
             distance_moved = numpy.dot(error[0:3], direction)
@@ -171,8 +176,8 @@ class VectorFieldPlanner(BasePlanner):
 
             return Status.CONTINUE
 
-        return self.FollowVectorField(robot, vf_straightline,
-                                      TerminateMove, timelimit)
+        return self.FollowVectorField(robot, vf_straightline, TerminateMove,
+                                      timelimit)
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
@@ -257,5 +262,10 @@ class VectorFieldPlanner(BasePlanner):
                 return cached_traj
             else:
                 raise
+
+        SetTrajectoryTags(qtraj, {
+            'constrained': 'true',
+            'timed': 'true'
+        }, append=True)
 
         return qtraj

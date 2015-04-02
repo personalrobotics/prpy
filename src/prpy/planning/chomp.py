@@ -28,14 +28,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import contextlib, collections, logging, numpy, openravepy, rospkg, warnings
-import prpy.tsr
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+import collections
+import logging
+import numpy
+import openravepy
+from .. import tsr
+from ..util import SetTrajectoryTags
+from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
+                  PlanningMethod)
 
 logger = logging.getLogger('prpy.planning.chomp')
 
 DistanceFieldKey = collections.namedtuple('DistanceFieldKey',
     [ 'kinematics_hash', 'enabled_mask', 'dof_values', 'dof_indices' ])
+
 
 class DistanceFieldManager(object):
     def __init__(self, module):
@@ -132,12 +138,15 @@ class DistanceFieldManager(object):
 
         return all_effected_links
 
+
 class CHOMPPlanner(BasePlanner):
     def __init__(self):
         super(CHOMPPlanner, self).__init__()
         self.setupEnv(self.env)
 
     def setupEnv(self, env):
+        from types import MethodType
+
         self.env = env
         try:
             from orcdchomp import orcdchomp
@@ -145,43 +154,52 @@ class CHOMPPlanner(BasePlanner):
         except ImportError:
             raise UnsupportedPlanningError('Unable to import orcdchomp.')
         except openravepy.openrave_exception as e:
-            raise UnsupportedPlanningError('Unable to create orcdchomp module: %s' % e)
+            raise UnsupportedPlanningError(
+                'Unable to create orcdchomp module: ' + str(e))
 
         if module is None:
-            raise UnsupportedPlanningError('Failed loading module.')
-        self.initialized = False
-        #orcdchomp.bind(self.module)
+            raise UnsupportedPlanningError('Failed loading CHOMP module.')
 
-        class Object():
+        # This is a hack to prevent leaking memory.
+        class CHOMPBindings(object):
             pass
 
-        import types
-
-        self.module = Object()
+        self.module = CHOMPBindings()
         self.module.module = module
-        self.module.viewspheres = types.MethodType(orcdchomp.viewspheres,module)
-        self.module.computedistancefield = types.MethodType(orcdchomp.computedistancefield,module)
-        self.module.addfield_fromobsarray = types.MethodType(orcdchomp.addfield_fromobsarray,module)
-        self.module.removefield = types.MethodType(orcdchomp.removefield,module)
-        self.module.create = types.MethodType(orcdchomp.create,module)
-        self.module.iterate = types.MethodType(orcdchomp.iterate,module)
-        self.module.gettraj = types.MethodType(orcdchomp.gettraj,module)
-        self.module.destroy = types.MethodType(orcdchomp.destroy,module)
-        self.module.runchomp = types.MethodType(orcdchomp.runchomp,module)
+        self.module.viewspheres =\
+            MethodType(orcdchomp.viewspheres, module)
+        self.module.computedistancefield =\
+            MethodType(orcdchomp.computedistancefield, module)
+        self.module.addfield_fromobsarray =\
+            MethodType(orcdchomp.addfield_fromobsarray, module)
+        self.module.removefield = MethodType(orcdchomp.removefield, module)
+        self.module.create = MethodType(orcdchomp.create, module)
+        self.module.iterate = MethodType(orcdchomp.iterate, module)
+        self.module.gettraj = MethodType(orcdchomp.gettraj, module)
+        self.module.destroy = MethodType(orcdchomp.destroy, module)
+        self.module.runchomp = MethodType(orcdchomp.runchomp, module)
         self.module.GetEnv = self.module.module.GetEnv
 
+        # Create a DistanceFieldManager to track which distance fields are
+        # currently loaded.
         self.distance_fields = DistanceFieldManager(self.module)
 
     def __str__(self):
         return 'CHOMP'
 
+    def ComputeDistanceField(self, robot):
+        logger.warning('ComputeDistanceField is deprecated. Distance fields are'
+                       ' now implicity created by DistanceFieldManager.')
+
     @PlanningMethod
-    def OptimizeTrajectory(self, robot, traj, lambda_=100.0, n_iter=50, **kw_args):
+    def OptimizeTrajectory(self, robot, traj, lambda_=100.0, n_iter=50,
+                           **kw_args):
         self.distance_fields.sync(robot)
 
         cspec = traj.GetConfigurationSpecification()
         cspec.AddDeltaTimeGroup()
         openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
+
         for i in xrange(traj.GetNumWaypoints()):
             waypoint = traj.GetWaypoint(i)
             cspec.InsertDeltaTime(waypoint, .1)
@@ -191,12 +209,15 @@ class CHOMPPlanner(BasePlanner):
             run = self.module.create(robot=robot, starttraj=traj, lambda_=lambda_)
             self.module.iterate(n_iter=n_iter, run=run)
             self.module.destroy(run=run)
-            return traj
         except Exception as e:
             raise PlanningError(str(e))
 
+        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        return traj
+
     @PlanningMethod
-    def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15, **kw_args):
+    def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15,
+                            **kw_args):
         """
         Plan to a single configuration with single-goal CHOMP.
         @param robot
@@ -207,14 +228,18 @@ class CHOMPPlanner(BasePlanner):
         self.distance_fields.sync(robot)
 
         try:
-            return self.module.runchomp(robot=robot, adofgoal=goal,
+            traj = self.module.runchomp(robot=robot, adofgoal=goal,
                                         lambda_=lambda_, n_iter=n_iter,
                                         releasegil=True, **kw_args)
         except Exception as e:
             raise PlanningError(str(e))
 
+        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        return traj
+
     @PlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0, n_iter=100, goal_tolerance=0.01, **kw_args):
+    def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0,
+                              n_iter=100, goal_tolerance=0.01, **kw_args):
         """
         Plan to a desired end-effector pose using GSCHOMP
         @param robot
@@ -234,11 +259,13 @@ class CHOMPPlanner(BasePlanner):
         start_config = robot.GetActiveDOFValues()
 
         try:
-            traj = self.module.runchomp(robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
-                                        lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
-                                        releasegil=True, **kw_args)
+            traj = self.module.runchomp(
+                robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
+                lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
+                releasegil=True, **kw_args
+            )
             traj = openravepy.planningutils.ReverseTrajectory(traj)
-        except RuntimeError, e:
+        except RuntimeError as e:
             raise PlanningError(str(e))
 
         # Verify that CHOMP didn't converge to the wrong goal. This is a
@@ -246,21 +273,27 @@ class CHOMPPlanner(BasePlanner):
         # fails because of joint limits.
         config_spec = traj.GetConfigurationSpecification()
         last_waypoint = traj.GetWaypoint(traj.GetNumWaypoints() - 1)
-        final_config = config_spec.ExtractJointValues(last_waypoint, robot, robot.GetActiveDOFIndices())
+        final_config = config_spec.ExtractJointValues(
+                last_waypoint, robot, robot.GetActiveDOFIndices())
         robot.SetActiveDOFValues(final_config)
         final_pose = robot.GetActiveManipulator().GetEndEffectorTransform()
 
         # TODO: Also check the orientation.
-        goal_distance = numpy.linalg.norm(final_pose[0:3, 3] - goal_pose[0:3, 3])
+        goal_distance = numpy.linalg.norm(final_pose[0:3, 3]
+                                         - goal_pose[0:3, 3])
         if goal_distance > goal_tolerance:
-            raise PlanningError('CHOMP deviated from the goal pose by {0:f} meters.'.format(goal_distance))
+            raise PlanningError(
+                'CHOMP deviated from the goal pose by {0:f} meters.'.format(
+                    goal_distance))
 
+        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
         return traj
 
+    # JK - Disabling. This is not working reliably.
     '''
-    JK - Disabling. This is not working reliably.
     @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, lambda_=100.0, n_iter=100, goal_tolerance=0.01, **kw_args):
+    def PlanToTSR(self, robot, tsrchains, lambda_=100.0, n_iter=100,
+                  goal_tolerance=0.01, **kw_args):
         """
         Plan to a goal TSR.
         @param robot
@@ -277,23 +310,19 @@ class CHOMPPlanner(BasePlanner):
         
         tsrchain = tsrchains[0]
         if not tsrchain.sample_goal or len(tsrchain.TSRs) > 1:
-            raise UnsupportedPlanningError('CHOMP: TSR chain must contain a single goal tsr')
+            raise UnsupportedPlanningError(
+                'CHOMP only supports TSR chains that contain a single goal'
+                ' TSR.'
+            )
         
         try:
             goal_tsr = tsrchain.TSRs[0]
-            traj = self.module.runchomp(robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
-                                        lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
-                                        releasegil=True, **kw_args)
-
-            traj = openravepy.planningutils.ReverseTrajectory(traj)
-
-        except RuntimeError, e:
+            traj = self.module.runchomp(
+                robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
+                lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
+                releasegil=True, **kw_args
+            )
+            return openravepy.planningutils.ReverseTrajectory(traj)
+        except RuntimeError as e:
             raise PlanningError(str(e))
-
-        return traj
     '''
-
-    def ComputeDistanceField(self, robot):
-        logger.warning('ComputeDistanceField is deprecated. Distance fields are'
-                       ' now implicity created by DistanceFieldManager.')
-

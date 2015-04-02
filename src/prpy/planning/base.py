@@ -33,7 +33,7 @@ import functools
 import logging
 import openravepy
 from ..clone import Clone
-from ..util import CopyTrajectory
+from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 
 logger = logging.getLogger('planning')
 
@@ -70,7 +70,18 @@ class PlanningMethod(object):
                 try:
                     planner_traj = self.func(instance, cloned_robot,
                                              *args, **kw_args)
+
+                    # Tag the trajectory with the planner and planning method
+                    # used to generate it. We don't overwrite these tags if
+                    # they already exist.
+                    tags = GetTrajectoryTags(planner_traj)
+                    tags.setdefault('planner', instance.__class__.__name__)
+                    tags.setdefault('planning_method', self.func.__name__)
+                    SetTrajectoryTags(planner_traj, tags, append=False)
+
                     return CopyTrajectory(planner_traj, env=env)
+
+                    return copied_traj
                 finally:
                     cloned_env.Unlock()
 

@@ -33,6 +33,7 @@ import logging
 import numpy
 import openravepy
 import time
+from ..util import SetTrajectoryTags
 from base import BasePlanner, PlanningError, PlanningMethod
 
 logger = logging.getLogger('planning')
@@ -221,4 +222,5 @@ class GreedyIKPlanner(BasePlanner):
                                    t, traj.GetDuration(), e.message)
 
         # Return as much of the trajectory as we have solved.
+        SetTrajectoryTags(qtraj, {'constrained': 'true'}, append=True)
         return qtraj

@@ -218,6 +218,47 @@ def CopyTrajectory(traj, env=None):
     return copy_traj
 
 
+def GetTrajectoryTags(traj):
+    """ Read key/value pairs from a trajectory.
+
+    The metadata is can be set by SetTrajectoryTags; see that function for
+    details. If no metadata is set, this function returns an empty dictionary.
+
+    @param traj input trajectory
+    @return dictionary of string key/value pairs
+    """
+    import json
+
+    description = traj.GetDescription()
+
+    if description:
+        return json.loads(description)
+    else:
+        return dict()
+
+
+def SetTrajectoryTags(traj, tags, append=False):
+    """ Tag a trajectory with a dictionary of key/value pairs.
+
+    If append = True, then the dictionary of tags is added to any existing tags
+    on the trajectory. Otherwise, all existing tags will be replaced. This
+    metadata can be accessed by GetTrajectoryTags. Currently, the metadata is
+    stored as JSON in the trajectory's description.
+
+    @param traj input trajectory
+    @param append if true, retain existing tags on the trajectory
+    """
+    import json
+
+    if append:
+        all_tags = GetTrajectoryTags(traj)
+        all_tags.update(tags)
+    else:
+        all_tags = tags
+
+    traj.SetDescription(json.dumps(all_tags))
+
+
 def SimplifyTrajectory(traj, robot):
     """
     Re-interpolate trajectory as minimal set of linear segments.
