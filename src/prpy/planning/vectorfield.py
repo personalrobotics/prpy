@@ -80,7 +80,7 @@ class VectorFieldPlanner(BasePlanner):
             dqout, tout = util.ComputeJointVelocityFromTwist(
                                 robot, twist)
             # Go as fast as possible
-            dqout = min(abs(robot.GetDOFVelocityLimits()/dqout))*dqout
+            dqout = min(abs(robot.GetActiveDOFVelocityLimits()/dqout))*dqout
 
             return dqout
 
@@ -149,7 +149,7 @@ class VectorFieldPlanner(BasePlanner):
                     robot, twist)
 
             # Go as fast as possible
-            dqout = min(abs(robot.GetDOFVelocityLimits()/dqout))*dqout
+            dqout = min(abs(robot.GetActiveDOFVelocityLimits()/dqout))*dqout
             return dqout
 
         def TerminateMove():
@@ -212,8 +212,8 @@ class VectorFieldPlanner(BasePlanner):
                 qtraj.Init(cspec)
                 cached_traj = None
 
-                dt_step = min(robot.GetDOFResolutions() /
-                              robot.GetDOFVelocityLimits())
+                dt_step = min(robot.GetActiveDOFResolutions() /
+                              robot.GetActiveDOFVelocityLimits())
                 dt_step *= dt_multiplier
                 status = fn_terminate()
                 while status != Status.TERMINATE:
@@ -225,7 +225,7 @@ class VectorFieldPlanner(BasePlanner):
 
                     dqout = fn_vectorfield()
                     numsteps = int(math.floor(max(
-                        dqout*dt_step/robot.GetDOFResolutions()
+                        dqout*dt_step/robot.GetActiveDOFResolutions()
                         )))
                     if numsteps == 0:
                         raise PlanningError('Step size too small, '
