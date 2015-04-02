@@ -41,6 +41,7 @@ class RenderTrajectory:
                     # Skip manipulators that don't have render_offset set.
                     if hasattr(manipulator, "render_offset"):
                         render_offset = manipulator.render_offset
+
                         if render_offset is None:
                             continue
                     else:
@@ -69,12 +70,12 @@ class RenderTrajectory:
 
 
 class RenderTSRList(object):
-    '''
+    """
     Render samples from a list of tsrs. 
     @param tsr_list A list of TSRChain objects (typically output from a call to tsrlibrary)
     @param env The OpenRAVE environment
     @param num_samples The number of samples to render
-    '''
+    """
     def __init__(self, tsr_list, env, num_samples=25, length=0.2):
         self.env = env
         self.tsr_list = tsr_list
@@ -111,3 +112,21 @@ class RenderVector(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.h = []
+
+class RenderPose(object):
+    """
+    Render an axis at a particular pose
+    @param pose The pose for the axis
+    @param env The OpenRAVE environment
+    @param length The length of each axis
+    """
+    def __init__(self, pose, env, length=0.2):
+        self.env = env
+        self.pose = pose
+        self.length = length
+
+    def __enter__(self):
+        self.h = openravepy.misc.DrawAxes(self.env, self.pose, dist=self.length)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
