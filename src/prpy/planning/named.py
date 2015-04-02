@@ -31,17 +31,25 @@ import logging, numpy, openravepy
 from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
 
 class NamedPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, delegate_planner=None):
+        """
+        @param delegate_planner planner used for PlanToConfiguration
+        """
         super(NamedPlanner, self).__init__()
+        self.delegate_planner = delegate_planner
 
     def __str__(self):
-        return 'NamedConfigurationPlanner'
+        return 'NamedPlanner'
 
     @PlanningMethod
     def PlanToNamedConfiguration(self, robot, name, **kw_args):
-        """
-        Plan this arm to saved configuration stored in robot.configurations by
-        ignoring any other DOFs specified in the named configuration.
+        """ Plan to a named configuration.
+
+        The configuration is looked up by name in robot.configurations. Any
+        DOFs not specified in the named configuration are ignored. Planning is
+        performed by PlanToConfiguration using a delegate planner. If not
+        specified, this defaults to robot.planner.
+
         @param name name of a saved configuration
         @param **kw_args optional arguments passed to PlanToConfiguration
         @returns traj trajectory
@@ -67,5 +75,6 @@ class NamedPlanner(BasePlanner):
                 arm_dof_values[i] = arm_dof_value
 
         # Delegate planning to another planner.
-        return robot.planner.PlanToConfiguration(robot, arm_dof_values, **kw_args)
+        planner = self.delegate_planner or robot.planner
+        return planner.PlanToConfiguration(robot, arm_dof_values, **kw_args)
 

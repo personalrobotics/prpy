@@ -30,7 +30,8 @@
 
 import copy, logging, numpy, openravepy, os, tempfile
 from ..util import SetTrajectoryTags
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
+                  PlanningMethod, Tags)
 import prpy.kin, prpy.tsr
 
 class CBiRRTPlanner(BasePlanner):
@@ -256,7 +257,7 @@ class CBiRRTPlanner(BasePlanner):
 
         # Tag the trajectory as constrained if a constraint TSR is present.
         if any(tsr_chain.constrain for tsr_chain in tsr_chains):
-            SetTrajectoryTags(traj, {'constrained': 'true'}, append=True)
+            SetTrajectoryTags(traj, {Tags.CONSTRAINED: True}, append=True)
 
         # Strip extraneous groups from the output trajectory.
         # TODO: Where are these groups coming from!?

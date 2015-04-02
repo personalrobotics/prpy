@@ -29,8 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from ..util import CopyTrajectory, SimplifyTrajectory, SetTrajectoryTags
-from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
-from openravepy import Planner, PlannerStatus, RaveCreatePlanner, openrave_exception
+from base import (BasePlanner, PlanningError, PlanningMethod,
+                  UnsupportedPlanningError, Tags)
+from openravepy import (Planner, PlannerStatus, RaveCreatePlanner,
+                        openrave_exception)
 
 
 class MacSmoother(BasePlanner):
@@ -84,6 +86,6 @@ class MacSmoother(BasePlanner):
         except openrave_exception as e:
             raise PlanningError('Timing trajectory failed: ' + str(e))
 
-        SetTrajectoryTags(output_traj, {'optimized': 'true'}, append=True)
+        SetTrajectoryTags(output_traj, {Tags.SMOOTH: True}, append=True)
         return output_traj
 

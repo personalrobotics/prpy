@@ -38,6 +38,11 @@ from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 logger = logging.getLogger('planning')
 
 
+class Tags(object):
+    SMOOTH = 'smooth'
+    CONSTRAINED = 'constrained'
+
+
 class PlanningError(Exception):
     pass
 
@@ -80,8 +85,6 @@ class PlanningMethod(object):
                     SetTrajectoryTags(planner_traj, tags, append=False)
 
                     return CopyTrajectory(planner_traj, env=env)
-
-                    return copied_traj
                 finally:
                     cloned_env.Unlock()
 
@@ -314,3 +317,50 @@ class Ranked(MetaPlanner):
 
         raise MetaPlanningError("All planners failed.",
                                 dict(zip(all_planners, results)))
+
+class FirstSupported(MetaPlanner):
+    def __init__(self, *planners):
+        self._planners = planners
+
+    def __str__(self):
+        return 'Fallback({:s})'.format(', '.join(map(str, self._planners)))
+
+    def get_planners(self, method_name):
+        return [planner for planner in self._planners
+                if hasattr(planner, method_name)]
+
+    def plan(self, method, args, kw_args):
+        for planner in self._planners:
+            if planner.has_planning_method(method):
+                plan_fn = getattr(planner, method)
+
+                try:
+                    return plan_fn(*args, **kw_args)
+                except UnsupportedPlanningError:
+                    continue
+
+        raise UnsupportedPlanningError()
+
+
+class MethodMask(MetaPlanner):
+    def __init__(self, planner, methods):
+        self._methods = set(methods)
+        self._planner = planner
+        self._planners = [planner]
+
+    def __str__(self):
+        return 'Only({:s}, methods={:s})'.format(
+            self._planner, list(self._methods))
+
+    def get_planners(self, method_name):
+        if method_name in self._methods:
+            return [self._planner]
+        else:
+            return []
+
+    def plan(self, method, args, kw_args):
+        if method in self._methods:
+            plan_fn = getattr(self._planner, method)
+            return plan_fn(*args, **kw_args)
+        else:
+            raise UnsupportedPlanningError()
