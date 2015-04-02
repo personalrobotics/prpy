@@ -356,7 +356,7 @@ class Only(MetaPlanner):
             return []
 
     def plan(self, method, args, kw_args):
-        if method_name in self._methods:
+        if method in self._methods:
             plan_fn = getattr(self._planner, method)
             return plan_fn(*args, **kw_args)
         else:
