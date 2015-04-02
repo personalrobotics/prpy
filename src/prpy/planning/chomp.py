@@ -35,7 +35,7 @@ import openravepy
 from .. import tsr
 from ..util import SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  PlanningMethod)
+                  PlanningMethod, Tags)
 
 logger = logging.getLogger('prpy.planning.chomp')
 
@@ -212,7 +212,7 @@ class CHOMPPlanner(BasePlanner):
         except Exception as e:
             raise PlanningError(str(e))
 
-        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
 
     @PlanningMethod
@@ -234,7 +234,7 @@ class CHOMPPlanner(BasePlanner):
         except Exception as e:
             raise PlanningError(str(e))
 
-        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
 
     @PlanningMethod
@@ -286,7 +286,7 @@ class CHOMPPlanner(BasePlanner):
                 'CHOMP deviated from the goal pose by {0:f} meters.'.format(
                     goal_distance))
 
-        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
 
     # JK - Disabling. This is not working reliably.

@@ -38,6 +38,11 @@ from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 logger = logging.getLogger('planning')
 
 
+class Tags(object):
+    SMOOTH = 'smooth'
+    CONSTRAINED = 'constrained'
+
+
 class PlanningError(Exception):
     pass
 

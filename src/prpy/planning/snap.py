@@ -30,7 +30,7 @@
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags
-from base import BasePlanner, PlanningError, PlanningMethod
+from base import BasePlanner, PlanningError, PlanningMethod, Tags
 
 class SnapPlanner(BasePlanner):
     """Planner that checks the straight-line trajectory to the goal.
@@ -130,5 +130,5 @@ class SnapPlanner(BasePlanner):
         traj.Init(cspec)
         traj.Insert(0, waypoints.ravel())
 
-        SetTrajectoryTags(traj, {'optimized': 'true'}, append=True)
+        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj

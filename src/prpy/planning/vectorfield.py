@@ -33,7 +33,7 @@ import numpy
 import openravepy
 import time
 from .. import util
-from base import BasePlanner, PlanningError, PlanningMethod
+from base import BasePlanner, PlanningError, PlanningMethod, Tags
 from enum import Enum
 import math
 
@@ -97,7 +97,7 @@ class VectorFieldPlanner(BasePlanner):
 
         # Flag this trajectory as unconstrained. This overwrites the
         # constrained flag set by FollowVectorField.
-        util.SetTrajectoryTags(traj, {'constrained': 'false'}, append=True)
+        util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
         return traj
 
     @PlanningMethod
@@ -263,9 +263,7 @@ class VectorFieldPlanner(BasePlanner):
             else:
                 raise
 
-        SetTrajectoryTags(qtraj, {
-            'constrained': 'true',
-            'timed': 'true'
-        }, append=True)
+        # TODO: Flag this trajectory as timed.
+        SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: 'true'}, append=True)
 
         return qtraj

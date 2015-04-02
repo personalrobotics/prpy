@@ -30,7 +30,8 @@
 
 import logging, numpy, openravepy, os, tempfile
 from ..util import CopyTrajectory, SetTrajectoryTags
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
+                  PlanningMethod, Tags)
 from openravepy import PlannerStatus 
 
 logger = logging.getLogger('pypy.planning.ompl')
@@ -214,5 +215,5 @@ class OMPLSimplifier(BasePlanner):
             raise PlanningError('Simplifier returned with status {0:s}.'.format(
                                 str(status)))
 
-        SetTrajectoryTags(output_path, {'optimized': 'true'}, append=True)
+        SetTrajectoryTags(output_path, {Tags.SMOOTH: True}, append=True)
         return output_path
