@@ -488,6 +488,8 @@ def ComputeJointVelocityFromTwist(robot, twist,
             defaults to quadraticObjective
     @params dq_init optional initial guess for optimal joint velocity
             defaults to robot.GetActiveDOFVelocities()
+    @params joint_limit_tolerance if less then this distance to joint
+            limit, velocity is bounded in that direction to 0
     @return dq_opt optimal joint velocity
     @return twist_opt actual achieved twist
             can be different from desired twist due to constraints
