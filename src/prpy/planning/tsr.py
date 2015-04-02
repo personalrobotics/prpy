@@ -46,6 +46,8 @@ class TSRPlanner(BasePlanner):
     def __str__(self):
         return 'TSRPlanner'
 
+    # TODO: Temporarily disabled based on Pras' feedback.
+    """
     @PlanningMethod
     def PlanToIK(self, robot, goal_pose, **kw_args):
         from ..tsr import TSR, TSRChain
@@ -54,6 +56,7 @@ class TSRPlanner(BasePlanner):
         tsr_chain = TSRChain(sample_goal=True, TSR=tsr)
 
         return self.PlanToTSR(robot, [tsr_chain], **kw_args)
+    """
 
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=2.0,
