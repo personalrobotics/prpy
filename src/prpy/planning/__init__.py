@@ -29,8 +29,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from base import (
-    Fallback,
-    Only,
+    FirstSupported,
+    MethodMask,
     Planner,
     PlanningError,
     Ranked,

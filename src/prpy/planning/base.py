@@ -318,7 +318,7 @@ class Ranked(MetaPlanner):
         raise MetaPlanningError("All planners failed.",
                                 dict(zip(all_planners, results)))
 
-class Fallback(MetaPlanner):
+class FirstSupported(MetaPlanner):
     def __init__(self, *planners):
         self._planners = planners
 
@@ -342,7 +342,7 @@ class Fallback(MetaPlanner):
         raise UnsupportedPlanningError()
 
 
-class Only(MetaPlanner):
+class MethodMask(MetaPlanner):
     def __init__(self, planner, methods):
         self._methods = set(methods)
         self._planner = planner
