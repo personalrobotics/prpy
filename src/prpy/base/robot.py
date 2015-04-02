@@ -78,23 +78,31 @@ class Robot(openravepy.Robot):
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
-        # Add planning methods to the tab-completion list.
+        # Add planning and action methods to the tab-completion list.
         method_names = set(self.__dict__.keys())
         method_names.update(self.planner.get_planning_method_names())
+        method_names.update(self.actions.get_actions())
         return list(method_names)
 
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
-        delegate_method = getattr(self.planner, name)
 
         # Resolve planner calls through the robot.planner field.
         if self.planner.has_planning_method(name):
+
+            delegate_method = getattr(self.planner, name)
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return self._PlanWrapper(delegate_method, args, kw_args)
 
+            return wrapper_method
+        elif self.actions.has_action(name):
+            delegate_method = self.actions.get_action(name)
+            @functools.wraps(delegate_method)
+            def wrapper_method(obj, *args, **kw_args):
+                return delegate_method(self, obj, *args, **kw_args)
             return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
