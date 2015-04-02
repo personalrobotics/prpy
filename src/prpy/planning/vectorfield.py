@@ -80,7 +80,8 @@ class VectorFieldPlanner(BasePlanner):
             dqout, tout = util.ComputeJointVelocityFromTwist(
                                 robot, twist)
             # Go as fast as possible
-            dqout = min(abs(robot.GetActiveDOFVelocityLimits()/dqout))*dqout
+            vlimits = robot.GetDOFVelocityLimits(dofindices=robot.GetActiveDOFIndices())
+            dqout = min(abs(vlimits/dqout))*dqout
 
             return dqout
 
@@ -149,7 +150,8 @@ class VectorFieldPlanner(BasePlanner):
                     robot, twist)
 
             # Go as fast as possible
-            dqout = min(abs(robot.GetActiveDOFVelocityLimits()/dqout))*dqout
+            vlimits= robot.GetDOFVelocityLimits(dofindices=robot.GetActiveDOFIndices())
+            dqout = min(abs(vlimits/dqout))*dqout
             return dqout
 
         def TerminateMove():
@@ -212,8 +214,9 @@ class VectorFieldPlanner(BasePlanner):
                 qtraj.Init(cspec)
                 cached_traj = None
 
+                vlimits = robot.GetDOFVelocityLimits(dofindices=robot.GetActiveDOFIndices())
                 dt_step = min(robot.GetActiveDOFResolutions() /
-                              robot.GetActiveDOFVelocityLimits())
+                              vlimits)
                 dt_step *= dt_multiplier
                 status = fn_terminate()
                 while status != Status.TERMINATE:
