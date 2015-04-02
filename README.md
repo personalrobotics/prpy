@@ -65,6 +65,8 @@ Additionally, PrPy provides several simple planners of its own:
   workspace trajectories
 - `SnapPlanner`: attempts to execute a straight-line joint-space trajectory to
   the goal
+- `GreedyIKPlanner`: follows a workspace path by greedily picking IK solutions
+- `VectorFieldPlanner`: follows any custom cspace vector field until a custom termination
 
 Finally, PrPy provides several meta-planners for combining the above
 planners:
