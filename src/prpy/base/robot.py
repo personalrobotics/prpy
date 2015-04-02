@@ -29,8 +29,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import functools, logging, openravepy, numpy
-from .. import bind, named_config, planning, util
 import prpy.util
+from .. import bind, named_config, planning, util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence 
@@ -100,19 +100,27 @@ class Robot(openravepy.Robot):
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
     def CloneBindings(self, parent):
-        Robot.__init__(self, parent.robot_name)
         self.planner = parent.planner
-        self.manipulators = [Cloned(manipulator, into=self.GetEnv())
-                             for manipulator in parent.manipulators]
+
+        # TODO: This is a bit of a mess. We need to clean this up when we
+        # finish the smoothing refactor.
+        self.simplifier = parent.simplifier
+        self.retimer = parent.retimer
+        self.smoother = parent.smoother
+
+        self.robot_name = parent.robot_name
+        self.tsrlibrary = parent.tsrlibrary
         self.configurations = parent.configurations
 
-        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
-        self.SetController(self.multicontroller)
+        self.controllers = []
+        self.SetController(None)
 
+        self.manipulators = [Cloned(manipulator, into=self.GetEnv())
+                             for manipulator in parent.manipulators]
+
+        # TODO: Do we really need this in cloned environments?
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
-        self.ompl_simplifier = OMPLSimplifier()
-
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
