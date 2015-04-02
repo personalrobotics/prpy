@@ -428,35 +428,29 @@ class Timer(object):
         return self.end - self.start
 
 
-def quadraticPlusJointLimitObjective(dq, *args):
+def quadraticPlusJointLimitObjective(dq, J, dx, q, q_min, q_max, delta_joint_penalty=5e-1, lambda_dqdist=0.01, *args):
     '''
-    Quadratic objective function for SciPy's optimization.
+    Quadratic plus joint limit avoidance objective function for SciPy's optimization.
     @param dq joint velocity
-    @param args[0] Jacobian
-    @param args[1] desired twist
-    @param args[2] current joint values
-    @param args[3] lower joint limit
-    @param args[4] upper joint limit
+    @param J Jacobian
+    @param dx desired twist
+    @param q current joint values
+    @param q_min lower joint limit
+    @param q_max upper joint limit
+    @param delta_joint_penalty distance from limit with penality
+    @param lamdbda_dqdist weighting for joint limit penalty
     '''
     
-    objective, gradient = quadraticObjective(dq, *args)
-    q = args[2]
-    q_min = args[3]
-    q_max = args[4]
+    #compute quadratic distance part
+    objective, gradient = quadraticObjective(dq, J, dx)
 
-    #when joint is less than this distance away from limit, start penalizing
-    delta_j = 3e-1
-
-    qdiff_lower = delta_j - (q-q_min)
-    qdiff_upper = delta_j - (q_max-q)
-
+    #add penalty for joint limit avoidance
+    qdiff_lower = delta_joint_penalty - (q-q_min)
+    qdiff_upper = delta_joint_penalty - (q_max-q)
 
     dq_target = [diff_lower if diff_lower > 0. else
                  -diff_upper if diff_upper > 0. else
                  0. for diff_lower, diff_upper in zip(qdiff_lower, qdiff_upper)]
-
-    #constant for weighing cost of quadratic vs. being diff from bounds
-    lambda_dqdist = 0.01
 
     objective += lambda_dqdist * 0.5 * sum( numpy.square(dq - dq_target))
     gradient += lambda_dqdist * (dq-dq_target)
@@ -464,17 +458,15 @@ def quadraticPlusJointLimitObjective(dq, *args):
     return objective, gradient
 
 
-def quadraticObjective(dq, *args):
+def quadraticObjective(dq, J, dx, *args):
     '''
     Quadratic objective function for SciPy's optimization.
     @param dq joint velocity
-    @param args[0] Jacobian
-    @param args[1] desired twist
+    @param J Jacobian
+    @param dx desired twist
     @return objective the objective function
     @return gradient the analytical gradient of the objective
     '''
-    J = args[0]
-    dx = args[1]
     error = (numpy.dot(J, dq) - dx)
     objective = 0.5*numpy.dot(numpy.transpose(error), error)
     gradient = numpy.dot(numpy.transpose(J), error)
@@ -482,7 +474,7 @@ def quadraticObjective(dq, *args):
 
 
 def ComputeJointVelocityFromTwist(robot, twist,
-                                  objective=quadraticPlusJointLimitObjective,
+                                  objective=quadraticObjective,
                                   joint_limit_tolerance=3e-2,
                                   dq_init=None):
     '''
@@ -527,8 +519,6 @@ def ComputeJointVelocityFromTwist(robot, twist,
                                        bounds=dq_bounds, approx_grad=False)
 
     dq_opt = opt[0]
-#    if opt[1] > 0:
-#        print "Unable to produce desired twist."
     twist_opt = numpy.dot(jacobian, dq_opt)
 
     return dq_opt, twist_opt
