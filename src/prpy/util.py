@@ -428,11 +428,47 @@ class Timer(object):
         return self.end - self.start
 
 
+def quadraticPlusJointLimitObjective(dq, *args):
+    '''
+    Quadratic objective function for SciPy's optimization.
+    @param dq joint velocity
+    @param args[0] Jacobian
+    @param args[1] desired twist
+    @param args[2] current joint values
+    @param args[3] lower joint limit
+    @param args[4] upper joint limit
+    '''
+    
+    objective, gradient = quadraticObjective(dq, *args)
+    q = args[2]
+    q_min = args[3]
+    q_max = args[4]
+
+    #when joint is less than this distance away from limit, start penalizing
+    delta_j = 3e-1
+
+    qdiff_lower = delta_j - (q-q_min)
+    qdiff_upper = delta_j - (q_max-q)
+
+
+    dq_target = [diff_lower if diff_lower > 0. else
+                 -diff_upper if diff_upper > 0. else
+                 0. for diff_lower, diff_upper in zip(qdiff_lower, qdiff_upper)]
+
+    #constant for weighing cost of quadratic vs. being diff from bounds
+    lambda_dqdist = 0.01
+
+    objective += lambda_dqdist * 0.5 * sum( numpy.square(dq - dq_target))
+    gradient += lambda_dqdist * (dq-dq_target)
+          
+    return objective, gradient
+
+
 def quadraticObjective(dq, *args):
     '''
     Quadratic objective function for SciPy's optimization.
     @param dq joint velocity
-    @param args[0]Jacobian
+    @param args[0] Jacobian
     @param args[1] desired twist
     @return objective the objective function
     @return gradient the analytical gradient of the objective
@@ -446,7 +482,8 @@ def quadraticObjective(dq, *args):
 
 
 def ComputeJointVelocityFromTwist(robot, twist,
-                                  objective=quadraticObjective,
+                                  objective=quadraticPlusJointLimitObjective,
+                                  joint_limit_tolerance=3e-2,
                                   dq_init=None):
     '''
     Computes the optimal joint velocity given a twist by formulating
@@ -478,18 +515,20 @@ def ComputeJointVelocityFromTwist(robot, twist,
     # Check for joint limits
     q_curr = robot.GetActiveDOFValues()
     q_min, q_max = robot.GetActiveDOFLimits()
-    dq_bounds = [(0, max) if (numpy.isclose(q_curr[i], q_min[i])) else
-                 (min, 0) if (numpy.isclose(q_curr[i], q_max[i])) else
+    dq_bounds = [(0, max) if (numpy.isclose(q_curr[i], q_min[i], atol=joint_limit_tolerance)) else
+                 (min, 0) if (numpy.isclose(q_curr[i], q_max[i], atol=joint_limit_tolerance)) else
                  (min, max) for i, (min, max) in enumerate(bounds)]
 
     if dq_init is None:
         dq_init = robot.GetActiveDOFVelocities()
 
     opt = scipy.optimize.fmin_l_bfgs_b(objective, dq_init, fprime=None,
-                                       args=(jacobian_active, twist_active),
+                                       args=(jacobian_active, twist_active, q_curr, q_min, q_max),
                                        bounds=dq_bounds, approx_grad=False)
 
     dq_opt = opt[0]
+#    if opt[1] > 0:
+#        print "Unable to produce desired twist."
     twist_opt = numpy.dot(jacobian, dq_opt)
 
     return dq_opt, twist_opt
