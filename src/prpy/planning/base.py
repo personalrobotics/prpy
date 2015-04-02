@@ -80,8 +80,6 @@ class PlanningMethod(object):
                     SetTrajectoryTags(planner_traj, tags, append=False)
 
                     return CopyTrajectory(planner_traj, env=env)
-
-                    return copied_traj
                 finally:
                     cloned_env.Unlock()
 
