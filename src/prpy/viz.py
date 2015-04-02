@@ -68,31 +68,45 @@ class RenderTrajectory:
         with self.env:
             del self.handles
 
+class RenderPoses(object):
+    """
+    Render axis at a poses
+    @param poses The poses to render
+    @param env The OpenRAVE environment
+    @param length The length of each axis
+    @param render If false, this class does nothing
+    """
+    def __init__(self, poses, env, length=0.2, render=True):
+        self.env = env
+        self.poses = poses
+        self.length = length
+        self.render = render
 
-class RenderTSRList(object):
+    def __enter__(self):
+        if self.render:
+            self.handles = []
+            for pose in self.poses:
+                self.handles.append(openravepy.misc.DrawAxes(self.env, pose, dist=self.length))
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.handles = []
+
+class RenderTSRList(RenderPoses):
     """
     Render samples from a list of tsrs. 
     @param tsr_list A list of TSRChain objects (typically output from a call to tsrlibrary)
     @param env The OpenRAVE environment
     @param num_samples The number of samples to render
+    @param render If false, this class does nothing
     """
-    def __init__(self, tsr_list, env, num_samples=25, length=0.2):
-        self.env = env
-        self.tsr_list = tsr_list
-        self.num_samples = num_samples
-        self.length = length
-
-    def __enter__(self):
+    def __init__(self, tsr_list, env, num_samples=25, length=0.2, render=True):
         import random
-        self.handles = []
-        for idx in range(self.num_samples):
-            tsr_chain_idx = random.randint(0, len(self.tsr_list) - 1)
-            tsr_chain = self.tsr_list[tsr_chain_idx]
-            ee_sample = tsr_chain.sample()
-            self.handles.append(openravepy.misc.DrawAxes(self.env, ee_sample, dist=self.length))
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.handles = []
+        poses = []
+        for idx in range(num_samples):
+            tsr_chain_idx = random.randint(0, len(tsr_list) - 1)
+            tsr_chain = tsr_list[tsr_chain_idx]
+            poses.append(tsr_chain.sample())
+        RenderPoses.__init__(self, poses, env, length=length, render=render)
 
 class RenderVector(object):
     '''
@@ -101,32 +115,18 @@ class RenderVector(object):
     @param direction The direction of the vector to render
     @param length The length of the rendered vector
     @param env The OpenRAVE environment
+    @param render If false, this class does nothing
     '''
-    def __init__(self, start_pt, direction, length, env):
+    def __init__(self, start_pt, direction, length, env, render=True):
         self.env = env
         self.start_point = start_pt
         self.end_point = start_pt + numpy.array(direction)*length
+        self.render = render
         
     def __enter__(self):
-        self.h = self.env.drawarrow(self.start_point, self.end_point)
+        if self.render:
+            self.h = self.env.drawarrow(self.start_point, self.end_point)
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.h = []
 
-class RenderPose(object):
-    """
-    Render an axis at a particular pose
-    @param pose The pose for the axis
-    @param env The OpenRAVE environment
-    @param length The length of each axis
-    """
-    def __init__(self, pose, env, length=0.2):
-        self.env = env
-        self.pose = pose
-        self.length = length
-
-    def __enter__(self):
-        self.h = openravepy.misc.DrawAxes(self.env, self.pose, dist=self.length)
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        pass
