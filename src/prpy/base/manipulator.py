@@ -40,36 +40,46 @@ class Manipulator(openravepy.Robot.Manipulator):
         pass
 
     def __dir__(self):
+        robot = self.GetRobot()
+
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
         # Add planning methods to the tab-completion list.
         method_names = set(self.__dict__.keys())
-        method_names.update(self.GetRobot().planner.get_planning_method_names())
-        method_names.update(self.GetRobot().actions.get_actions())
+
+        if hasattr(robot, 'planner') and robot.planner is not None:
+            method_names.update(robot.planner.get_planning_method_names())
+        if hasattr(robot, 'actions') and robot.actions is not None:
+            method_names.update(robot.actions.get_actions())
+
         return list(method_names)
 
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
+        robot = self.GetRobot()
  
         # Resolve planner calls through the robot.planner field.
         # FIXME: We need to replicate the _PlanWrapper functionality here.
-        if self.GetRobot().planner.has_planning_method(name):
-            delegate_method = getattr(self.GetRobot().planner, name)
+        if (hasattr(robot, 'planner') and robot.planner is not None
+                and robot.planner.has_planning_method(name)):
+
+            delegate_method = getattr(robot.planner, name)
             @functools.wraps(delegate_method)
-            def wrapper_method(*args, **kw_args):
-                return self._PlanWrapper(delegate_method, args, kw_args)
+            def wrapper_method(*args, **kwargs):
+                return self._PlanWrapper(delegate_method, args, kwargs)
             return wrapper_method
-        elif self.GetRobot().actions.has_action(name):
-            delegate_method = self.GetRobot().actions.get_action(name)
+
+        elif (hasattr(robot, 'actions') and robot.actions is not None
+                and robot.actions.has_action(name)):
+
+            delegate_method = robot.actions.get_action(name)
             @functools.wraps(delegate_method)
-            def wrapper_method(obj, *args, **kw_args):
-                return delegate_method(self.GetRobot(), obj,
-                                       manip = self,
-                                       *args, **kw_args)
+            def wrapper_method(obj, *args, **kwargs):
+                return delegate_method(robot, obj, manip=self, *args, **kwargs)
             return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
