@@ -35,8 +35,8 @@ from .. import exceptions
 from .. import util
 
 class MicoRobot(Robot):
-    def __init__(self):
-        Robot.__init__(self)
+    def __init__(self, robot_name=None):
+        Robot.__init__(self, robot_name=robot_name)
 
         # Optional MacTrajectory retimer. If this fails, we'll fall back on
         # executing generic trajectories.
