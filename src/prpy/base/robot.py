@@ -181,7 +181,10 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
-    def PostProcessPath(self, path, defer=False, executor=None, **kwargs):
+    def PostProcessPath(self, path, defer=False, executor=None,
+                        constrained=None, smooth=None, default_timelimit=0.5,
+                        shortcut_options=None, smoothing_options=None,
+                        retiming_options=None):
         """ Post-process a geometric path to prepare it for execution.
 
         This method post-processes a geometric path by (optionally) optimizing
@@ -218,38 +221,35 @@ class Robot(openravepy.Robot):
         @param retiming_options kwargs to RetimeTrajectory for timing
         @return trajectory ready for execution
         """
+        from ..planning.base import Tags
+        from ..util import GetTrajectoryTags, CopyTrajectory
 
-        def do_postprocess(path, constrained=None, smooth=None,
-                           default_timelimit=0.5, shortcut_options=None,
-                           smoothing_options=None, retiming_options=None):
-            from ..planning.base import Tags
-            from ..util import GetTrajectoryTags, CopyTrajectory
+        # Default parameters.
+        if shortcut_options is None:
+            shortcut_options = dict()
+        if smoothing_options is None:
+            smoothing_options = dict()
+        if retiming_options is None:
+            retiming_options = dict()
 
-            # Default parameters.
-            if shortcut_options is None:
-                shortcut_options = dict()
-            if smoothing_options is None:
-                smoothing_options = dict()
-            if retiming_options is None:
-                retiming_options = dict()
+        shortcut_options.setdefault('timelimit', default_timelimit)
+        smoothing_options.setdefault('timelimit', default_timelimit)
+        retiming_options.setdefault('timelimit', default_timelimit)
 
-            shortcut_options.setdefault('timelimit', default_timelimit)
-            smoothing_options.setdefault('timelimit', default_timelimit)
-            retiming_options.setdefault('timelimit', default_timelimit)
+        # Read default parameters from the trajectory's tags.
+        tags = GetTrajectoryTags(path)
 
-            # Read default parameters from the trajectory's tags.
-            tags = GetTrajectoryTags(path)
+        if constrained is None:
+            constrained = tags.get(Tags.CONSTRAINED, False)
+            logger.debug('Detected "%s" tag on trajectory: Setting'
+                         ' constrained = True.', Tags.CONSTRAINED)
 
-            if constrained is None:
-                constrained = tags.get(Tags.CONSTRAINED, False)
-                logger.debug('Detected "%s" tag on trajectory: Setting'
-                             ' constrained = True.', Tags.CONSTRAINED)
+        if smooth is None:
+            smooth = tags.get(Tags.SMOOTH, False)
+            logger.debug('Detected "%s" tag on trajectory: Setting smooth'
+                         ' = True', Tags.SMOOTH)
 
-            if smooth is None:
-                smooth = tags.get(Tags.SMOOTH, False)
-                logger.debug('Detected "%s" tag on trajectory: Setting smooth'
-                             ' = True', Tags.SMOOTH)
-
+        def do_postprocess():
             with Clone(self.GetEnv()) as cloned_env:
                 cloned_robot = cloned_env.Cloned(self)
 
@@ -288,12 +288,13 @@ class Robot(openravepy.Robot):
                 # The trajectory is not constrained, so we can shortcut it
                 # before execution.
                     logger.debug('Shortcutting an unconstrained path.')
-                    path = self.simplifier.ShortcutPath(
+                    shortcut_path = self.simplifier.ShortcutPath(
                         cloned_robot, path, defer=False, **shortcut_options)
 
                     logger.debug('Smoothing an unconstrained path.')
                     traj = self.smoother.RetimeTrajectory(
-                        cloned_robot, path, defer=False, **smoothing_options)
+                        cloned_robot, shortcut_path, defer=False,
+                        **smoothing_options)
 
                 return CopyTrajectory(traj, env=self.GetEnv())
 
@@ -304,9 +305,9 @@ class Robot(openravepy.Robot):
             if executor is None:
                 executor = get_default_executor()
 
-            return wrap_future(executor.submit(do_postprocess, path, **kwargs))
+            return wrap_future(executor.submit(do_postprocess))
         else:
-            return do_postprocess(path, **kwargs)
+            return do_postprocess()
 
     def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
                     timeout=1., **kwargs):
