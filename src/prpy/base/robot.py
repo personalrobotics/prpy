@@ -42,6 +42,7 @@ logger = logging.getLogger('robot')
 
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
+        self.actions = None
         self.planner = None
         self.robot_name = robot_name
 
@@ -80,8 +81,12 @@ class Robot(openravepy.Robot):
 
         # Add planning and action methods to the tab-completion list.
         method_names = set(self.__dict__.keys())
-        method_names.update(self.planner.get_planning_method_names())
-        method_names.update(self.actions.get_actions())
+
+        if hasattr(self, 'planner') and self.planner is not None:
+            method_names.update(self.planner.get_planning_method_names())
+        if hasattr(self, 'actions') and self.actions is not None:
+            method_names.update(self.actions.get_actions())
+
         return list(method_names)
 
     def __getattr__(self, name):
@@ -89,8 +94,8 @@ class Robot(openravepy.Robot):
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
-        # Resolve planner calls through the robot.planner field.
-        if self.planner.has_planning_method(name):
+        if (hasattr(self, 'planner') and self.planner is not None
+            and self.planner.has_planning_method(name)):
 
             delegate_method = getattr(self.planner, name)
             @functools.wraps(delegate_method)
@@ -98,7 +103,9 @@ class Robot(openravepy.Robot):
                 return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
-        elif self.actions.has_action(name):
+        elif (hasattr(self, 'actions') and self.actions is not None
+              and self.actions.has_action(name)):
+
             delegate_method = self.actions.get_action(name)
             @functools.wraps(delegate_method)
             def wrapper_method(obj, *args, **kw_args):
