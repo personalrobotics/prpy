@@ -181,6 +181,133 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
+    def PostProcessPath(self, path, defer=False, executor=None, **kwargs):
+        """ Post-process a geometric path to prepare it for execution.
+
+        This method post-processes a geometric path by (optionally) optimizing
+        it and timing it. Three different post-processing pipelines are used:
+
+        1. For constrained trajectories, we do not modify the geometric path
+           and retime the path to be time-optimal. This trajectory must stop
+           at every waypoint. The only exception is for...
+        2. For smooth trajectories, we attempt to fit a time-optimal smooth
+           curve through the waypoints (not implemented). If this curve is
+           not collision free, then we fall back on...
+        3. By default, we run a smoother that jointly times and smooths the
+           path. This algorithm can change the geometric path to optimize
+           runtime.
+
+        The behavior in (1) and (2) can be forced by passing constrained=True
+        or smooth=True. By default, the case is inferred by the tag(s) attached
+        to the trajectory: (1) is triggered by the CONSTRAINED tag and (2) is
+        tiggered by the SMOOTH tag.
+
+        Options an be passed to each post-processing routine using the
+        shortcut-options, smoothing_options, and retiming_options **kwargs
+        dictionaries. If no "timelimit" is specified in any of these
+        dictionaries, it defaults to default_timelimit seconds.
+
+        @param path un-timed OpenRAVE trajectory
+        @param defer return immediately with a future trajectory
+        @param executor executor to use when defer = True
+        @param constrained the path is constrained; do not change it
+        @param smooth the path is smooth; attempt to execute it directly
+        @param default_timelimit timelimit for all operations, if not set
+        @param shortcut_options kwargs to ShortcutPath for shortcutting
+        @param smoothing_options kwargs to RetimeTrajectory for smoothing
+        @param retiming_options kwargs to RetimeTrajectory for timing
+        @return trajectory ready for execution
+        """
+
+        def do_postprocess(path, constrained=None, smooth=None,
+                           default_timelimit=0.5, shortcut_options=None,
+                           smoothing_options=None, retiming_options=None):
+            from ..planning.base import Tags
+            from ..util import GetTrajectoryTags, CopyTrajectory
+
+            # Default parameters.
+            if shortcut_options is None:
+                shortcut_options = dict()
+            if smoothing_options is None:
+                smoothing_options = dict()
+            if retiming_options is None:
+                retiming_options = dict()
+
+            shortcut_options.setdefault('timelimit', default_timelimit)
+            smoothing_options.setdefault('timelimit', default_timelimit)
+            retiming_options.setdefault('timelimit', default_timelimit)
+
+            # Read default parameters from the trajectory's tags.
+            tags = GetTrajectoryTags(path)
+
+            if constrained is None:
+                constrained = tags.get(Tags.CONSTRAINED, False)
+                logger.debug('Detected "%s" tag on trajectory: Setting'
+                             ' constrained = True.', Tags.CONSTRAINED)
+
+            if smooth is None:
+                smooth = tags.get(Tags.SMOOTH, False)
+                logger.debug('Detected "%s" tag on trajectory: Setting smooth'
+                             ' = True', Tags.SMOOTH)
+
+            with Clone(self.GetEnv()) as cloned_env:
+                cloned_robot = cloned_env.Cloned(self)
+
+                # Planners only operate on the active DOFs. We'll set any DOFs
+                # in the trajectory as active.
+                env = path.GetEnv()
+                cspec = path.GetConfigurationSpecification()
+                used_bodies = cspec.ExtractUsedBodies(env)
+                if self not in used_bodies:
+                    raise ValueError(
+                        'Robot "{:s}" is not in the trajectory.'.format(
+                            self.GetName()))
+
+                dof_indices, _ = cspec.ExtractUsedIndices(self)
+                cloned_robot.SetActiveDOFs(dof_indices)
+                logger.debug(
+                    'Setting robot "%s" DOFs %s as active for post-processing.',
+                    cloned_robot.GetName(), list(dof_indices))
+
+                # Directly compute a timing of smooth trajectories.
+                if smooth:
+                    logger.warning(
+                        'Post-processing smooth paths is not supported.'
+                        ' Using the default post-processing logic; this may'
+                        ' significantly change the geometric path.'
+                    )
+
+                # The trajectory is constrained. Retime it without changing the
+                # geometric path.
+                if constrained:
+                    logger.debug('Retiming a constrained path. The output'
+                                 ' trajectory will stop at every waypoint.')
+                    traj = self.retimer.RetimeTrajectory(
+                        cloned_robot, path, defer=False, **retiming_options)
+                else:
+                # The trajectory is not constrained, so we can shortcut it
+                # before execution.
+                    logger.debug('Shortcutting an unconstrained path.')
+                    path = self.simplifier.ShortcutPath(
+                        cloned_robot, path, defer=False, **shortcut_options)
+
+                    logger.debug('Smoothing an unconstrained path.')
+                    traj = self.smoother.RetimeTrajectory(
+                        cloned_robot, path, defer=False, **smoothing_options)
+
+                return CopyTrajectory(traj, env=self.GetEnv())
+
+        if defer:
+            from trollius.executor import get_default_executor
+            from trollius.futures import wrap_future
+
+            if executor is None:
+                executor = get_default_executor()
+
+            return wrap_future(executor.submit(do_postprocess, path, **kwargs))
+        else:
+            return do_postprocess(path, **kwargs)
+
     def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
                     timeout=1., **kwargs):
 
