@@ -269,6 +269,8 @@ class Robot(openravepy.Robot):
                     'Setting robot "%s" DOFs %s as active for post-processing.',
                     cloned_robot.GetName(), list(dof_indices))
 
+                # TODO: Handle a affine DOF trajectories for the base.
+
                 # Directly compute a timing of smooth trajectories.
                 if smooth:
                     logger.warning(
@@ -309,51 +311,74 @@ class Robot(openravepy.Robot):
         else:
             return do_postprocess()
 
-    def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
-                    timeout=1., **kwargs):
+    def ExecutePath(self, path, defer=False, executor=None, **kwargs):
+        """ Post-process and execute an un-timed path.
 
-        logger.debug('Begin ExecutePath')
+        This method calls PostProcessPath, then passes the result to
+        ExecuteTrajectory. Any extra **kwargs are forwarded to both of these
+        methods. This function returns the timed trajectory that was executed
+        on the robot.
 
-        def do_execute(path, simplify, smooth, timeout, **kwargs):
+        @param path OpenRAVE trajectory representing an un-timed path
+        @param defer execute asynchronously and return a future
+        @param executor if defer = True, which executor to use
+        @param **kwargs forwarded to PostProcessPath and ExecuteTrajectory
+        @return timed trajectory executed on the robot
+        """
 
-            with Clone(self.GetEnv()) as cloned_env:
-                traj_dofs = util.GetTrajectoryIndices(path)
-                cloned_env.Cloned(self).SetActiveDOFs(traj_dofs)
-                cloned_robot = cloned_env.Cloned(self)
+        def do_execute():
+            logger.debug('Post-processing path to compute a timed trajectory.')
+            traj = self.PostProcessPath(path, defer=False, **kwargs)
 
-                if simplify:
-                    path = self.simplifier.ShortcutPath(cloned_robot, path, defer=False,
-                                                        timeout=timeout, **kwargs)
-
-                retimer = self.smoother if smooth else self.retimer
-                cloned_timed_traj = retimer.RetimeTrajectory(cloned_robot, path, defer=False, **kwargs)
-
-                # Copy the trajectory back to the original environment.
-                from ..util import CopyTrajectory
-                timed_traj = CopyTrajectory(cloned_timed_traj, env=self.GetEnv())
-
-            return self.ExecuteTrajectory(timed_traj, defer=False, **kwargs)
+            logger.debug('Executing timed trajectory.')
+            return self.ExecuteTrajectory(traj, defer=False, **kwargs)
 
         if defer:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
-            executor = kwargs.get('executor') or get_default_executor()
-            return wrap_future(
-                executor.submit(do_execute,
-                    path, simplify=simplify, smooth=smooth, timeout=timeout,
-                    **kwargs
-                )
-            )
-        else:
-            return do_execute(path, simplify=simplify, smooth=smooth,
-                              timeout=timeout, **kwargs)
+            if executor is None:
+                executor = get_default_executor()
 
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kw_args):
+            return wrap_future(executor.submit(do_execute))
+        else:
+            return do_execute()
+
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01):
+        """ Executes a time trajectory on the robot.
+
+        This function directly executes a timed OpenRAVE trajectory on the
+        robot. If you have a geometric path, such as those returned by a
+        geometric motion planner, you should first time the path using
+        PostProcessPath. Alternatively, you could use the ExecutePath helper
+        function to time and execute the path in one function call.
+
+        If timeout = None (the default), this function does not return until
+        execution has finished. Termination occurs if the trajectory is
+        successfully executed or if a fault occurs (in this case, an exception
+        will be raised). If timeout is a float (including timeout = 0), this
+        function will return None once the timeout has ellapsed, even if the
+        trajectory is still being executed.
+        
+        NOTE: We suggest that you either use timeout=None or defer=True. If
+        trajectory execution times out, there is no way to tell whether
+        execution was successful or not. Other values of timeout are only
+        supported for legacy reasons.
+
+        This function returns the trajectory that was actually executed on the
+        robot, including controller error. If this is not available, the input
+        trajectory will be returned instead.
+
+        @param traj timed OpenRAVE trajectory to be executed
+        @param defer execute asynchronously and return a trajectory Future
+        @param timeout maximum time to wait for execution to finish
+        @param period poll rate, in seconds, for checking trajectory status
+        @return trajectory executed on the robot
+        """
+
         # TODO: Verify that the trajectory is timed.
         # TODO: Check if this trajectory contains the base.
 
-        logger.debug('Begin ExecuteTrajectory')
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
@@ -366,8 +391,13 @@ class Robot(openravepy.Robot):
         ]
 
         if needs_base:
-            if hasattr(self, 'base') and hasattr(self.base, 'controller'):
+            if (hasattr(self, 'base') and hasattr(self.base, 'controller')
+                    and self.base.controller is not None):
                 active_controllers.append(self.base.controller)
+            else:
+                logger.warning(
+                    'Trajectory includes the base, but no base controller is'
+                    ' available. Is self.base.controller set?')
 
         if defer:
             import time
