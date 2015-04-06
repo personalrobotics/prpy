@@ -33,50 +33,41 @@ from .. import util
 from endeffector import EndEffector
 
 class MicoHand(EndEffector):
-    # def __init__(self, sim, manipulator, controller_namespace, hand_namespace):
-    #     EndEffector.__init__(self, manipulator)
-
-    #     self.simulated = sim
-
-    #     # Hand controller
-    #     robot = self.manipulator.GetRobot()
-    #     env = robot.GetEnv()
-    #     self.controller = robot.AttachController(name=self.GetName(),
-    #         args='MicoHandController {0:s} {1:s}'.format('prpy', hand_namespace),
-    #         dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
-
     def __init__(self, sim, manipulator):
-        EndEffector.__init__(self, manipulator)
+        super(EndEffector, self).__init__(manipulator)
 
         self.simulated = sim
 
-        # Hand controller
-        robot = self.manipulator.GetRobot()
-        env = robot.GetEnv()
-        self.controller  = self.manipulator.controller;
-        if (sim == True):
-           controller_namespace='/mico_controller'
-           hand_namespace='/mico_hand'
-           self.controller = robot.AttachController(name=self.GetName(),
-           args='MicoHandController {0:s} {1:s}'.format('prpy', hand_namespace),
-           dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
+        if sim:
+            robot = self.manipulator.GetRobot()
+            self.controller = robot.AttachController(
+                name=self.GetName(), args='', simulated=True,
+                dof_indices=self.GetIndices(), affine_dofs=0
+            )
+        else:
+            self.controller = None
 
-    def MoveHand(hand, f1=0.8, f2=0.8, spread=None, timeout=None):
+    def CloneBindings(self, parent):
+        super(MicoHand, self).CloneBindings(parent)
+
+        self.simulated = True
+        self.controller = None
+
+    def MoveHand(hand, f1, f2, timeout=None):
         """
-        Change the hand preshape. This function blocks until trajectory execution
-        finishes. This can be changed by changing the timeout parameter to a
-        maximum number of seconds. Pass zero to return instantantly.
+        Change the hand preshape. This function blocks until trajectory
+        execution finishes. This can be changed by changing the timeout
+        parameter to a maximum number of seconds. Pass zero to return
+        instantantly.
+
         @param f1 finger 1 angle
         @param f2 finger 2 angle
-        @param spread spread angle
         @param timeout blocking execution timeout
         """
         # Default any None's to the current DOF values.
         preshape = hand.GetDOFValues()
         if f1     is not None: preshape[0] = f1
         if f2     is not None: preshape[1] = f2
-        if spread is not None: preshape[2] = spread
-
 
         #hand.controller.SetDesired(preshape)
         robot = hand.GetParent()
@@ -110,10 +101,9 @@ class MicoHand(EndEffector):
         # hand.controller.SetDesired(preshape)
         # util.WaitForControllers([ hand.controller ], timeout=timeout) 
        
-    def OpenHand(hand, spread=None, timeout=None):
+    def OpenHand(hand, value=0., timeout=None):
         """
-        Open the hand with a fixed spread.
-        @param spread hand spread
+        Open the hand.
         @param timeout blocking execution timeout
         """
         if hand.simulated:
@@ -126,13 +116,10 @@ class MicoHand(EndEffector):
 
             util.WaitForControllers([ hand.controller ], timeout=timeout)
         else:
-            # TODO: Load this angle from somewhere.
-            hand.MoveHand(f1=0.0, f2=0.0, spread=spread, timeout=timeout)
+            hand.MoveHand(f1=value, f2=value, timeout=timeout)
 
-    def CloseHand(hand, spread=None, timeout=None):
-        """
-        Close the hand with a fixed spread.
-        @param spread hand spread
+    def CloseHand(hand, value=0.8, timeout=None):
+        """ Close the hand.
         @param timeout blocking execution timeout
         """
         if hand.simulated:
@@ -145,44 +132,10 @@ class MicoHand(EndEffector):
 
             util.WaitForControllers([ hand.controller ], timeout=timeout)
         else:
-            # TODO: Load this angle from somewhere.
-            hand.MoveHand(f1=0.8, f2=0.8, spread=spread, timeout=timeout)
-    
+            hand.MoveHand(f1=value, f2=value, timeout=timeout)
 
-    def CloseHandTight(hand, spread=None, timeout=None):
-        """
-        Close the hand with a fixed spread.
-        @param spread hand spread
+    def CloseHandTight(self, value=1.2, timeout=None):
+        """ Close the hand tightly.
         @param timeout blocking execution timeout
         """
-        if hand.simulated:
-            robot = hand.manipulator.GetRobot()
-            p = openravepy.KinBody.SaveParameters
-
-            with robot.CreateRobotStateSaver(p.ActiveDOF | p.ActiveManipulator):
-                hand.manipulator.SetActive()
-                robot.task_manipulation.CloseFingers()
-
-            util.WaitForControllers([ hand.controller ], timeout=timeout)
-        else:
-            # TODO: Load this angle from somewhere.
-            hand.MoveHand(f1=1.20, f2=1.20, spread=spread, timeout=timeout)
-
-
-
-    def ResetHand(hand):
-        """
-        Reset the hand
-        """
-        if not hand.simulated:
-            hand.controller.SendCommand('ResetHand')
-
-    def GetState(hand):
-        """
-        Gets the current state of the hand
-        """
-        if hand.simulated:
-            return 'done'
-        else:
-            return hand.handstate_sensor.SendCommand('GetState')
-            
+        return self.CloseHand(value=value, timeout=timeout)
