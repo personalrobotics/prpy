@@ -262,7 +262,7 @@ class CBiRRTPlanner(BasePlanner):
 
         # Strip extraneous groups from the output trajectory.
         # TODO: Where are these groups coming from!?
-        cspec = robot.GetActiveConfigurationSpecification()
+        cspec = robot.GetActiveConfigurationSpecification('linear')
         openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
 
         return traj
