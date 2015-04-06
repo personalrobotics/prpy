@@ -28,8 +28,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy, time
+import numpy
+import openravepy
 from .. import util
+from ..exceptions import PrPyException
 from endeffector import EndEffector
 
 class MicoHand(EndEffector):
@@ -64,42 +66,42 @@ class MicoHand(EndEffector):
         @param f2 finger 2 angle
         @param timeout blocking execution timeout
         """
-        # Default any None's to the current DOF values.
-        preshape = hand.GetDOFValues()
-        if f1     is not None: preshape[0] = f1
-        if f2     is not None: preshape[1] = f2
 
-        #hand.controller.SetDesired(preshape)
+        from openravepy import PlannerStatus
+
         robot = hand.GetParent()
-        activedofs = [i for i in range(8)]
-        robot.SetActiveDOFs(activedofs)
+
+        with robot.GetEnv():
+            current_preshape = robot.GetActiveDOFValues()
+
+            # Default any None's to the current DOF values.
+            desired_preshape = current_preshape.copy()
+            if f1 is not None: desired_preshape[0] = f1
+            if f2 is not None: desired_preshape[1] = f2
+
+            sp = openravepy.Robot.SaveParameters
+            with robot.CreateRobotStateSaver(sp.ActiveDOF):
+                robot.SetActiveDOFs(self.GetIndices())
+                cspec = robot.GetActiveConfigurationSpecification()
+
+        # Create a two waypoint trajectory to the target configuration.
         traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), '')
-        traj.Init(robot.GetActiveConfigurationSpecification())
-        dof_values = robot.GetActiveDOFValues()
-        #traj.Insert(0, dof_values)
-        #dof_values[6] = 0.3
-        #dof_values[7] = 0.3
-        #traj.Insert(0,dof_values)
-        dof_values[6] = 0.5
-        dof_values[7] = 0.5
-        traj.Insert(0,dof_values)
-        dof_values[6] = f1
-        dof_values[7] = f2
-        traj.Insert(1,dof_values)
-        openravepy.planningutils.RetimeActiveDOFTrajectory(traj, robot)
+        traj.Init(cspec)
+        traj.Insert(0, current_preshape)
+        traj.Insert(1, desired_preshape)
+
+        # Time the trajectory so we can execute it.
+        result = openravepy.planningutils.RetimeTrajectory(
+            traj, False, 1., 1., 'LinearTrajectoryRetimer')
+
+        if result not in [ PlannerStatus.HasSolution,
+                           PlannerStatus.InterruptedWithSolution ]:
+            raise PrPyException('Failed timing finger trajectory.')
+
+        # Execute the trajectory.
+        # TODO: Where do we get hand.controller from?
         hand.controller.SetPath(traj)
         util.WaitForControllers([ hand.controller ], timeout=timeout) 
-       
-        activedofs = [i for i in range(6)]
-        robot.SetActiveDOFs(activedofs)
-        
-
-
-        #from IPython import embed
-        #embed()
-
-        # hand.controller.SetDesired(preshape)
-        # util.WaitForControllers([ hand.controller ], timeout=timeout) 
        
     def OpenHand(hand, value=0., timeout=None):
         """
