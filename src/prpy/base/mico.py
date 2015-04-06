@@ -28,12 +28,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy, rospy
+import openravepy
 from manipulator import Manipulator
-from prpy.clone import Clone
-from .. import util
-from .. import exceptions
-from IPython import embed
 
 class Mico(Manipulator):
     def __init__(self, sim, controller_namespace,
@@ -41,33 +37,27 @@ class Mico(Manipulator):
         Manipulator.__init__(self)
 
         self.simulated = sim
-        robot = self.GetRobot()
 
-        if sim:
-            self.controller = self.GetRobot().AttachController(name=self.GetName(),
-            args='idealcontroller'.format('prpy', controller_namespace),
-            dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)        
-        else:
-            self.or_physical_controller = ('roscontroller openrave {0} 1'.format(rospy.get_namespace()))
-            self.ros_controllers = [
-                "traj_controller",
-                "joint_state_controller",
-            ]
-            or_controller_string = self.or_physical_controller
-            self._load_controllers(self.ros_controllers)
-            env = robot.GetEnv()
-            with env:
-                self.controller = openravepy.RaveCreateController(env,
-                    or_controller_string)
-            m = robot.GetActiveDOFIndices()
-            c = self.controller
-            robot.SetController(c, m, 0)
+        robot = self.GetRobot()
+        env = robot.GetEnv()
+
+        self.controller = robot.AttachController(
+            name=self.GetName(), simulated=sim,
+            args='roscontroller openrave {:s} 1'.format(controller_namespace),
+            dof_indices=self.GetArmIndices(), affine_dofs=0
+        )
 
         # Enable servo motions in simulation mode.
         if sim:
             from prpy.simulation import ServoSimulator
 
             self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)
+        # Load the correct ros_control controllers.
+        else:
+            self._load_controllers([
+                'traj_controller',
+                'joint_state_controller',
+            ])
 
     def CloneBindings(self, parent):
         self.__init__(True, None)
@@ -89,8 +79,11 @@ class Mico(Manipulator):
             raise NotImplementedError('Servo is not implemented on the real robot.')
 
     def _load_controllers(self, controllers, timeout=10):
+        """Load a list of ros_control controllers by name.
+        """
+
+        import rospy
         from controller_manager_msgs.srv import SwitchController, ListControllers
-        """Load a list of ros_control controllers by name."""
 
         rospy.wait_for_service('controller_manager/switch_controller', timeout=10)
         rospy.wait_for_service('controller_manager/list_controllers', timeout=10)
@@ -103,20 +96,3 @@ class Mico(Manipulator):
         running = set([c.name for c in list_controllers().controller  if c.state == "running"])
         controllers = set(controllers)
         switch_controllers(list(controllers - running), list(running - controllers), 2)
-    
-    def _unload_controllers(self, controllers):
-        from controller_manager_msgs.srv import SwitchController, ListControllers
-        """Unload a list of ros_control controllers by name"""
-
-        rospy.wait_for_service('controller_manager/switch_controller')
-        rospy.wait_for_service('controller_manager/list_controllers')
-
-        switch_controllers = rospy.ServiceProxy(
-                'controller_manager/switch_controller', SwitchController)
-        list_controllers = rospy.ServiceProxy(
-                'controller_manager/list_controllers', ListControllers)
-
-        running = set([c.name for c in list_controllers().controller
-            if c.state == "running"])
-        controllers = set(controllers)
-        switch_controllers([], list(controllers & running), 2)
