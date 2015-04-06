@@ -40,20 +40,10 @@ class MicoHand(EndEffector):
 
         self.simulated = sim
 
-        if sim:
-            robot = self.manipulator.GetRobot()
-            self.controller = robot.AttachController(
-                name=self.GetName(), args='', simulated=True,
-                dof_indices=self.GetIndices(), affine_dofs=0
-            )
-        else:
-            self.controller = None
-
     def CloneBindings(self, parent):
         super(MicoHand, self).CloneBindings(parent)
 
         self.simulated = True
-        self.controller = None
 
     def MoveHand(hand, f1, f2, timeout=None):
         """
@@ -99,9 +89,8 @@ class MicoHand(EndEffector):
             raise PrPyException('Failed timing finger trajectory.')
 
         # Execute the trajectory.
-        # TODO: Where do we get hand.controller from?
-        hand.controller.SetPath(traj)
-        util.WaitForControllers([ hand.controller ], timeout=timeout) 
+        robot.GetController().SetPath(traj)
+        robot.WaitForController(timeout)
        
     def OpenHand(hand, value=0., timeout=None):
         """
@@ -116,7 +105,7 @@ class MicoHand(EndEffector):
                 hand.manipulator.SetActive()
                 robot.task_manipulation.ReleaseFingers()
 
-            util.WaitForControllers([ hand.controller ], timeout=timeout)
+            robot.WaitForController(timeout)
         else:
             hand.MoveHand(f1=value, f2=value, timeout=timeout)
 
@@ -132,7 +121,7 @@ class MicoHand(EndEffector):
                 hand.manipulator.SetActive()
                 robot.task_manipulation.CloseFingers()
 
-            util.WaitForControllers([ hand.controller ], timeout=timeout)
+            robot.WaitForController(timeout)
         else:
             hand.MoveHand(f1=value, f2=value, timeout=timeout)
 

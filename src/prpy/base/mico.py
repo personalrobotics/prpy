@@ -32,7 +32,7 @@ import openravepy
 from manipulator import Manipulator
 
 class Mico(Manipulator):
-    def __init__(self, sim, controller_namespace,
+    def __init__(self, sim,
                  iktype=openravepy.IkParameterization.Type.Transform6D):
         super(Manipulator, self).__init__()
 
@@ -41,12 +41,6 @@ class Mico(Manipulator):
 
         robot = self.GetRobot()
         env = robot.GetEnv()
-
-        self.controller = robot.AttachController(
-            name=self.GetName(), simulated=sim,
-            args='roscontroller openrave {:s} 1'.format(controller_namespace),
-            dof_indices=self.GetArmIndices(), affine_dofs=0
-        )
 
         # Load or_nlopt_ik as the IK solver. Unfortunately, IKFast doesn't work
         # on the Mico.
@@ -60,12 +54,6 @@ class Mico(Manipulator):
 
             self.servo_simulator = ServoSimulator(self, rate=20,
                                                   watchdog_timeout=0.1)
-        # Load the correct ros_control controllers.
-        else:
-            self._load_controllers([
-                'traj_controller',
-                'joint_state_controller',
-            ])
 
     def CloneBindings(self, parent):
         super(Mico, self).CloneBindings(parent)
@@ -73,7 +61,6 @@ class Mico(Manipulator):
         self.simulated = True
         self.iktype = parent.iktype
 
-        self.controller = None
         self.servo_simulator = None
 
         if parent.iktype is not None:
@@ -93,33 +80,7 @@ class Mico(Manipulator):
                 ' Expected {:d}; got {:d}.'.format(num_dof, len(velocities)))
 
         if self.simulated:
-            self.controller.Reset(0)
+            self.GetRobot().GetController().Reset(0)
             self.servo_simulator.SetVelocity(velocities)
         else:
-            raise NotImplementedError('Servo is not implemented.')
-
-    def _load_controllers(self, controllers, timeout=10):
-        """Load a list of ros_control controllers by name.
-        """
-
-        import rospy
-        from controller_manager_msgs.srv import (ListControllers,
-                                                 SwitchController)
-
-        rospy.wait_for_service('controller_manager/switch_controller',
-                               timeout=10)
-        rospy.wait_for_service('controller_manager/list_controllers',
-                               timeout=10)
-
-        switch_controllers = rospy.ServiceProxy(
-                'controller_manager/switch_controller', SwitchController)
-        list_controllers = rospy.ServiceProxy(
-                'controller_manager/list_controllers', ListControllers)
-
-        desired_controllers = set(controllers)
-        loaded_controllers = list_controllers().controller
-        running_running = set(c.name for c in loaded_controllers \
-                              if c.state == "running")
-
-        switch_controllers(list(desired_controllers - running_controllers),
-                           list(running_controllers - desired_controllers), 2)
+            raise NotImplementedError('Servo is not implemented.') 
