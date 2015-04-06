@@ -37,6 +37,7 @@ class Mico(Manipulator):
         super(Manipulator, self).__init__()
 
         self.simulated = sim
+        self.iktype = iktype
 
         robot = self.GetRobot()
         env = robot.GetEnv()
@@ -46,6 +47,12 @@ class Mico(Manipulator):
             args='roscontroller openrave {:s} 1'.format(controller_namespace),
             dof_indices=self.GetArmIndices(), affine_dofs=0
         )
+
+        # Load or_nlopt_ik as the IK solver. Unfortunately, IKFast doesn't work
+        # on the Mico.
+        if iktype is not None:
+            self.iksolver = openravepy.RaveCreateIkSolver(env, 'NloptIK')
+            self.SetIKSolver(self.iksolver)
 
         # Enable servo motions in simulation mode.
         if sim:
@@ -64,8 +71,14 @@ class Mico(Manipulator):
         super(Mico, self).CloneBindings(parent)
 
         self.simulated = True
+        self.iktype = parent.iktype
+
         self.controller = None
         self.servo_simulator = None
+
+        if parent.iktype is not None:
+            self.iksolver = openravepy.RaveCreateIkSolver(env, 'NloptIK')
+            self.SetIKSolver(self.iksolver)
 
     def Servo(self, velocities):
         """
