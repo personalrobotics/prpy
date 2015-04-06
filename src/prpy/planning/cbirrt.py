@@ -256,7 +256,8 @@ class CBiRRTPlanner(BasePlanner):
             traj.deserialize(traj_xml)
 
         # Tag the trajectory as constrained if a constraint TSR is present.
-        if any(tsr_chain.constrain for tsr_chain in tsr_chains):
+        if (tsr_chains is not None
+                and any(tsr_chain.constrain for tsr_chain in tsr_chains)):
             SetTrajectoryTags(traj, {Tags.CONSTRAINED: True}, append=True)
 
         # Strip extraneous groups from the output trajectory.
