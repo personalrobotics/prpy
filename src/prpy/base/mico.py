@@ -36,40 +36,6 @@ from .. import exceptions
 from IPython import embed
 
 class Mico(Manipulator):
-    def _load_controllers(self, controllers, timeout=10):
-        from controller_manager_msgs.srv import SwitchController, ListControllers
-        """Load a list of ros_control controllers by name."""
-
-        rospy.wait_for_service('controller_manager/switch_controller', timeout=10)
-        rospy.wait_for_service('controller_manager/list_controllers', timeout=10)
-
-        switch_controllers = rospy.ServiceProxy(
-                'controller_manager/switch_controller', SwitchController)
-        list_controllers = rospy.ServiceProxy(
-                'controller_manager/list_controllers', ListControllers)
-
-        running = set([c.name for c in list_controllers().controller  if c.state == "running"])
-        controllers = set(controllers)
-        switch_controllers(list(controllers - running), list(running - controllers), 2)
-    
-    def _unload_controllers(self, controllers):
-        from controller_manager_msgs.srv import SwitchController, ListControllers
-        """Unload a list of ros_control controllers by name"""
-
-        rospy.wait_for_service('controller_manager/switch_controller')
-        rospy.wait_for_service('controller_manager/list_controllers')
-
-        switch_controllers = rospy.ServiceProxy(
-                'controller_manager/switch_controller', SwitchController)
-        list_controllers = rospy.ServiceProxy(
-                'controller_manager/list_controllers', ListControllers)
-
-        running = set([c.name for c in list_controllers().controller
-            if c.state == "running"])
-        controllers = set(controllers)
-        switch_controllers([], list(controllers & running), 2)
-
-
     def __init__(self, sim, controller_namespace,
                  iktype=openravepy.IkParameterization.Type.Transform6D):
         Manipulator.__init__(self)
@@ -121,3 +87,36 @@ class Mico(Manipulator):
             self.servo_simulator.SetVelocity(velocities)
         else:
             raise NotImplementedError('Servo is not implemented on the real robot.')
+
+    def _load_controllers(self, controllers, timeout=10):
+        from controller_manager_msgs.srv import SwitchController, ListControllers
+        """Load a list of ros_control controllers by name."""
+
+        rospy.wait_for_service('controller_manager/switch_controller', timeout=10)
+        rospy.wait_for_service('controller_manager/list_controllers', timeout=10)
+
+        switch_controllers = rospy.ServiceProxy(
+                'controller_manager/switch_controller', SwitchController)
+        list_controllers = rospy.ServiceProxy(
+                'controller_manager/list_controllers', ListControllers)
+
+        running = set([c.name for c in list_controllers().controller  if c.state == "running"])
+        controllers = set(controllers)
+        switch_controllers(list(controllers - running), list(running - controllers), 2)
+    
+    def _unload_controllers(self, controllers):
+        from controller_manager_msgs.srv import SwitchController, ListControllers
+        """Unload a list of ros_control controllers by name"""
+
+        rospy.wait_for_service('controller_manager/switch_controller')
+        rospy.wait_for_service('controller_manager/list_controllers')
+
+        switch_controllers = rospy.ServiceProxy(
+                'controller_manager/switch_controller', SwitchController)
+        list_controllers = rospy.ServiceProxy(
+                'controller_manager/list_controllers', ListControllers)
+
+        running = set([c.name for c in list_controllers().controller
+            if c.state == "running"])
+        controllers = set(controllers)
+        switch_controllers([], list(controllers & running), 2)
