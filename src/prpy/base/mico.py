@@ -34,7 +34,7 @@ from manipulator import Manipulator
 class Mico(Manipulator):
     def __init__(self, sim, controller_namespace,
                  iktype=openravepy.IkParameterization.Type.Transform6D):
-        Manipulator.__init__(self)
+        super(Manipulator, self).__init__()
 
         self.simulated = sim
 
@@ -51,7 +51,8 @@ class Mico(Manipulator):
         if sim:
             from prpy.simulation import ServoSimulator
 
-            self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)
+            self.servo_simulator = ServoSimulator(self, rate=20,
+                                                  watchdog_timeout=0.1)
         # Load the correct ros_control controllers.
         else:
             self._load_controllers([
@@ -60,7 +61,11 @@ class Mico(Manipulator):
             ])
 
     def CloneBindings(self, parent):
-        self.__init__(True, None)
+        super(Mico, self).CloneBindings(parent)
+
+        self.simulated = True
+        self.controller = None
+        self.servo_simulator = None
 
     def Servo(self, velocities):
         """
@@ -68,31 +73,40 @@ class Mico(Manipulator):
         @param velocities instantaneous joint velocities in radians per second
         """
         num_dof = len(self.GetArmIndices())
+
         if len(velocities) != num_dof:
-            raise ValueError('Incorrect number of joint velocities. Expected {0:d}; got {0:d}.'.format(
-                             num_dof, len(velocities)))
+            raise ValueError(
+                'Incorrect number of joint velocities.'
+                ' Expected {:d}; got {:d}.'.format(num_dof, len(velocities)))
 
         if self.simulated:
             self.controller.Reset(0)
             self.servo_simulator.SetVelocity(velocities)
         else:
-            raise NotImplementedError('Servo is not implemented on the real robot.')
+            raise NotImplementedError('Servo is not implemented.')
 
     def _load_controllers(self, controllers, timeout=10):
         """Load a list of ros_control controllers by name.
         """
 
         import rospy
-        from controller_manager_msgs.srv import SwitchController, ListControllers
+        from controller_manager_msgs.srv import (ListControllers,
+                                                 SwitchController)
 
-        rospy.wait_for_service('controller_manager/switch_controller', timeout=10)
-        rospy.wait_for_service('controller_manager/list_controllers', timeout=10)
+        rospy.wait_for_service('controller_manager/switch_controller',
+                               timeout=10)
+        rospy.wait_for_service('controller_manager/list_controllers',
+                               timeout=10)
 
         switch_controllers = rospy.ServiceProxy(
                 'controller_manager/switch_controller', SwitchController)
         list_controllers = rospy.ServiceProxy(
                 'controller_manager/list_controllers', ListControllers)
 
-        running = set([c.name for c in list_controllers().controller  if c.state == "running"])
-        controllers = set(controllers)
-        switch_controllers(list(controllers - running), list(running - controllers), 2)
+        desired_controllers = set(controllers)
+        loaded_controllers = list_controllers().controller
+        running_running = set(c.name for c in loaded_controllers \
+                              if c.state == "running")
+
+        switch_controllers(list(desired_controllers - running_controllers),
+                           list(running_controllers - desired_controllers), 2)
