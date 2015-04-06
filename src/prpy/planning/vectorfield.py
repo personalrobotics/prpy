@@ -244,7 +244,7 @@ class VectorFieldPlanner(BasePlanner):
 
                         status = fn_terminate()
                         if status == Status.CACHE_AND_CONTINUE:
-                            cached_traj = prpy.util.CopyTrajectory(qtraj)
+                            cached_traj = util.CopyTrajectory(qtraj)
                         if status == Status.TERMINATE:
                             break
 
