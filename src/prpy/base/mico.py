@@ -34,7 +34,7 @@ from manipulator import Manipulator
 class Mico(Manipulator):
     def __init__(self, sim,
                  iktype=openravepy.IkParameterization.Type.Transform6D):
-        super(Manipulator, self).__init__()
+        Manipulator.__init__(self)
 
         self.simulated = sim
         self.iktype = iktype

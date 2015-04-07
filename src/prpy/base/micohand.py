@@ -36,7 +36,7 @@ from endeffector import EndEffector
 
 class MicoHand(EndEffector):
     def __init__(self, sim, manipulator):
-        super(EndEffector, self).__init__(manipulator)
+        EndEffector.__init__(self, manipulator)
 
         self.simulated = sim
 
