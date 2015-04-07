@@ -179,7 +179,7 @@ class VectorFieldPlanner(BasePlanner):
             return Status.CONTINUE
 
         return self.FollowVectorField(robot, vf_straightline, TerminateMove,
-                                      timelimit)
+                                      timelimit, **kw_args)
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
