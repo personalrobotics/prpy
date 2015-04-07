@@ -2,6 +2,69 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fixed the OMPL planner creation test.
+* Modified CBiRRT to output linear interpolation.
+* Fixed __getattr__ and __dir__ on Manipulator (`#89 <https://github.com/personalrobotics/prpy/issues/89>`_)
+* Fixed infinite recursion in `#89 <https://github.com/personalrobotics/prpy/issues/89>`_
+  robot.planner or robot.actions not being defined caused infinite
+  recursion in __getattr__. This patch explicitly checks for those
+  attributes before querying them.
+* Added robot_name pass-through argument.
+* Various fixes: Added logic to catch openrave excpetion and reraise as planning exception in CHOMP. Added PlanToConfiguration to BiRRT. Changed SetTrajectoryTags to util.SetTrajectoryTags in vectorfield planner.
+* Feature/action library
+* Changed RenderPose to RenderPoses. Made RenderTSRChains call RenderPoses. Added render flag to RenderTSRChains, RenderPoses and RenderVector so that they can be used optionally.
+* Adding RenderPose function to allow rendering an axis from a with block
+* for servo simulation, sleep time takes into account how much time already was spend on computation
+* Merge pull request `#81 <https://github.com/personalrobotics/prpy/issues/81>`_ from personalrobotics/feature/PlanningRefactor
+  Added new MethodMask and FirstSupported meta-planners
+* Disabled PlanToIK on TSRPlanner.
+* Renamed new meta-planners.
+  - Only to MethodMask
+  - Fallback to FirstSupported
+* made default quadraticObjective, changed to allow you to specify arguments for joint limit avoidance
+* Tag trajectories with information necessary to control smoothing.
+* Moved common tags into an Enum.
+* Switched from XML to JSON to trajectory tagging.
+* Added python-enum dependency.
+* Added PlanToIK to TSRPlanner.
+* Added new MetaPlanners and refactored planning.
+  - Added the Fallback meta-planner. This meta-planner operates on a list
+  of planners and calls the first planner in the list that supports the
+  desired planning method.
+  - Added the Only meta-planner. This meta-planner operates on a single
+  planner by only allowing access to a subset of its planning methods.
+  - Added support for explicitly passing a delegate planner to:
+  - IKPlanner
+  - NamedPlanner
+  - TSRPlanner
+  - Modified TSRPlanner to raise an UnsupportedPlanningError when it
+  receives unsupported TSRs. This is necessary to trigger the fallback
+  behavior implemented in the Fallback meta-planner.
+* feature added to avoid joint limit with ComputeJointVelocityFromTwist
+* Cleaned up CloneBindings functions
+  - Reference the TSRLibrary from the parent environment.
+  - Reference the NamedConfigurations from the parent environment.
+  - Don't load ServoSimulatored in cloned environments.
+  - Don't load any controllers in cloned environments.
+  - Avoid calling __init__ to prevent future nasty surprises.
+  - NOTE: This fixes a memory leak caught by Pras.
+* Merge pull request `#76 <https://github.com/personalrobotics/prpy/issues/76>`_ from personalrobotics/feature/vector_field_planner_timestepping
+  Added variable time steps for vector field planner
+* Hide IK log spam when cloning environments.
+* Tag trajectories with constrained and optimized
+* More CHOMP module refactoring.
+* Cleaned up CHOPM file.
+* Added variable time steps for vector field planner
+* Tag trajectories with planner and planning method.
+* Renaming robot.actionlibrary to robot.actions
+* Adding logic to explicitely clear handles arrays in visualization helper functions
+* Fixing logic that adds actions as methods on robot. Adding logic to add actions as methods on manipulator. Updating visualization of TSR lists to have parameter for axis length. Removing reference to push_grasp from prpy/action init.
+* Adding logic to expose actions as methods on robot
+* Initial action library implementation
+* Contributors: Jennifer King, Michael Koval, Shervin Javdani, Siddhartha Srinivasa
+
 0.4.0 (2015-03-30)
 ------------------
 * Planning with vector fields.
