@@ -36,6 +36,7 @@ from openravepy import PlannerStatus
 
 logger = logging.getLogger('pypy.planning.ompl')
 
+
 class OMPLPlanner(BasePlanner):
     def __init__(self, algorithm='RRTConnect'):
         super(OMPLPlanner, self).__init__()
@@ -43,10 +44,12 @@ class OMPLPlanner(BasePlanner):
         self.setup = False
         self.algorithm = algorithm
 
-        try:
-            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_' + algorithm)
-        except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create OMPL planner.')
+        planner_name = 'OMPL_{:s}'.format(algorithm)
+        self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
+
+        if self.planner is None:
+            raise UnsupportedPlanningError(
+                'Unable to create "{:s}" planner.'.format(planner_name))
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
@@ -118,6 +121,7 @@ class OMPLPlanner(BasePlanner):
             
         return self._Plan(robot, formatted_extra_params=extraParams, **kw_args)
 
+
 class RRTConnect(OMPLPlanner):
     def __init__(self):
         OMPLPlanner.__init__(self, algorithm='RRTConnect')
@@ -185,10 +189,12 @@ class OMPLSimplifier(BasePlanner):
     def __init__(self):
         super(OMPLSimplifier, self).__init__()
 
-        try:
-            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_Simplifier')
-        except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create OMPL planner.')
+        planner_name = 'OMPL_Simplifier'
+        self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
+
+        if self.planner is None:
+            raise UnsupportedPlanningError(
+                'Unable to create OMPL_Simplifier planner.')
 
     def __str__(self):
         return 'OMPL Simplifier'
