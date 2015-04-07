@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.5.0 (2015-04-07)
+------------------
 * Fixed the OMPL planner creation test.
 * Modified CBiRRT to output linear interpolation.
 * Fixed __getattr__ and __dir__ on Manipulator (`#89 <https://github.com/personalrobotics/prpy/issues/89>`_)
