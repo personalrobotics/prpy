@@ -183,7 +183,7 @@ class VectorFieldPlanner(BasePlanner):
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
-                          timelimit=5.0, dt_multiplier=1.0, **kw_args):
+                          timelimit=5.0, dt_multiplier=1.01, **kw_args):
         """
         Follow a joint space vectorfield to termination.
 
@@ -228,7 +228,7 @@ class VectorFieldPlanner(BasePlanner):
 
                     dqout = fn_vectorfield()
                     numsteps = int(math.floor(max(
-                        dqout*dt_step/robot.GetActiveDOFResolutions()
+                        abs(dqout*dt_step/robot.GetActiveDOFResolutions())
                         )))
                     if numsteps == 0:
                         raise PlanningError('Step size too small, '
