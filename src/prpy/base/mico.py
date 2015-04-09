@@ -48,10 +48,12 @@ class Mico(Manipulator):
             self.iksolver = openravepy.RaveCreateIkSolver(env, 'NloptIK')
             self.SetIKSolver(self.iksolver)
 
-        # Enable servo motions in simulation mode.
+        # Load simulation controllers.
         if sim:
             from prpy.simulation import ServoSimulator
 
+            self.controller = robot.AttachController(
+                self.GetName(), '', self.GetArmIndices(), 0, True)
             self.servo_simulator = ServoSimulator(self, rate=20,
                                                   watchdog_timeout=0.1)
 
@@ -63,9 +65,12 @@ class Mico(Manipulator):
 
         self.servo_simulator = None
 
+        # TODO: This is broken on nlopt_ik
+        """
         if parent.iktype is not None:
             self.iksolver = openravepy.RaveCreateIkSolver(env, 'NloptIK')
             self.SetIKSolver(self.iksolver)
+        """
 
     def Servo(self, velocities):
         """

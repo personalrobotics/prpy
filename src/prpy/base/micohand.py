@@ -40,6 +40,11 @@ class MicoHand(EndEffector):
 
         self.simulated = sim
 
+        if sim:
+            robot = manipulator.GetRobot()
+            self.controller = robot.AttachController(
+                self.GetName(), '', self.GetIndices(), 0, True)
+
     def CloneBindings(self, parent):
         super(MicoHand, self).CloneBindings(parent)
 
@@ -90,7 +95,9 @@ class MicoHand(EndEffector):
 
         # Execute the trajectory.
         robot.GetController().SetPath(traj)
-        robot.WaitForController(timeout)
+
+        if timeout:
+            robot.WaitForController(timeout)
        
     def OpenHand(hand, value=0., timeout=None):
         """
@@ -105,7 +112,8 @@ class MicoHand(EndEffector):
                 hand.manipulator.SetActive()
                 robot.task_manipulation.ReleaseFingers()
 
-            robot.WaitForController(timeout)
+            if timeout:
+                robot.WaitForController(timeout)
         else:
             hand.MoveHand(f1=value, f2=value, timeout=timeout)
 
@@ -121,7 +129,8 @@ class MicoHand(EndEffector):
                 hand.manipulator.SetActive()
                 robot.task_manipulation.CloseFingers()
 
-            robot.WaitForController(timeout)
+            if timeout:
+                robot.WaitForController(timeout)
         else:
             hand.MoveHand(f1=value, f2=value, timeout=timeout)
 
