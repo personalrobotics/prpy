@@ -547,11 +547,12 @@ def ComputeJointVelocityFromTwist(robot, twist,
     jacobian_active = jacobian[rows, :]
 
     bounds = [(-x, x) for x in robot.GetActiveDOFMaxVel()]
+
     # Check for joint limits
     q_curr = robot.GetActiveDOFValues()
     q_min, q_max = robot.GetActiveDOFLimits()
-    dq_bounds = [(0, max) if (numpy.isclose(q_curr[i], q_min[i], atol=joint_limit_tolerance)) else
-                 (min, 0) if (numpy.isclose(q_curr[i], q_max[i], atol=joint_limit_tolerance)) else
+    dq_bounds = [(0, max) if q_curr[i] <= q_min[i] + joint_limit_tolerance else
+                 (min, 0) if q_curr[i] >= q_max[i] + joint_limit_tolerance else
                  (min, max) for i, (min, max) in enumerate(bounds)]
 
     if dq_init is None:
