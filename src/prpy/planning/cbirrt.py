@@ -57,7 +57,6 @@ class CBiRRTPlanner(BasePlanner):
         """
         return self.Plan(robot, jointgoals=goals, smoothingitrs=0, **kw_args)
 
-
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
@@ -95,6 +94,8 @@ class CBiRRTPlanner(BasePlanner):
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
+        direction = numpy.array(direction, dtype=float)
+
         if direction.shape != (3,):
             raise ValueError('Direction must be a three-dimensional vector.')
         if not (distance >= 0):
