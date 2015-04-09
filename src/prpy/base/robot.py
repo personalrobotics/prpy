@@ -183,51 +183,209 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
-    def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
-                    timeout=1., **kwargs):
+    def PostProcessPath(self, path, defer=False, executor=None,
+                        constrained=None, smooth=None, default_timelimit=0.5,
+                        shortcut_options=None, smoothing_options=None,
+                        retiming_options=None):
+        """ Post-process a geometric path to prepare it for execution.
 
-        logger.debug('Begin ExecutePath')
+        This method post-processes a geometric path by (optionally) optimizing
+        it and timing it. Three different post-processing pipelines are used:
 
-        def do_execute(path, simplify, smooth, timeout, **kwargs):
+        1. For constrained trajectories, we do not modify the geometric path
+           and retime the path to be time-optimal. This trajectory must stop
+           at every waypoint. The only exception is for...
+        2. For smooth trajectories, we attempt to fit a time-optimal smooth
+           curve through the waypoints (not implemented). If this curve is
+           not collision free, then we fall back on...
+        3. By default, we run a smoother that jointly times and smooths the
+           path. This algorithm can change the geometric path to optimize
+           runtime.
 
+        The behavior in (1) and (2) can be forced by passing constrained=True
+        or smooth=True. By default, the case is inferred by the tag(s) attached
+        to the trajectory: (1) is triggered by the CONSTRAINED tag and (2) is
+        tiggered by the SMOOTH tag.
+
+        Options an be passed to each post-processing routine using the
+        shortcut-options, smoothing_options, and retiming_options **kwargs
+        dictionaries. If no "timelimit" is specified in any of these
+        dictionaries, it defaults to default_timelimit seconds.
+
+        @param path un-timed OpenRAVE trajectory
+        @param defer return immediately with a future trajectory
+        @param executor executor to use when defer = True
+        @param constrained the path is constrained; do not change it
+        @param smooth the path is smooth; attempt to execute it directly
+        @param default_timelimit timelimit for all operations, if not set
+        @param shortcut_options kwargs to ShortcutPath for shortcutting
+        @param smoothing_options kwargs to RetimeTrajectory for smoothing
+        @param retiming_options kwargs to RetimeTrajectory for timing
+        @return trajectory ready for execution
+        """
+        from ..planning.base import Tags
+        from ..util import GetTrajectoryTags, CopyTrajectory
+
+        # Default parameters.
+        if shortcut_options is None:
+            shortcut_options = dict()
+        if smoothing_options is None:
+            smoothing_options = dict()
+        if retiming_options is None:
+            retiming_options = dict()
+
+        shortcut_options.setdefault('timelimit', default_timelimit)
+        smoothing_options.setdefault('timelimit', default_timelimit)
+        retiming_options.setdefault('timelimit', default_timelimit)
+
+        # Read default parameters from the trajectory's tags.
+        tags = GetTrajectoryTags(path)
+
+        if constrained is None:
+            constrained = tags.get(Tags.CONSTRAINED, False)
+            logger.debug('Detected "%s" tag on trajectory: Setting'
+                         ' constrained = True.', Tags.CONSTRAINED)
+
+        if smooth is None:
+            smooth = tags.get(Tags.SMOOTH, False)
+            logger.debug('Detected "%s" tag on trajectory: Setting smooth'
+                         ' = True', Tags.SMOOTH)
+
+        def do_postprocess():
             with Clone(self.GetEnv()) as cloned_env:
-                traj_dofs = util.GetTrajectoryIndices(path)
-                cloned_env.Cloned(self).SetActiveDOFs(traj_dofs)
                 cloned_robot = cloned_env.Cloned(self)
 
-                if simplify and self.simplifier is not None:
-                    path = self.simplifier.ShortcutPath(cloned_robot, path, defer=False,
-                                                        timeout=timeout, **kwargs)
+                # Planners only operate on the active DOFs. We'll set any DOFs
+                # in the trajectory as active.
+                env = path.GetEnv()
+                cspec = path.GetConfigurationSpecification()
+                used_bodies = cspec.ExtractUsedBodies(env)
+                if self not in used_bodies:
+                    raise ValueError(
+                        'Robot "{:s}" is not in the trajectory.'.format(
+                            self.GetName()))
 
-                retimer = self.smoother if smooth else self.retimer
-                cloned_timed_traj = retimer.RetimeTrajectory(cloned_robot, path, defer=False, **kwargs)
+                dof_indices, _ = cspec.ExtractUsedIndices(self)
+                cloned_robot.SetActiveDOFs(dof_indices)
+                logger.debug(
+                    'Setting robot "%s" DOFs %s as active for post-processing.',
+                    cloned_robot.GetName(), list(dof_indices))
 
-                # Copy the trajectory back to the original environment.
-                from ..util import CopyTrajectory
-                timed_traj = CopyTrajectory(cloned_timed_traj, env=self.GetEnv())
+                # TODO: Handle a affine DOF trajectories for the base.
 
-            return self.ExecuteTrajectory(timed_traj, defer=False, **kwargs)
+                # Directly compute a timing of smooth trajectories.
+                if smooth:
+                    logger.warning(
+                        'Post-processing smooth paths is not supported.'
+                        ' Using the default post-processing logic; this may'
+                        ' significantly change the geometric path.'
+                    )
+
+                # The trajectory is constrained. Retime it without changing the
+                # geometric path.
+                if constrained:
+                    logger.debug('Retiming a constrained path. The output'
+                                 ' trajectory will stop at every waypoint.')
+                    traj = self.retimer.RetimeTrajectory(
+                        cloned_robot, path, defer=False, **retiming_options)
+                else:
+                # The trajectory is not constrained, so we can shortcut it
+                # before execution.
+                    if self.simplifier is not None:
+                        logger.debug('Shortcutting an unconstrained path.')
+                        shortcut_path = self.simplifier.ShortcutPath(
+                            cloned_robot, path, defer=False, **shortcut_options)
+                    else:
+                        logger.debug('Skipping shortcutting; no simplifier'
+                                     ' available.')
+                        shortcut_path = path
+
+                    logger.debug('Smoothing an unconstrained path.')
+                    traj = self.smoother.RetimeTrajectory(
+                        cloned_robot, shortcut_path, defer=False,
+                        **smoothing_options)
+
+                return CopyTrajectory(traj, env=self.GetEnv())
 
         if defer:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
-            executor = kwargs.get('executor') or get_default_executor()
-            return wrap_future(
-                executor.submit(do_execute,
-                    path, simplify=simplify, smooth=smooth, timeout=timeout,
-                    **kwargs
-                )
-            )
-        else:
-            return do_execute(path, simplify=simplify, smooth=smooth,
-                              timeout=timeout, **kwargs)
+            if executor is None:
+                executor = get_default_executor()
 
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kw_args):
+            return wrap_future(executor.submit(do_postprocess))
+        else:
+            return do_postprocess()
+
+    def ExecutePath(self, path, defer=False, executor=None, **kwargs):
+        """ Post-process and execute an un-timed path.
+
+        This method calls PostProcessPath, then passes the result to
+        ExecuteTrajectory. Any extra **kwargs are forwarded to both of these
+        methods. This function returns the timed trajectory that was executed
+        on the robot.
+
+        @param path OpenRAVE trajectory representing an un-timed path
+        @param defer execute asynchronously and return a future
+        @param executor if defer = True, which executor to use
+        @param **kwargs forwarded to PostProcessPath and ExecuteTrajectory
+        @return timed trajectory executed on the robot
+        """
+
+        def do_execute():
+            logger.debug('Post-processing path to compute a timed trajectory.')
+            traj = self.PostProcessPath(path, defer=False, **kwargs)
+
+            logger.debug('Executing timed trajectory.')
+            return self.ExecuteTrajectory(traj, defer=False, **kwargs)
+
+        if defer:
+            from trollius.executor import get_default_executor
+            from trollius.futures import wrap_future
+
+            if executor is None:
+                executor = get_default_executor()
+
+            return wrap_future(executor.submit(do_execute))
+        else:
+            return do_execute()
+
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01):
+        """ Executes a time trajectory on the robot.
+
+        This function directly executes a timed OpenRAVE trajectory on the
+        robot. If you have a geometric path, such as those returned by a
+        geometric motion planner, you should first time the path using
+        PostProcessPath. Alternatively, you could use the ExecutePath helper
+        function to time and execute the path in one function call.
+
+        If timeout = None (the default), this function does not return until
+        execution has finished. Termination occurs if the trajectory is
+        successfully executed or if a fault occurs (in this case, an exception
+        will be raised). If timeout is a float (including timeout = 0), this
+        function will return None once the timeout has ellapsed, even if the
+        trajectory is still being executed.
+        
+        NOTE: We suggest that you either use timeout=None or defer=True. If
+        trajectory execution times out, there is no way to tell whether
+        execution was successful or not. Other values of timeout are only
+        supported for legacy reasons.
+
+        This function returns the trajectory that was actually executed on the
+        robot, including controller error. If this is not available, the input
+        trajectory will be returned instead.
+
+        @param traj timed OpenRAVE trajectory to be executed
+        @param defer execute asynchronously and return a trajectory Future
+        @param timeout maximum time to wait for execution to finish
+        @param period poll rate, in seconds, for checking trajectory status
+        @return trajectory executed on the robot
+        """
+
         # TODO: Verify that the trajectory is timed.
         # TODO: Check if this trajectory contains the base.
 
-        logger.debug('Begin ExecuteTrajectory')
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
@@ -240,8 +398,13 @@ class Robot(openravepy.Robot):
         ]
 
         if needs_base:
-            if hasattr(self, 'base') and hasattr(self.base, 'controller'):
+            if (hasattr(self, 'base') and hasattr(self.base, 'controller')
+                    and self.base.controller is not None):
                 active_controllers.append(self.base.controller)
+            else:
+                logger.warning(
+                    'Trajectory includes the base, but no base controller is'
+                    ' available. Is self.base.controller set?')
 
         if defer:
             import time
