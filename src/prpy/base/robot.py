@@ -143,7 +143,9 @@ class Robot(openravepy.Robot):
         simulated is False, a controller is created using 'args' and is attached
         to the multicontroller. In simulation mode an IdealController is
         created instead. Regardless of the simulation mode, the multicontroller
-        must be finalized before use.  @param name user-readable name used to identify this controller
+        must be finalized before use.
+
+        @param name user-readable name used to identify this controller
         @param args real controller arguments
         @param dof_indices controlled joint DOFs
         @param affine_dofs controleld affine DOFs
@@ -193,7 +195,7 @@ class Robot(openravepy.Robot):
                 cloned_env.Cloned(self).SetActiveDOFs(traj_dofs)
                 cloned_robot = cloned_env.Cloned(self)
 
-                if simplify:
+                if simplify and self.simplifier is not None:
                     path = self.simplifier.ShortcutPath(cloned_robot, path, defer=False,
                                                         timeout=timeout, **kwargs)
 
