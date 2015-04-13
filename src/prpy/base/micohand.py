@@ -58,7 +58,7 @@ class MicoHand(EndEffector):
 
         self.simulated = True
 
-    def MoveHand(hand, f1, f2, timeout=None):
+    def MoveHand(self, f1, f2, timeout=None):
         """
         Change the hand preshape. This function blocks until trajectory
         execution finishes. This can be changed by changing the timeout
@@ -72,20 +72,19 @@ class MicoHand(EndEffector):
 
         from openravepy import PlannerStatus
 
-        robot = hand.GetParent()
+        robot = self.GetParent()
 
         with robot.GetEnv():
-            current_preshape = robot.GetActiveDOFValues()
+            sp = openravepy.Robot.SaveParameters
+            with robot.CreateRobotStateSaver(sp.ActiveDOF):
+                robot.SetActiveDOFs(self.GetIndices())
+                cspec = robot.GetActiveConfigurationSpecification('linear')
+                current_preshape = robot.GetActiveDOFValues()
 
             # Default any None's to the current DOF values.
             desired_preshape = current_preshape.copy()
             if f1 is not None: desired_preshape[0] = f1
             if f2 is not None: desired_preshape[1] = f2
-
-            sp = openravepy.Robot.SaveParameters
-            with robot.CreateRobotStateSaver(sp.ActiveDOF):
-                robot.SetActiveDOFs(self.GetIndices())
-                cspec = robot.GetActiveConfigurationSpecification()
 
         # Create a two waypoint trajectory to the target configuration.
         traj = openravepy.RaveCreateTrajectory(robot.GetEnv(), '')
@@ -102,45 +101,46 @@ class MicoHand(EndEffector):
             raise PrPyException('Failed timing finger trajectory.')
 
         # Execute the trajectory.
-        robot.GetController().SetPath(traj)
-
-        if timeout:
-            robot.WaitForController(timeout)
+        return robot.ExecuteTrajectory(traj)
        
-    def OpenHand(hand, value=0., timeout=None):
+    def OpenHand(self, value=0., timeout=None):
         """
         Open the hand.
         @param timeout blocking execution timeout
         """
-        if hand.simulated:
-            robot = hand.manipulator.GetRobot()
+        if self.simulated:
+            robot = self.manipulator.GetRobot()
             p = openravepy.KinBody.SaveParameters
 
             with robot.CreateRobotStateSaver(p.ActiveDOF | p.ActiveManipulator):
-                hand.manipulator.SetActive()
+                self.manipulator.SetActive()
                 robot.task_manipulation.ReleaseFingers()
 
             if timeout:
                 robot.WaitForController(timeout)
-        else:
-            hand.MoveHand(f1=value, f2=value, timeout=timeout)
 
-    def CloseHand(hand, value=0.8, timeout=None):
+            return None
+        else:
+            return self.MoveHand(f1=value, f2=value, timeout=timeout)
+
+    def CloseHand(self, value=0.8, timeout=None):
         """ Close the hand.
         @param timeout blocking execution timeout
         """
-        if hand.simulated:
-            robot = hand.manipulator.GetRobot()
+        if self.simulated:
+            robot = self.manipulator.GetRobot()
             p = openravepy.KinBody.SaveParameters
 
             with robot.CreateRobotStateSaver(p.ActiveDOF | p.ActiveManipulator):
-                hand.manipulator.SetActive()
+                self.manipulator.SetActive()
                 robot.task_manipulation.CloseFingers()
 
             if timeout:
                 robot.WaitForController(timeout)
+
+            return None
         else:
-            hand.MoveHand(f1=value, f2=value, timeout=timeout)
+            return self.MoveHand(f1=value, f2=value, timeout=timeout)
 
     def CloseHandTight(self, value=1.2, timeout=None):
         """ Close the hand tightly.
