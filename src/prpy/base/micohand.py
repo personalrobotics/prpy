@@ -38,7 +38,15 @@ class MicoHand(EndEffector):
     def __init__(self, sim, manipulator):
         EndEffector.__init__(self, manipulator)
 
+        robot = manipulator.GetRobot()
+        env = robot.GetEnv()
+
         self.simulated = sim
+
+        with env:
+            accel_limits = robot.GetDOFAccelerationLimits()
+            accel_limits[self.GetIndices()] = 1.
+            robot.SetDOFAccelerationLimits(accel_limits)
 
         if sim:
             robot = manipulator.GetRobot()
