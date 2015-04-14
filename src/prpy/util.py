@@ -40,6 +40,40 @@ def create_sensor(env, args, anonymous=True):
     env.Add(sensor, anonymous)
     return sensor
 
+def CreatePlannerParametersString(options, params=None):
+    """ Creates an OpenRAVE parameter XML string.
+
+    OpenRAVE planners have an InitPlan function that either take an instance of
+    the PlannerParameters() struct or the serialized XML version of this
+    struct. Unfortunately, it is not possible to override several default
+    options in the Python API. This function takes a seed PlannerParameters
+    struct and a dictionary of key-value pairs to override. It returns XML that
+    can be passed directly to InitPlan.
+
+    @param options: dictionary of key-value pairs
+    @type  options: {str: str}
+    @param params: input struct (defaults to the defaults in OpenRAVE)
+    @type  params: openravepy.Planner.PlannerParameters
+    @return planner parameters string XML
+    @rtype  str
+    """
+    import lxml.etree
+    import openravepy
+
+    if params is None:
+        params = openravepy.Planner.PlannerParameters()
+
+    params_xml = lxml.etree.fromstring(params.__repr__().split('"""')[1])
+
+    for key, value in options.iteritems():
+        element = params_xml.find(key)
+        if element is None:
+            element = lxml.etree.SubElement(key)
+
+        element.text = str(value)
+
+    return lxml.etree.tostring(params_xml)
+
 def HasAffineDOFs(cspec):
     def has_group(cspec, group_name):
         try:
