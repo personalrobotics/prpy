@@ -332,12 +332,22 @@ class Robot(openravepy.Robot):
         @param **kwargs forwarded to PostProcessPath and ExecuteTrajectory
         @return timed trajectory executed on the robot
         """
+        from ..util import Timer
 
         def do_execute():
-            logger.debug('Post-processing path to compute a timed trajectory.')
-            traj = self.PostProcessPath(path, defer=False, **kwargs)
+            logger.info('Post-processing path with %d waypoints.',
+                path.GetNumWaypoints())
 
-            logger.debug('Executing timed trajectory.')
+            with Timer() as timer:
+                traj = self.PostProcessPath(path, defer=False, **kwargs)
+
+            logger.info('Post-processing took %.3f seconds and produced a path'
+                        ' with %d waypoints and a duration of %.3f seconds.',
+                timer.get_duration(),
+                traj.GetNumWaypoints(),
+                traj.GetDuration()
+            )
+
             return self.ExecuteTrajectory(traj, defer=False, **kwargs)
 
         if defer:
