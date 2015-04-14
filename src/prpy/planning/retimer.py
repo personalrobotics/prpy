@@ -80,7 +80,8 @@ class OpenRAVERetimer(BasePlanner):
             all_options.update(options)
 
         params = Planner.PlannerParameters()
-        params.SetConfigurationSpecification(self.env, cspec)
+        params.SetConfigurationSpecification(
+            self.env, cspec.GetTimeDerivativeSpecification(0))
         params_str = CreatePlannerParametersString(all_options, params)
 
         # Copy the input trajectory into the planning environment. This is
@@ -93,6 +94,13 @@ class OpenRAVERetimer(BasePlanner):
         output_traj = SimplifyTrajectory(input_path, robot)
 
         # Compute the timing. This happens in-place.
+        status = openravepy.planningutils.SmoothTrajectory(
+            output_traj, 1, 1, 'ParabolicSmoother', '')
+
+        # FIXME: This should faster, since it doesn't re-create the planner for
+        # each query. Unfortunately, the planner throws an "original ramp 0 in
+        # collision" error.
+        output_traj = SimplifyTrajectory(input_path, robot)
         self.planner.InitPlan(None, params_str)
         status = self.planner.PlanPath(output_traj, releasegil=True)
 
@@ -109,16 +117,23 @@ class ParabolicRetimer(OpenRAVERetimer):
         super(ParabolicRetimer, self).__init__(
                 'ParabolicTrajectoryRetimer', **kwargs)
 
+        self.default_options['_postprocessing'] = None
+
 
 class ParabolicSmoother(OpenRAVERetimer):
     def __init__(self, **kwargs):
         super(ParabolicSmoother, self).__init__('ParabolicSmoother', **kwargs)
+
+        self.default_options['_postprocessing'] = None
 
 
 class HauserParabolicSmoother(OpenRAVERetimer):
     def __init__(self, **kwargs):
         super(HauserParabolicSmoother, self).__init__(
                 'HauserParabolicSmoother', **kwargs)
+
+        self.default_options['_postprocessing'] = None
+
 
 class OpenRAVEAffineRetimer(BasePlanner):
 

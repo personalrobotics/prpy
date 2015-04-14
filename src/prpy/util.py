@@ -67,10 +67,17 @@ def CreatePlannerParametersString(options, params=None):
 
     for key, value in options.iteritems():
         element = params_xml.find(key)
-        if element is None:
-            element = lxml.etree.SubElement(key)
 
-        element.text = str(value)
+        # Remove a value if "value" is None.
+        if value is None:
+            if element is not None:
+                params_xml.remove(element)
+        # Add (or overwrite) and existing value.
+        else:
+            if element is None:
+                element = lxml.etree.SubElement(params_xml, key)
+
+            element.text = str(value)
 
     return lxml.etree.tostring(params_xml)
 
