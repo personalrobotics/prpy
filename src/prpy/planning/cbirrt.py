@@ -76,6 +76,10 @@ class CBiRRTPlanner(BasePlanner):
         @param psample probability of sampling a goal
         @return traj output path
         """
+        #from IPython import embed
+        #embed()
+        self.ClearIkSolver(robot.GetActiveManipulator())
+
         manipulator_index = robot.GetActiveManipulatorIndex()
         goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
@@ -94,6 +98,8 @@ class CBiRRTPlanner(BasePlanner):
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
+        self.ClearIkSolver(robot.GetActiveManipulator())
+
         direction = numpy.array(direction, dtype=float)
 
         if direction.shape != (3,):
@@ -268,8 +274,17 @@ class CBiRRTPlanner(BasePlanner):
 
         return traj
 
+    def ClearIkSolver(self, manip):
+        manip.SetIkSolver(None)
+        manip.SetLocalToolTransform(manip.GetLocalToolTransform())
+        manip.SetIkSolver(None)
+        if manip.GetIkSolver() is not None:
+            raise ValueError('Unable to clear IkSolver')
+
+
     @staticmethod
     def serialize_dof_values(dof_values):
         return [ str(len(dof_values)), 
                  ' '.join([ str(x) for x in dof_values]) ]
 
+   
