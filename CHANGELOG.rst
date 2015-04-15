@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.5.1 (2015-04-15)
+------------------
 * Merge branch 'feature/MICORefactor' of github.com:personalrobotics/prpy into feature/MICORefactor
 * Fixed ParabolicSmoother bug (thanks @rdiankov)
 * added code to cleanup ik solver, changed acceleration to 1.5
