@@ -82,6 +82,7 @@ class OpenRAVERetimer(BasePlanner):
         params = Planner.PlannerParameters()
         params.SetConfigurationSpecification(
             self.env, cspec.GetTimeDerivativeSpecification(0))
+
         params_str = CreatePlannerParametersString(all_options, params)
 
         # Copy the input trajectory into the planning environment. This is
@@ -95,14 +96,16 @@ class OpenRAVERetimer(BasePlanner):
 
         # Compute the timing. This happens in-place.
         status = openravepy.planningutils.SmoothTrajectory(
-            output_traj, 1, 1, 'ParabolicSmoother', '')
+            output_traj, 1, 1, self.algorithm, '')
 
         # FIXME: This should faster, since it doesn't re-create the planner for
         # each query. Unfortunately, the planner throws an "original ramp 0 in
         # collision" error.
+        """
         output_traj = SimplifyTrajectory(input_path, robot)
         self.planner.InitPlan(None, params_str)
         status = self.planner.PlanPath(output_traj, releasegil=True)
+        """
 
         if status not in [ PlannerStatus.HasSolution,
                            PlannerStatus.InterruptedWithSolution ]:
@@ -117,22 +120,28 @@ class ParabolicRetimer(OpenRAVERetimer):
         super(ParabolicRetimer, self).__init__(
                 'ParabolicTrajectoryRetimer', **kwargs)
 
-        self.default_options['_postprocessing'] = None
-
 
 class ParabolicSmoother(OpenRAVERetimer):
     def __init__(self, **kwargs):
         super(ParabolicSmoother, self).__init__('ParabolicSmoother', **kwargs)
 
-        self.default_options['_postprocessing'] = None
+        self.default_options.update({
+            '_postprocessing': None,
+            '_fsteplength': '0',
+            'interpolation': '',
+            'hastimestamps': 0,
+            'hasvelocities': 0,
+            'pointtolerance': '0.2',
+            'outputaccelchanges': 1,
+            'multidofinterp': 0,
+            'verifyinitialpath': 1,
+        })
 
 
 class HauserParabolicSmoother(OpenRAVERetimer):
     def __init__(self, **kwargs):
         super(HauserParabolicSmoother, self).__init__(
                 'HauserParabolicSmoother', **kwargs)
-
-        self.default_options['_postprocessing'] = None
 
 
 class OpenRAVEAffineRetimer(BasePlanner):

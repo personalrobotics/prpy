@@ -40,7 +40,8 @@ def create_sensor(env, args, anonymous=True):
     env.Add(sensor, anonymous)
     return sensor
 
-def CreatePlannerParametersString(options, params=None):
+def CreatePlannerParametersString(options, params=None,
+                                  remove_postprocessing=True):
     """ Creates an OpenRAVE parameter XML string.
 
     OpenRAVE planners have an InitPlan function that either take an instance of
@@ -59,6 +60,11 @@ def CreatePlannerParametersString(options, params=None):
     """
     import lxml.etree
     import openravepy
+    from copy import deepcopy
+
+    options = deepcopy(options)
+    if remove_postprocessing:
+        options['_postprocessing'] = None
 
     if params is None:
         params = openravepy.Planner.PlannerParameters()
@@ -78,6 +84,11 @@ def CreatePlannerParametersString(options, params=None):
                 element = lxml.etree.SubElement(params_xml, key)
 
             element.text = str(value)
+
+    if remove_postprocessing:
+        params_xml.append(
+            lxml.etree.fromstring("""<_postprocessing planner=""><_nmaxiterations>20</_nmaxiterations><_postprocessing planner="parabolicsmoother"><_nmaxiterations>100</_nmaxiterations></_postprocessing></_postprocessing>""")
+        )
 
     return lxml.etree.tostring(params_xml)
 
