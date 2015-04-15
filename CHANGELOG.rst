@@ -2,6 +2,47 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge branch 'feature/MICORefactor' of github.com:personalrobotics/prpy into feature/MICORefactor
+* Fixed ParabolicSmoother bug (thanks @rdiankov)
+* added code to cleanup ik solver, changed acceleration to 1.5
+* Added some hacks for ParabolicSmoother.
+* More retiming fixes.
+* Added a few useful log messages.
+* Cleaned up wrappers for OpenRAVE retimers.
+* Fixed Open/Close/CloseTight functions on MicoHand.
+* Set acceleration limits by default.
+* Convert CBiRRT "direction" to a NumPy array.
+* Merge branch 'master' into feature/MICORefactor
+  Conflicts:
+  src/prpy/base/robot.py
+* Merge pull request `#95 <https://github.com/personalrobotics/prpy/issues/95>`_ from personalrobotics/feature/SmoothingRefactor2
+  Trajectory timing/smoothing refactor 2.0.
+* Merge pull request `#108 <https://github.com/personalrobotics/prpy/issues/108>`_ from personalrobotics/bugfix/issue99
+  Fixed two bugs in vectorfield planner.
+* Made robot.simplifier optional.
+* Load an IdealController in simulation.
+* Fixed two bugs in planner
+  Fixed two bugs:
+  1. Missing `abs`
+  2. Changed default `dt_multiplier` to 1.01 so that `numsteps` floors to 1 by default.
+* Fixed weird superclass issue.
+* Removed multi-controller references from Mico.
+* More MicoHand cleanup.
+* Started removing BH-specific code from MicoHand
+* Removed MICORobot, since it does nothing.
+* Load or_nlopt_ik by default.
+* PEP-8 fixes.
+* Removed more dead code from Mico.
+* Rearranged Mico file.
+* Removed PlanToNamedConfiguration from Mico.
+* Removed OWD-specific code from the Mico.
+* Documented ExecutePath and ExecuteTrajectory.
+* Simplified PostProcessPath with defer=True.
+* Rough PostProcessPath function.
+* Contributors: Michael Koval, Siddhartha Srinivasa, Stefanos Nikolaidis
+
 0.5.0 (2015-04-07)
 ------------------
 * Fixed the OMPL planner creation test.
