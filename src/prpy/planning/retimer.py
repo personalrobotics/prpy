@@ -95,17 +95,9 @@ class OpenRAVERetimer(BasePlanner):
         output_traj = SimplifyTrajectory(input_path, robot)
 
         # Compute the timing. This happens in-place.
-        status = openravepy.planningutils.SmoothTrajectory(
-            output_traj, 1, 1, self.algorithm, '')
-
-        # FIXME: This should faster, since it doesn't re-create the planner for
-        # each query. Unfortunately, the planner throws an "original ramp 0 in
-        # collision" error.
-        """
         output_traj = SimplifyTrajectory(input_path, robot)
         self.planner.InitPlan(None, params_str)
         status = self.planner.PlanPath(output_traj, releasegil=True)
-        """
 
         if status not in [ PlannerStatus.HasSolution,
                            PlannerStatus.InterruptedWithSolution ]:
@@ -134,7 +126,7 @@ class ParabolicSmoother(OpenRAVERetimer):
             'pointtolerance': '0.2',
             'outputaccelchanges': 1,
             'multidofinterp': 0,
-            'verifyinitialpath': 1,
+            'verifyinitialpath': '0',
         })
 
 
