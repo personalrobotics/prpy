@@ -73,7 +73,8 @@ class OpenRAVERetimer(BasePlanner):
         elif joint_values_group.interpolation != 'linear':
             logger.warning(
                 'Path has interpolation of type "%s"; only "linear"'
-                ' interpolation is supported.', group.interpolation)
+                ' interpolation is supported.',
+                joint_values_group.interpolation)
 
         # Set parameters.
         all_options = deepcopy(self.default_options)
