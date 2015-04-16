@@ -43,8 +43,10 @@ class Mico(Manipulator):
         env = robot.GetEnv()
 
         with env:
+            dof_indices = self.GetIndices()
             accel_limits = robot.GetDOFAccelerationLimits()
-            accel_limits[self.GetIndices()] = 2.5
+            accel_limits[dof_indices[0:3]] = 1.2
+            accel_limits[dof_indices[3:6]] = 1.0
             robot.SetDOFAccelerationLimits(accel_limits)
 
         # Load or_nlopt_ik as the IK solver. Unfortunately, IKFast doesn't work
