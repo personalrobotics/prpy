@@ -57,6 +57,7 @@ class OpenRAVERetimer(BasePlanner):
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
         from ..util import (CreatePlannerParametersString, CopyTrajectory,
                             SimplifyTrajectory, HasAffineDOFs)
+        from openravepy import CollisionOptions, CollisionOptionsStateSaver
         from copy import deepcopy
         from openravepy import Planner
 
@@ -94,10 +95,18 @@ class OpenRAVERetimer(BasePlanner):
         # not perform this check internally (e.g. ParabolicTrajectoryRetimer).
         output_traj = SimplifyTrajectory(input_path, robot)
 
+        # Only collision check the active DOFs.
+        dof_indices, _ = cspec.ExtractUsedIndices(robot)
+        robot.SetActiveDOFs(dof_indices)
+
         # Compute the timing. This happens in-place.
         output_traj = SimplifyTrajectory(input_path, robot)
         self.planner.InitPlan(None, params_str)
-        status = self.planner.PlanPath(output_traj, releasegil=True)
+
+
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+            status = self.planner.PlanPath(output_traj, releasegil=True)
 
         if status not in [ PlannerStatus.HasSolution,
                            PlannerStatus.InterruptedWithSolution ]:

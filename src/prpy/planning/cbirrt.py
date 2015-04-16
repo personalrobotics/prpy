@@ -186,6 +186,8 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
+        from openravepy import CollisionOptions, CollisionOptionsStateSaver
+
         self.env.LoadProblem(self.problem, robot.GetName())
 
         args = [ 'RunCBiRRT' ]
@@ -252,7 +254,10 @@ class CBiRRTPlanner(BasePlanner):
         args += [ 'filename', traj_path ]
         args_str = ' '.join(args)
 
-        response = self.problem.SendCommand(args_str, True)
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+            response = self.problem.SendCommand(args_str, True)
+
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response)
          
