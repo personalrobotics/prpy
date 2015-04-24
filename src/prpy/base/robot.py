@@ -184,7 +184,7 @@ class Robot(openravepy.Robot):
     def PostProcessPath(self, path, defer=False, executor=None,
                         constrained=None, smooth=None, default_timelimit=0.5,
                         shortcut_options=None, smoothing_options=None,
-                        retiming_options=None):
+                        retiming_options=None, **kwargs):
         """ Post-process a geometric path to prepare it for execution.
 
         This method post-processes a geometric path by (optionally) optimizing
@@ -344,7 +344,7 @@ class Robot(openravepy.Robot):
         else:
             return do_execute()
 
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01):
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kwargs):
         """ Executes a time trajectory on the robot.
 
         This function directly executes a timed OpenRAVE trajectory on the
