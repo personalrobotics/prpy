@@ -300,7 +300,7 @@ class Robot(openravepy.Robot):
 
                 return CopyTrajectory(traj, env=self.GetEnv())
 
-        if defer:
+        if defer is True:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
@@ -333,7 +333,7 @@ class Robot(openravepy.Robot):
             logger.debug('Executing timed trajectory.')
             return self.ExecuteTrajectory(traj, defer=False, **kwargs)
 
-        if defer:
+        if defer is True:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
@@ -399,7 +399,7 @@ class Robot(openravepy.Robot):
                     'Trajectory includes the base, but no base controller is'
                     ' available. Is self.base.controller set?')
 
-        if defer:
+        if defer is True:
             import time
             import trollius
 
