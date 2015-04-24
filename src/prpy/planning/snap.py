@@ -88,7 +88,10 @@ class SnapPlanner(BasePlanner):
         manipulator = robot.GetActiveManipulator()
         current_config = robot.GetDOFValues(manipulator.GetArmIndices())
         ik_param = openravepy.IkParameterization(goal_pose, ikp.Transform6D)
-        ik_solution = manipulator.FindIKSolution(ik_param, ikfo.CheckEnvCollisions)
+        ik_solution = manipulator.FindIKSolution(
+            ik_param, ikfo.CheckEnvCollisions,
+            ikreturn=False, releasegil=True
+        )
 
         if ik_solution is None:
             raise PlanningError('There is no IK solution at the goal pose.')

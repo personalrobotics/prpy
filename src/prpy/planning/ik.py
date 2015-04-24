@@ -63,7 +63,9 @@ class IKPlanner(BasePlanner):
             ik_param = IkParameterization(
                 goal_pose, IkParameterizationType.Transform6D)
             ik_solutions = manipulator.FindIKSolutions(
-                ik_param, IkFilterOptions.CheckEnvCollisions)
+                ik_param, IkFilterOptions.CheckEnvCollisions,
+                ikreturn=False, releasegil=True
+            )
 
         if ik_solutions.shape[0] == 0:
             raise PlanningError('There is no IK solution at the goal pose.')

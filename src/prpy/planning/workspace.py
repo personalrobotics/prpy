@@ -185,7 +185,9 @@ class GreedyIKPlanner(BasePlanner):
                     qcurr = robot.GetActiveDOFValues()  # Configuration at t.
                     qnew = manip.FindIKSolution(
                         openravepy.matrixFromPose(traj.Sample(t+dt)[0:7]),
-                        ik_options
+                        ik_options,
+                        ikreturn=False,
+                        releasegil=True
                     )
 
                     # Check if the step was within joint DOF resolution.
