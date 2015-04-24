@@ -171,8 +171,10 @@ class GreedyIKPlanner(BasePlanner):
             ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
 
             start_time = time.time()
+            epsilon = 1e-6
+
             try:
-                while not numpy.isclose(t, traj.GetDuration()):
+                while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
