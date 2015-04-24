@@ -83,6 +83,11 @@ class Clone(object):
 
         # Actually clone.
         with self.clone_env:
+            # Clear user-data. Otherwise, cloning into into the same target
+            # environment multiple times may not cause CloneBindings to get
+            # called again.
+            self.clone_env.SetUserData(None)
+
             if self.clone_env != self.clone_parent:
                 with self.clone_parent:
                     self.clone_env.Clone(self.clone_parent, self.options)

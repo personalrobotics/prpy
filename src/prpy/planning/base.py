@@ -221,25 +221,35 @@ class Sequence(MetaPlanner):
         self._planners = planners
 
     def __str__(self):
-        return 'Sequence({0:s})'.format(', '.join(map(str, self._planners)))
+        return 'Sequence({:s})'.format(', '.join(map(str, self._planners)))
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
                 if hasattr(planner, method_name)]
 
     def plan(self, method, args, kw_args):
+        from ..util import Timer
+
         errors = dict()
 
         for planner in self._planners:
             try:
                 if hasattr(planner, method):
-                    logger.debug('Sequence - Calling planner "%s".', str(planner))
+                    logger.info('Sequence - Calling planner "%s".', str(planner))
                     planner_method = getattr(planner, method)
                     kw_args['defer'] = False
-                    return planner_method(*args, **kw_args)
+
+                    with Timer() as timer:
+                        output = planner_method(*args, **kw_args)
+
+                    logger.info('Sequence - Planning succeeded after %.3f'
+                                ' seconds with "%s".',
+                        timer.get_duration(), str(planner)
+                    )
+                    return output
                 else:
-                    logger.debug('Sequence - Skipping planner "%s"; does not have "%s" method.',
-                                 str(planner), method)
+                    logger.debug('Sequence - Skipping planner "%s"; does not'
+                                 ' have "%s" method.', str(planner), method)
             except MetaPlanningError as e:
                 errors[planner] = e
             except PlanningError as e:

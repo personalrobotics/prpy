@@ -143,7 +143,9 @@ class Robot(openravepy.Robot):
         simulated is False, a controller is created using 'args' and is attached
         to the multicontroller. In simulation mode an IdealController is
         created instead. Regardless of the simulation mode, the multicontroller
-        must be finalized before use.  @param name user-readable name used to identify this controller
+        must be finalized before use.
+
+        @param name user-readable name used to identify this controller
         @param args real controller arguments
         @param dof_indices controlled joint DOFs
         @param affine_dofs controleld affine DOFs
@@ -289,9 +291,14 @@ class Robot(openravepy.Robot):
                 else:
                 # The trajectory is not constrained, so we can shortcut it
                 # before execution.
-                    logger.debug('Shortcutting an unconstrained path.')
-                    shortcut_path = self.simplifier.ShortcutPath(
-                        cloned_robot, path, defer=False, **shortcut_options)
+                    if self.simplifier is not None:
+                        logger.debug('Shortcutting an unconstrained path.')
+                        shortcut_path = self.simplifier.ShortcutPath(
+                            cloned_robot, path, defer=False, **shortcut_options)
+                    else:
+                        logger.debug('Skipping shortcutting; no simplifier'
+                                     ' available.')
+                        shortcut_path = path
 
                     logger.debug('Smoothing an unconstrained path.')
                     traj = self.smoother.RetimeTrajectory(
@@ -325,12 +332,22 @@ class Robot(openravepy.Robot):
         @param **kwargs forwarded to PostProcessPath and ExecuteTrajectory
         @return timed trajectory executed on the robot
         """
+        from ..util import Timer
 
         def do_execute():
-            logger.debug('Post-processing path to compute a timed trajectory.')
-            traj = self.PostProcessPath(path, defer=False, **kwargs)
+            logger.info('Post-processing path with %d waypoints.',
+                path.GetNumWaypoints())
 
-            logger.debug('Executing timed trajectory.')
+            with Timer() as timer:
+                traj = self.PostProcessPath(path, defer=False, **kwargs)
+
+            logger.info('Post-processing took %.3f seconds and produced a path'
+                        ' with %d waypoints and a duration of %.3f seconds.',
+                timer.get_duration(),
+                traj.GetNumWaypoints(),
+                traj.GetDuration()
+            )
+
             return self.ExecuteTrajectory(traj, defer=False, **kwargs)
 
         if defer is True:
