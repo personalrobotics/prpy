@@ -229,11 +229,9 @@ def GetTrajectoryTags(traj):
     """
     import json
 
-    description = traj.GetDescription()
-
-    if description:
-        return json.loads(description)
-    else:
+    try:
+        return json.loads(traj.GetDescription())
+    except ValueError:
         return dict()
 
 
