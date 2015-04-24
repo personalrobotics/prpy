@@ -76,10 +76,6 @@ class CBiRRTPlanner(BasePlanner):
         @param psample probability of sampling a goal
         @return traj output path
         """
-        #from IPython import embed
-        #embed()
-        self.ClearIkSolver(robot.GetActiveManipulator())
-
         manipulator_index = robot.GetActiveManipulatorIndex()
         goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
@@ -98,8 +94,6 @@ class CBiRRTPlanner(BasePlanner):
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
-        self.ClearIkSolver(robot.GetActiveManipulator())
-
         direction = numpy.array(direction, dtype=float)
 
         if direction.shape != (3,):
@@ -187,6 +181,10 @@ class CBiRRTPlanner(BasePlanner):
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
+
+        # TODO We may need this work-around because CBiRRT doesn't like it when
+        # an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
+        #self.ClearIkSolver(robot.GetActiveManipulator())
 
         self.env.LoadProblem(self.problem, robot.GetName())
 
