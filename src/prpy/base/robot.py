@@ -307,7 +307,7 @@ class Robot(openravepy.Robot):
 
                 return CopyTrajectory(traj, env=self.GetEnv())
 
-        if defer:
+        if defer is True:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
@@ -316,6 +316,10 @@ class Robot(openravepy.Robot):
 
             return wrap_future(executor.submit(do_postprocess))
         else:
+            if defer is not False:
+                logger.warning('Received unexpected value "%s" for defer.',
+                               defer)
+
             return do_postprocess()
 
     def ExecutePath(self, path, defer=False, executor=None, **kwargs):
@@ -350,7 +354,7 @@ class Robot(openravepy.Robot):
 
             return self.ExecuteTrajectory(traj, defer=False, **kwargs)
 
-        if defer:
+        if defer is True:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
@@ -359,6 +363,10 @@ class Robot(openravepy.Robot):
 
             return wrap_future(executor.submit(do_execute))
         else:
+            if defer is not False:
+                logger.warning('Received unexpected value "%s" for defer.',
+                               defer)
+
             return do_execute()
 
     def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01):
@@ -416,7 +424,7 @@ class Robot(openravepy.Robot):
                     'Trajectory includes the base, but no base controller is'
                     ' available. Is self.base.controller set?')
 
-        if defer:
+        if defer is True:
             import time
             import trollius
 
@@ -436,6 +444,10 @@ class Robot(openravepy.Robot):
 
             return trollius.async(do_poll())
         else:
+            if defer is not False:
+                logger.warning('Received unexpected value "%s" for defer.',
+                               defer)
+
             util.WaitForControllers(active_controllers, timeout=timeout)
 
         return traj

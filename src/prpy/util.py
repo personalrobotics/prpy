@@ -32,6 +32,10 @@
 import logging, numpy, openravepy, scipy.misc, time, threading, math
 import scipy.optimize
 
+
+logger = logging.getLogger('prpy.util')
+
+
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
     if sensor is None:
@@ -283,10 +287,14 @@ def GetTrajectoryTags(traj):
 
     description = traj.GetDescription()
 
-    if description:
-        return json.loads(description)
-    else:
+    if description == '':
         return dict()
+    else:
+        try:
+            return json.loads(description)
+        except ValueError as e:
+            logger.warning('Failed reading tags from trajectory: %s', e.message)
+            return dict()
 
 
 def SetTrajectoryTags(traj, tags, append=False):
