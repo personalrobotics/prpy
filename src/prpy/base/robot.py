@@ -315,12 +315,11 @@ class Robot(openravepy.Robot):
                 executor = get_default_executor()
 
             return wrap_future(executor.submit(do_postprocess))
-        else:
-            if defer is not False:
-                logger.warning('Received unexpected value "%s" for defer.',
-                               defer)
-
+        elif defer is False:
             return do_postprocess()
+        else:
+            raise ValueError('Received unexpected value "{:s}" for defer.'.format(defer))
+
 
     def ExecutePath(self, path, defer=False, executor=None, **kwargs):
         """ Post-process and execute an un-timed path.
@@ -362,12 +361,11 @@ class Robot(openravepy.Robot):
                 executor = get_default_executor()
 
             return wrap_future(executor.submit(do_execute))
-        else:
-            if defer is not False:
-                logger.warning('Received unexpected value "%s" for defer.',
-                               defer)
-
+        elif defer is False:
             return do_execute()
+        else:
+            raise ValueError('Received unexpected value "{:s}" for defer.'.format(defer))
+
 
     def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01):
         """ Executes a time trajectory on the robot.
@@ -443,14 +441,12 @@ class Robot(openravepy.Robot):
                 raise trollius.Return(None)
 
             return trollius.async(do_poll())
-        else:
-            if defer is not False:
-                logger.warning('Received unexpected value "%s" for defer.',
-                               defer)
-
+        elif defer is not False:
             util.WaitForControllers(active_controllers, timeout=timeout)
+            return traj
+        else:
+            raise ValueError('Received unexpected value "{:s}" for defer.'.format(defer))
 
-        return traj
 
     def ViolatesVelocityLimits(self, traj):
         """
