@@ -364,7 +364,7 @@ class Robot(openravepy.Robot):
         elif defer is False:
             return do_execute()
         else:
-            raise ValueError('Received unexpected value "{:s}" for defer.'.format(defer))
+            raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
 
 
     def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kwargs):
@@ -441,11 +441,11 @@ class Robot(openravepy.Robot):
                 raise trollius.Return(None)
 
             return trollius.async(do_poll())
-        elif defer is not False:
+        elif defer is False:
             util.WaitForControllers(active_controllers, timeout=timeout)
             return traj
         else:
-            raise ValueError('Received unexpected value "{:s}" for defer.'.format(defer))
+            raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
 
 
     def ViolatesVelocityLimits(self, traj):
