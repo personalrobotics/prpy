@@ -158,6 +158,11 @@ class MobileBase(object):
             )
             cloned_traj = planning_method(cloned_robot, *args, **kw_args)
 
+            config_spec = cloned_robot.GetActiveConfigurationSpecification()
+            openravepy.planningutils.ConvertTrajectorySpecification(
+                cloned_traj, config_spec
+            )
+
             # Copy the trajectory back to the original environment.
             from ..util import CopyTrajectory
             traj = CopyTrajectory(cloned_traj, env=robot.GetEnv())
