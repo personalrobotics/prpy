@@ -183,7 +183,7 @@ class MetaPlanner(Planner):
         meta_wrapper.__name__ = method_name
         docstrings = list()
         for planner in self.get_planners_recursive(method_name):
-            if hasattr(planner, method_name):
+            if planner.has_planning_method(method_name):
                 planner_method = getattr(planner, method_name)
                 docstrings.append((planner, planner_method))
 
@@ -225,7 +225,7 @@ class Sequence(MetaPlanner):
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
-                if hasattr(planner, method_name)]
+                if planner.has_planning_method(method_name)]
 
     def plan(self, method, args, kw_args):
         from ..util import Timer
@@ -234,7 +234,7 @@ class Sequence(MetaPlanner):
 
         for planner in self._planners:
             try:
-                if hasattr(planner, method):
+                if planner.has_planning_method(method):
                     logger.info('Sequence - Calling planner "%s".', str(planner))
                     planner_method = getattr(planner, method)
                     kw_args['defer'] = False
@@ -268,7 +268,7 @@ class Ranked(MetaPlanner):
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
-                if hasattr(planner, method_name)]
+                if planner.has_planning_method(method_name)]
 
     def plan(self, method, args, kw_args):
         all_planners = self._planners
@@ -277,7 +277,7 @@ class Ranked(MetaPlanner):
 
         # Find only planners that support the required planning method.
         for index, planner in enumerate(all_planners):
-            if not hasattr(planner, method):
+            if not planner.has_planning_method(method):
                 results[index] = PlanningError(
                     "{:s} does not implement method {:s}."
                     .format(planner, method)
@@ -337,7 +337,7 @@ class FirstSupported(MetaPlanner):
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
-                if hasattr(planner, method_name)]
+                if planner.has_planning_method(method_name)]
 
     def plan(self, method, args, kw_args):
         for planner in self._planners:

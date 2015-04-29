@@ -101,14 +101,15 @@ class OpenRAVERetimer(BasePlanner):
         robot.SetActiveDOFs(dof_indices)
 
         # Compute the timing. This happens in-place.
-        output_traj = SimplifyTrajectory(input_path, robot)
         self.planner.InitPlan(None, params_str)
 
 
         with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
+            logging.info('Retiming with %s' % self.algorithm)
+            logging.info('Retiming trajectory with %d waypoints' % output_traj.GetNumWaypoints())
             status = self.planner.PlanPath(output_traj, releasegil=True)
-
+            
         if status not in [ PlannerStatus.HasSolution,
                            PlannerStatus.InterruptedWithSolution ]:
             raise PlanningError(
