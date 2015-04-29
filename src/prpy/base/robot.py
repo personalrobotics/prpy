@@ -35,7 +35,7 @@ from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence 
 from ..planning.ompl import OMPLSimplifier
-from ..planning.retimer import ParabolicRetimer, ParabolicSmoother
+from ..planning.retimer import HauserParabolicSmoother, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
 
 logger = logging.getLogger('robot')
@@ -67,10 +67,10 @@ class Robot(openravepy.Robot):
         # Path post-processing for execution. This includes simplification of
         # the geometric path, retiming a path into a trajectory, and smoothing
         # (joint simplificaiton and retiming).
-        self.simplifier = OMPLSimplifier()
+        self.simplifier = None
         self.retimer = ParabolicRetimer()
         self.smoother = Sequence(
-            ParabolicSmoother(),
+            HauserParabolicSmoother(),
             self.retimer
         )
 

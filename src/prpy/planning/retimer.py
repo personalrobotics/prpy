@@ -101,7 +101,6 @@ class OpenRAVERetimer(BasePlanner):
         robot.SetActiveDOFs(dof_indices)
 
         # Compute the timing. This happens in-place.
-        output_traj = SimplifyTrajectory(input_path, robot)
         self.planner.InitPlan(None, params_str)
 
 
