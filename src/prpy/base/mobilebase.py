@@ -97,7 +97,7 @@ class MobileBase(object):
 
             traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
             if execute:
-                return self.robot.ExecuteTrajectory(traj, **kw_args)
+                return self.ExecuteBasePath(traj, **kw_args)
             else:
                 return traj
         else:
@@ -118,7 +118,7 @@ class MobileBase(object):
 
             traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
             if execute:
-                return self.robot.ExecuteTrajectory(traj, **kw_args)
+                return self.ExecuteBasePath(traj, **kw_args)
             else:
                 return traj
         else:
@@ -158,7 +158,6 @@ class MobileBase(object):
             )
             cloned_traj = planning_method(cloned_robot, *args, **kw_args)
 
-            # Strip inactive DOFs from the trajectory
             config_spec = cloned_robot.GetActiveConfigurationSpecification()
             openravepy.planningutils.ConvertTrajectorySpecification(
                 cloned_traj, config_spec
