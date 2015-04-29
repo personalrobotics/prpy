@@ -106,8 +106,6 @@ class OpenRAVERetimer(BasePlanner):
 
         with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
-            logging.info('Retiming with %s' % self.algorithm)
-            logging.info('Retiming trajectory with %d waypoints' % output_traj.GetNumWaypoints())
             status = self.planner.PlanPath(output_traj, releasegil=True)
 
         if status not in [ PlannerStatus.HasSolution,
