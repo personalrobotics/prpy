@@ -187,31 +187,35 @@ class Robot(openravepy.Robot):
     def PostProcessPath(self, path, defer=False, executor=None,
                         constrained=None, smooth=None, default_timelimit=0.5,
                         shortcut_options=None, smoothing_options=None,
-                        retiming_options=None, **kwargs):
+                        retiming_options=None, affine_retiming_options=None,
+                        **kwargs):
         """ Post-process a geometric path to prepare it for execution.
 
         This method post-processes a geometric path by (optionally) optimizing
-        it and timing it. Three different post-processing pipelines are used:
+        it and timing it. Four different post-processing pipelines are used:
 
-        1. For constrained trajectories, we do not modify the geometric path
-           and retime the path to be time-optimal. This trajectory must stop
-           at every waypoint. The only exception is for...
-        2. For smooth trajectories, we attempt to fit a time-optimal smooth
+        1. For base trajectories (i..e affine DOFs), we time the trajectory
+           using self.affine_retimer. This function does not currently support
+           trajectories that contain both regular and affine DOFs.
+        2. For constrained trajectories, we do not modify the geometric path
+           and retime the path to be time-optimal via self.retimer. This
+           trajectory must stop at every waypoint. The only exception is for...
+        3. For smooth trajectories, we attempt to fit a time-optimal smooth
            curve through the waypoints (not implemented). If this curve is
            not collision free, then we fall back on...
-        3. By default, we run a smoother that jointly times and smooths the
-           path. This algorithm can change the geometric path to optimize
-           runtime.
+        4. By default, we run a smoother that jointly times and smooths the
+           path via self.smoother. This algorithm can change the geometric path to
+           optimize runtime.
 
-        The behavior in (1) and (2) can be forced by passing constrained=True
+        The behavior in (2) and (3) can be forced by passing constrained=True
         or smooth=True. By default, the case is inferred by the tag(s) attached
         to the trajectory: (1) is triggered by the CONSTRAINED tag and (2) is
         tiggered by the SMOOTH tag.
 
         Options an be passed to each post-processing routine using the
-        shortcut-options, smoothing_options, and retiming_options **kwargs
-        dictionaries. If no "timelimit" is specified in any of these
-        dictionaries, it defaults to default_timelimit seconds.
+        affine_retiming_options, shortcut_options, smoothing_options, and
+        retiming_options **kwargs dictionaries. If no "timelimit" is specified
+        in any of these dictionaries, it defaults to default_timelimit seconds.
 
         @param path un-timed OpenRAVE trajectory
         @param defer return immediately with a future trajectory
@@ -219,13 +223,15 @@ class Robot(openravepy.Robot):
         @param constrained the path is constrained; do not change it
         @param smooth the path is smooth; attempt to execute it directly
         @param default_timelimit timelimit for all operations, if not set
-        @param shortcut_options kwargs to ShortcutPath for shortcutting
-        @param smoothing_options kwargs to RetimeTrajectory for smoothing
-        @param retiming_options kwargs to RetimeTrajectory for timing
+        @param shortcut_options kwargs to self.simplifier
+        @param smoothing_options kwargs to self.smoother
+        @param retiming_options kwargs to self.retimer
+        @param affine_retiming_options kwargs to self.affine_retimer
         @return trajectory ready for execution
         """
         from ..planning.base import Tags
         from ..util import GetTrajectoryTags, CopyTrajectory
+        from openravepy import DOFAffine
 
         # Default parameters.
         if shortcut_options is None:
@@ -234,10 +240,13 @@ class Robot(openravepy.Robot):
             smoothing_options = dict()
         if retiming_options is None:
             retiming_options = dict()
+        if affine_retiming_options is None:
+            affine_retimer_options = dict()
 
         shortcut_options.setdefault('timelimit', default_timelimit)
         smoothing_options.setdefault('timelimit', default_timelimit)
         retiming_options.setdefault('timelimit', default_timelimit)
+        affine_retiming_options.setdefault('timelimit', default_timelimit)
 
         # Read default parameters from the trajectory's tags.
         tags = GetTrajectoryTags(path)
@@ -267,65 +276,60 @@ class Robot(openravepy.Robot):
                         'Robot "{:s}" is not in the trajectory.'.format(
                             self.GetName()))
 
-                # Check for affine dofs in the path
-                has_affine_dofs = prpy.util.HasAffineDOFs(cspec)
+                # Extract active DOFs from teh trajectory and set them as active.
+                dof_indices, _ = cspec.ExtractUsedIndices(self)
 
-                if has_affine_dofs:
-                    cloned_robot.SetActiveDOFs(
-                        [],
-                        affine=(openravepy.DOFAffine.X |
-                                openravepy.DOFAffine.Y |
-                                openravepy.DOFAffine.RotationAxis)
+                if prpy.util.HasAffineDOFs(cspec):
+                    affine_dofs = (DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
+                else:
+                    affine_dofs = 0
+
+                cloned_robot.SetActiveDOFs(dof_indices, affine_dofs)
+                logger.debug(
+                    'Setting robot "%s" DOFs %s (affine? %d) as active for'
+                    ' post-processing.',
+                    cloned_robot.GetName(), list(dof_indices), has_affine_dofs
+                )
+
+                if dof_indices and affine_dofs:
+                    raise ValueError(
+                        'Trajectory contains both affine and regular DOFs.')
+                # Special case for timing affine-only trajectories.
+                elif affine_dofs:
+                    traj = self.affine_retimer.RetimeTrajectory(
+                        cloned_robot, path, defer=False, **affine_retimer_options)
+                else:
+                    # Directly compute a timing of smooth trajectories.
+                    if smooth:
+                        logger.warning(
+                            'Post-processing smooth paths is not supported.'
+                            ' Using the default post-processing logic; this may'
+                            ' significantly change the geometric path.'
                         )
-                    logger.debug(
-                        ' Setting robot "%s" affine DOFs as active for post-processing.',
-                        cloned_robot.GetName())
-                else:
-                    dof_indices, _ = cspec.ExtractUsedIndices(self)
-                    cloned_robot.SetActiveDOFs(dof_indices)
-                    logger.debug(
-                        'Setting robot "%s" DOFs %s as active for post-processing.',
-                        cloned_robot.GetName(), list(dof_indices))
 
-                # Directly compute a timing of smooth trajectories.
-                if smooth:
-                    logger.warning(
-                        'Post-processing smooth paths is not supported.'
-                        ' Using the default post-processing logic; this may'
-                        ' significantly change the geometric path.'
-                    )
+                    # The trajectory is constrained. Retime it without changing the
+                    # geometric path.
+                    if constrained:
+                        logger.debug('Retiming a constrained path. The output'
+                                     ' trajectory will stop at every waypoint.')
+                        traj = self.retimer.RetimeTrajectory(
+                            cloned_robot, path, defer=False, **retiming_options)
+                    # The trajectory is not constrained, so we can shortcut it
+                    # before execution.
+                    else:
+                        if self.simplifier is not None:
+                            logger.debug('Shortcutting an unconstrained path.')
+                            shortcut_path = self.simplifier.ShortcutPath(
+                                cloned_robot, path, defer=False, **shortcut_options)
+                        else:
+                            logger.debug('Skipping shortcutting; no simplifier'
+                                         ' available.')
+                            shortcut_path = path
 
-                # The trajectory is constrained. Retime it without changing the
-                # geometric path.
-                if constrained:
-                    logger.debug('Retiming a constrained path. The output'
-                                 ' trajectory will stop at every waypoint.')
-                    if has_affine_dofs:
-                        retimer = self.affine_retimer
-                    else:
-                        retimer = self.retimer
-                    traj = retimer.RetimeTrajectory(
-                        cloned_robot, path, defer=False, **retiming_options)
-                else:
-                # The trajectory is not constrained, so we can shortcut it
-                # before execution.
-                    if self.simplifier is not None:
-                        logger.debug('Shortcutting an unconstrained path.')
-                        shortcut_path = self.simplifier.ShortcutPath(
-                            cloned_robot, path, defer=False, **shortcut_options)
-                    else:
-                        logger.debug('Skipping shortcutting; no simplifier'
-                                     ' available.')
-                        shortcut_path = path
-
-                    logger.debug('Smoothing an unconstrained path.')
-                    if has_affine_dofs:
-                        smoother = self.affine_retimer
-                    else:
-                        smoother = self.smoother
-                    traj = smoother.RetimeTrajectory(
-                        cloned_robot, shortcut_path, defer=False,
-                        **smoothing_options)
+                        logger.debug('Smoothing an unconstrained path.')
+                        traj = self.smoother.RetimeTrajectory(
+                            cloned_robot, shortcut_path, defer=False,
+                            **smoothing_options)
 
                 return CopyTrajectory(traj, env=self.GetEnv())
 
