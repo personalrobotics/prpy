@@ -41,7 +41,8 @@ logger = logging.getLogger('planning')
 class Tags(object):
     SMOOTH = 'smooth'
     CONSTRAINED = 'constrained'
-
+    PLANNER = 'planner'
+    METHOD = 'planning_method'
 
 class PlanningError(Exception):
     pass
@@ -80,8 +81,8 @@ class PlanningMethod(object):
                     # used to generate it. We don't overwrite these tags if
                     # they already exist.
                     tags = GetTrajectoryTags(planner_traj)
-                    tags.setdefault('planner', instance.__class__.__name__)
-                    tags.setdefault('planning_method', self.func.__name__)
+                    tags.setdefault(Tags.PLANNER, instance.__class__.__name__)
+                    tags.setdefault(Tags.METHOD, self.func.__name__)
                     SetTrajectoryTags(planner_traj, tags, append=False)
 
                     return CopyTrajectory(planner_traj, env=env)
