@@ -281,6 +281,14 @@ class Robot(openravepy.Robot):
 
                 if prpy.util.HasAffineDOFs(cspec):
                     affine_dofs = (DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
+                    
+                    # Bug in OpenRAVE ExtractUsedIndices function makes 
+                    # dof_indices = affine_dofs. Temporary workaround for that bug.
+                    dof_indices = []
+                    logger.warning(
+                        'Trajectory contains affine DOFs. Any regular DOFs'
+                        ' will be ignored.'
+                    )
                 else:
                     affine_dofs = 0
 
@@ -291,7 +299,7 @@ class Robot(openravepy.Robot):
                     cloned_robot.GetName(), list(dof_indices), affine_dofs
                 )
 
-                if dof_indices and affine_dofs:
+                if len(dof_indices) and affine_dofs:
                     raise ValueError(
                         'Trajectory contains both affine and regular DOFs.')
                 # Special case for timing affine-only trajectories.
