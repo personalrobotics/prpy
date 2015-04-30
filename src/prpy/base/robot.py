@@ -35,7 +35,7 @@ from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence 
 from ..planning.ompl import OMPLSimplifier
-from ..planning.retimer import HauserParabolicSmoother, ParabolicRetimer
+from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
 
 logger = logging.getLogger('robot')
@@ -73,6 +73,7 @@ class Robot(openravepy.Robot):
             HauserParabolicSmoother(),
             self.retimer
         )
+        self.affine_retimer = OpenRAVEAffineRetimer()
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
@@ -259,19 +260,32 @@ class Robot(openravepy.Robot):
                 # in the trajectory as active.
                 env = path.GetEnv()
                 cspec = path.GetConfigurationSpecification()
+
                 used_bodies = cspec.ExtractUsedBodies(env)
                 if self not in used_bodies:
                     raise ValueError(
                         'Robot "{:s}" is not in the trajectory.'.format(
                             self.GetName()))
 
-                dof_indices, _ = cspec.ExtractUsedIndices(self)
-                cloned_robot.SetActiveDOFs(dof_indices)
-                logger.debug(
-                    'Setting robot "%s" DOFs %s as active for post-processing.',
-                    cloned_robot.GetName(), list(dof_indices))
+                # Check for affine dofs in the path
+                has_affine_dofs = prpy.util.HasAffineDOFs(cspec)
 
-                # TODO: Handle a affine DOF trajectories for the base.
+                if has_affine_dofs:
+                    cloned_robot.SetActiveDOFs(
+                        [],
+                        affine=(openravepy.DOFAffine.X |
+                                openravepy.DOFAffine.Y |
+                                openravepy.DOFAffine.RotationAxis)
+                        )
+                    logger.debug(
+                        ' Setting robot "%s" affine DOFs as active for post-processing.',
+                        cloned_robot.GetName())
+                else:
+                    dof_indices, _ = cspec.ExtractUsedIndices(self)
+                    cloned_robot.SetActiveDOFs(dof_indices)
+                    logger.debug(
+                        'Setting robot "%s" DOFs %s as active for post-processing.',
+                        cloned_robot.GetName(), list(dof_indices))
 
                 # Directly compute a timing of smooth trajectories.
                 if smooth:
@@ -286,7 +300,11 @@ class Robot(openravepy.Robot):
                 if constrained:
                     logger.debug('Retiming a constrained path. The output'
                                  ' trajectory will stop at every waypoint.')
-                    traj = self.retimer.RetimeTrajectory(
+                    if has_affine_dofs:
+                        retimer = self.affine_retimer
+                    else:
+                        retimer = self.retimer
+                    traj = retimer.RetimeTrajectory(
                         cloned_robot, path, defer=False, **retiming_options)
                 else:
                 # The trajectory is not constrained, so we can shortcut it
@@ -301,7 +319,11 @@ class Robot(openravepy.Robot):
                         shortcut_path = path
 
                     logger.debug('Smoothing an unconstrained path.')
-                    traj = self.smoother.RetimeTrajectory(
+                    if has_affine_dofs:
+                        smoother = self.affine_retimer
+                    else:
+                        smoother = self.smoother
+                    traj = smoother.RetimeTrajectory(
                         cloned_robot, shortcut_path, defer=False,
                         **smoothing_options)
 

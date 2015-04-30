@@ -28,7 +28,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
+from ..util import SetTrajectoryTags
+from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError, Tags
 import openravepy
 
 class SBPLPlanner(BasePlanner):
@@ -108,5 +109,6 @@ class SBPLPlanner(BasePlanner):
         if status not in [ PlannerStatus.HasSolution, PlannerStatus.InterruptedWithSolution ]:
             raise PlanningError('Planner returned with status {0:s}.'.format(str(status)))
 
+        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj  
         
