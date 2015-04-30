@@ -96,7 +96,7 @@ class MobileBase(object):
             if execute:
                 return self.robot.ExecutePath(path, **kw_args)
             else:
-                return traj
+                return path
         else:
             raise NotImplementedError('DriveForward is not implemented')
 
@@ -117,7 +117,7 @@ class MobileBase(object):
             if execute:
                 return self.robot.ExecutePath(path, **kw_args)
             else:
-                return traj
+                return path
         else:
             raise NotImplementedError('Rotate is not implemented')
 
