@@ -246,7 +246,7 @@ class Robot(openravepy.Robot):
         shortcut_options.setdefault('timelimit', default_timelimit)
         smoothing_options.setdefault('timelimit', default_timelimit)
         retiming_options.setdefault('timelimit', default_timelimit)
-        affine_retiming_options.setdefault('timelimit', default_timelimit)
+        affine_retimer_options.setdefault('timelimit', default_timelimit)
 
         # Read default parameters from the trajectory's tags.
         tags = GetTrajectoryTags(path)
@@ -288,7 +288,7 @@ class Robot(openravepy.Robot):
                 logger.debug(
                     'Setting robot "%s" DOFs %s (affine? %d) as active for'
                     ' post-processing.',
-                    cloned_robot.GetName(), list(dof_indices), has_affine_dofs
+                    cloned_robot.GetName(), list(dof_indices), affine_dofs
                 )
 
                 if dof_indices and affine_dofs:
