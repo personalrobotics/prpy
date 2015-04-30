@@ -671,3 +671,25 @@ def GeodesicDistance(t1, t2, r=1.0):
     error = GeodesicError(t1, t2)
     error[3] = r*error[3]
     return numpy.linalg.norm(error)
+
+def FindCatkinResource(package, relative_path):
+    '''
+    Find a Catkin resource in the share directory or
+    the package source directory. Raises IOError
+    if resource is not found.
+    
+    @param relative_path Path relative to share or package 
+    source directory
+    @param package The package to search in
+    @return Absolute path to resource 
+    '''
+    from catkin.find_in_workspaces import find_in_workspaces
+    
+    paths = find_in_workspaces(project=package, search_dirs=['share'],
+                               path=relative_path, first_match_only=True)
+
+    if paths and len(paths) == 1:
+        return paths[0]
+    else:
+        raise IOError('Loading resource "{:s}" failed.'.format(
+                      relative_path))
