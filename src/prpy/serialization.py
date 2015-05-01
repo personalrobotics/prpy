@@ -13,18 +13,36 @@ def serialize_kinbody(body):
     all_joints.extend(body.GetPassiveJoints())
     all_joints.sort(key=lambda x: x.GetJointIndex())
 
-    return {
+    data = {
+        'is_robot': body.IsRobot(),
         'name': body.GetName(),
         'uri': body.GetXMLFilename(),
         'links': map(serialize_link, body.GetLinks()),
         'joints': map(serialize_joint, all_joints),
-        'state': serialize_kinbody_state(body),
+        'kinbody_state': serialize_kinbody_state(body),
+    }
+
+    if body.IsRobot():
+        data.update(serialize_robot(body))
+
+    return data
+
+def serialize_robot(robot):
+    return {
+        'manipulators': map(serialize_manipulator, robot.GetManipulators()),
+        'robot_state': serialize_robot_state(robot),
     }
 
 def serialize_kinbody_state(body):
     return {
         name: get_fn(body)
         for name, (get_fn, _) in KINBODY_STATE_MAP.iteritems()
+    }
+
+def serialize_robot_state(body):
+    return {
+        name: get_fn(body)
+        for name, (get_fn, _) in ROBOT_STATE_MAP.iteritems()
     }
 
 def serialize_link(link):
@@ -35,6 +53,11 @@ def serialize_link(link):
 def serialize_joint(joint):
     return {
         'info': serialize_joint_info(joint.GetInfo())
+    }
+
+def serialize_manipulator(manipulator):
+    return {
+        'info': serialize_manipulator_info(manipulator.GetInfo())
     }
 
 def serialize_with_map(obj, attribute_map):
@@ -65,30 +88,50 @@ def serialize_transform(t):
 
 # Deserialization.
 def deserialize_kinbody(env, data, name=None, anonymous=False):
-    from openravepy import RaveCreateKinBody
+    from openravepy import RaveCreateKinBody, RaveCreateRobot
 
-    kinbody = RaveCreateKinBody(env, '')
-    kinbody.Init(
-        linkinfos=[
-            deserialize_link_info(link_data['info']) \
-            for link_data in data['links']
-        ],
-        jointinfos=[
-            deserialize_joint_info(joint_data['info']) \
-            for joint_data in data['joints']
-        ],
-        uri=data['uri'],
-    )
+    link_infos = [
+        deserialize_link_info(link_data['info']) \
+        for link_data in data['links']
+    ]
+    joint_infos = [
+        deserialize_joint_info(joint_data['info']) \
+        for joint_data in data['joints']
+    ]
+
+    if data['is_robot']:
+        # TODO: Also load sensors.
+        manipulator_infos = [
+            deserialize_manipulator_info(manipulator_data['info']) \
+            for manipulator_data in data['manipulators']
+        ]
+        sensor_infos = []
+
+        kinbody = RaveCreateRobot(env, '')
+        kinbody.Init(
+            link_infos, joint_infos,
+            manipulator_infos, sensor_infos,
+            data['uri']
+        )
+    else:
+        kinbody = RaveCreateKinBody(env, '')
+        kinbody.Init(link_infos, joint_infos, data['uri'])
 
     kinbody.SetName(name or data['name'])
     env.Add(kinbody, anonymous)
 
-    deserialize_kinbody_state(kinbody, data['state'])
+    deserialize_kinbody_state(kinbody, data['kinbody_state'])
+    if kinbody.IsRobot():
+        deserialize_robot_state(kinbody, data['robot_state'])
 
     return kinbody
 
 def deserialize_kinbody_state(body, data):
     for key, (_, set_fn) in KINBODY_STATE_MAP.iteritems():
+        set_fn(body, data[key])
+
+def deserialize_robot_state(body, data):
+    for key, (_, set_fn) in ROBOT_STATE_MAP.iteritems():
         set_fn(body, data[key])
 
 def deserialize_with_map(obj, data, attribute_map):
@@ -186,6 +229,17 @@ KINBODY_STATE_MAP = {
         lambda x, value: x.SetDOFTorqueLimits(value),
     ),
     # TODO: What about link accelerations and geometry groups?
+}
+ROBOT_STATE_MAP = {
+    # TODO: Does this preserve affine DOFs?
+    'active_dof_indices': (
+        lambda x: list(x.GetActiveDOFIndices()),
+        lambda x, value: x.SetActiveDOFs(value)
+    ),
+    'active_manipulator': (
+        lambda x: x.GetActiveManipulator().GetName(),
+        lambda x, value: x.SetActiveManipulator(value),
+    )
 }
 LINK_INFO_MAP = {
     '_bIsEnabled': both_identity,
