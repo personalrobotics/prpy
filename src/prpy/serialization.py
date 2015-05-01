@@ -1,5 +1,9 @@
 import numpy
 import openravepy
+import logging
+
+serialization_logger = logging.getLogger('prpy.serialization')
+deserialization_logger = logging.getLogger('prpy.deserialization')
 
 # Serialization.
 def serialize_environment(env):
@@ -40,25 +44,30 @@ def serialize_kinbody_state(body):
     }
 
 def serialize_robot_state(body):
-    return {
+    data = {
         name: get_fn(body)
         for name, (get_fn, _) in ROBOT_STATE_MAP.iteritems()
     }
+    data['grabbed_bodies'] = map(serialize_grabbed_info, body.GetGrabbedInfo())
+    return data
 
 def serialize_link(link):
-    return {
-        'info': serialize_link_info(link.GetInfo())
-    }
+    data = { 'info': serialize_link_info(link.GetInfo()) }
+
+    # Bodies loaded from ".kinbody.xml" do not have GeometryInfo's listed in
+    # their LinkInfo class. We manually read them from GetGeometries().
+    # TODO: This may not correctly preserve non-active geometry groups.
+    data['info']['_vgeometryinfos'] = [
+        serialize_geometry_info(geometry.GetInfo()) \
+        for geometry in link.GetGeometries()
+    ]
+    return data
 
 def serialize_joint(joint):
-    return {
-        'info': serialize_joint_info(joint.GetInfo())
-    }
+    return { 'info': serialize_joint_info(joint.GetInfo()) }
 
 def serialize_manipulator(manipulator):
-    return {
-        'info': serialize_manipulator_info(manipulator.GetInfo())
-    }
+    return { 'info': serialize_manipulator_info(manipulator.GetInfo()) }
 
 def serialize_with_map(obj, attribute_map):
     return {
@@ -78,6 +87,9 @@ def serialize_manipulator_info(manip_info):
 def serialize_geometry_info(geom_info):
     return serialize_with_map(geom_info, GEOMETRY_INFO_MAP)
 
+def serialize_grabbed_info(grabbed_info):
+    return serialize_with_map(grabbed_info, GRABBED_INFO_MAP)
+
 def serialize_transform(t):
     from openravepy import quatFromRotationMatrix
 
@@ -87,7 +99,29 @@ def serialize_transform(t):
     }
 
 # Deserialization.
-def deserialize_kinbody(env, data, name=None, anonymous=False):
+def deserialize_environment(data, env=None):
+    import openravepy
+
+    if env is None:
+        env = openravepy.Environment()
+
+    # Deserialize the kinematic structure.
+    deserialized_bodies = []
+    for body_data in data['bodies']:
+        body = deserialize_kinbody(env, body_data, state=False)
+        deserialized_bodies.append(body)
+
+    # Restore state. We do this in a second pass to insure that any bodies that
+    # are grabbed already exist.
+    for body, body_data in zip(deserialized_bodies, data['bodies']):
+        deserialize_kinbody_state(body, body_data['kinbody_state'])
+
+        if body.IsRobot():
+            deserialize_robot_state(body, body_data['robot_state'])
+
+    return env
+
+def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
     from openravepy import RaveCreateKinBody, RaveCreateRobot
 
     link_infos = [
@@ -120,9 +154,10 @@ def deserialize_kinbody(env, data, name=None, anonymous=False):
     kinbody.SetName(name or data['name'])
     env.Add(kinbody, anonymous)
 
-    deserialize_kinbody_state(kinbody, data['kinbody_state'])
-    if kinbody.IsRobot():
-        deserialize_robot_state(kinbody, data['robot_state'])
+    if state:
+        deserialize_kinbody_state(kinbody, data['kinbody_state'])
+        if kinbody.IsRobot():
+            deserialize_robot_state(kinbody, data['robot_state'])
 
     return kinbody
 
@@ -133,6 +168,21 @@ def deserialize_kinbody_state(body, data):
 def deserialize_robot_state(body, data):
     for key, (_, set_fn) in ROBOT_STATE_MAP.iteritems():
         set_fn(body, data[key])
+
+    env = body.GetEnv()
+
+    for grabbed_info_dict in data['grabbed_bodies']:
+        grabbed_info = deserialize_grabbed_info(grabbed_info_dict)
+
+        robot_link = body.GetLink(grabbed_info._robotlinkname)
+        robot_links_to_ignore = grabbed_info._setRobotLinksToIgnore
+
+        grabbed_body = env.GetKinBody(grabbed_info._grabbedname)
+        grabbed_pose = numpy.dot(robot_link.GetTransform(),
+                                 grabbed_info._trelative)
+        grabbed_body.SetTransform(grabbed_pose)
+
+        body.Grab(grabbed_body, robot_link, robot_links_to_ignore)
 
 def deserialize_with_map(obj, data, attribute_map):
     for key, (_, deserialize_fn) in attribute_map.iteritems():
@@ -169,6 +219,11 @@ def deserialize_geometry_info(data):
 
     return geom_info
 
+def deserialize_grabbed_info(data):
+    from openravepy import Robot
+
+    return deserialize_with_map(Robot.GrabbedInfo(), data, GRABBED_INFO_MAP)
+
 def deserialize_transform(data):
     from openravepy import matrixFromQuat
 
@@ -180,6 +235,11 @@ def deserialize_transform(data):
 mesh_environment = openravepy.Environment()
 identity = lambda x: x
 both_identity = (identity, identity)
+numpy_identity = (
+    lambda x: x.tolist(),
+    lambda x: numpy.array(x)
+)
+transform_identity = (serialize_transform, deserialize_transform)
 
 KINBODY_STATE_MAP = {
     'description': (
@@ -187,7 +247,7 @@ KINBODY_STATE_MAP = {
         lambda x, value: x.SetDescription(value),
     ),
     'link_enable_states': (
-        lambda x: list(x.GetLinkEnableStates()),
+        lambda x: x.GetLinkEnableStates().tolist(),
         lambda x, value: x.SetLinkEnableStates(value)
     ),
     'link_transforms': (
@@ -205,11 +265,11 @@ KINBODY_STATE_MAP = {
         lambda x, value: x.SetTransform(deserialize_transform(value)),
     ),
     'dof_weights': (
-        lambda x: list(x.GetDOFWeights()),
+        lambda x: x.GetDOFWeights().tolist(),
         lambda x, value: x.SetDOFWeights(value),
     ),
     'dof_resolutions': (
-        lambda x: list(x.GetDOFResolutions()),
+        lambda x: x.GetDOFResolutions().tolist(),
         lambda x, value: x.SetDOFResolutions(value),
     ),
     'dof_position_limits': (
@@ -217,15 +277,15 @@ KINBODY_STATE_MAP = {
         lambda x, (lower, upper): x.SetDOFLimits(lower, upper),
     ),
     'dof_velocity_limits': (
-        lambda x: list(x.GetDOFVelocityLimits()),
+        lambda x: x.GetDOFVelocityLimits().tolist(),
         lambda x, value: x.SetDOFVelocityLimits(value),
     ),
     'dof_acceleration_limits': (
-        lambda x: list(x.GetDOFAccelerationLimits()),
+        lambda x: x.GetDOFAccelerationLimits().tolist(),
         lambda x, value: x.SetDOFAccelerationLimits(value),
     ),
     'dof_torque_limits': (
-        lambda x: list(x.GetDOFTorqueLimits()),
+        lambda x: x.GetDOFTorqueLimits().tolist(),
         lambda x, value: x.SetDOFTorqueLimits(value),
     ),
     # TODO: What about link accelerations and geometry groups?
@@ -233,13 +293,13 @@ KINBODY_STATE_MAP = {
 ROBOT_STATE_MAP = {
     # TODO: Does this preserve affine DOFs?
     'active_dof_indices': (
-        lambda x: list(x.GetActiveDOFIndices()),
+        lambda x: x.GetActiveDOFIndices().tolist(),
         lambda x, value: x.SetActiveDOFs(value)
     ),
     'active_manipulator': (
         lambda x: x.GetActiveManipulator().GetName(),
         lambda x, value: x.SetActiveManipulator(value),
-    )
+    ),
 }
 LINK_INFO_MAP = {
     '_bIsEnabled': both_identity,
@@ -249,14 +309,14 @@ LINK_INFO_MAP = {
     '_mapStringParameters': both_identity,
     '_mass': both_identity,
     '_name': both_identity,
-    '_t': (serialize_transform, deserialize_transform),
-    '_tMassFrame': (serialize_transform, deserialize_transform),
+    '_t': transform_identity,
+    '_tMassFrame': transform_identity,
     '_vForcedAdjacentLinks': both_identity,
     '_vgeometryinfos': (
         lambda x: map(serialize_geometry_info, x),
         lambda x: map(deserialize_geometry_info, x),
     ),
-    '_vinertiamoments': (list, numpy.array),
+    '_vinertiamoments': numpy_identity,
 }
 JOINT_INFO_MAP = {
     '_bIsActive': both_identity,
@@ -271,23 +331,23 @@ JOINT_INFO_MAP = {
         lambda x: x.name,
         lambda x: openravepy.KinBody.JointType.names[x]
     ),
-    '_vanchor': (list, numpy.array),
+    '_vanchor': numpy_identity,
     '_vaxes': (
-        lambda x: map(list, x),
+        lambda x: [ xi.tolist() for xi in x ],
         lambda x: map(numpy.array, x)
     ),
-    '_vcurrentvalues': (list, numpy.array),
-    '_vhardmaxvel': (list, numpy.array),
-    '_vlowerlimit': (list, numpy.array),
-    '_vmaxaccel': (list, numpy.array),
-    '_vmaxinertia': (list, numpy.array),
-    '_vmaxtorque': (list, numpy.array),
-    '_vmaxvel': (list, numpy.array),
+    '_vcurrentvalues': numpy_identity,
+    '_vhardmaxvel': numpy_identity,
+    '_vlowerlimit': numpy_identity,
+    '_vmaxaccel': numpy_identity,
+    '_vmaxinertia': numpy_identity,
+    '_vmaxtorque': numpy_identity,
+    '_vmaxvel': numpy_identity,
     '_vmimic': both_identity,
-    '_voffsets': (list, numpy.array),
-    '_vresolution': (list, numpy.array),
-    '_vupperlimit': (list, numpy.array),
-    '_vweights': (list, numpy.array),
+    '_voffsets': numpy_identity,
+    '_vresolution': numpy_identity,
+    '_vupperlimit': numpy_identity,
+    '_vweights': numpy_identity,
 }
 GEOMETRY_INFO_MAP = {
     '_bModifiable': both_identity,
@@ -295,18 +355,19 @@ GEOMETRY_INFO_MAP = {
     '_fTransparency': both_identity,
     '_filenamecollision': both_identity,
     '_filenamerender': both_identity,
-    '_t': (serialize_transform, deserialize_transform),
+    '_t': transform_identity,
     '_type': (
         lambda x: x.name,
         lambda x: openravepy.GeometryType.names[x]
     ),
-    '_vAmbientColor': (list, numpy.array),
-    '_vCollisionScale': both_identity,
-    '_vDiffuseColor': (list, numpy.array),
-    '_vGeomData': (list, numpy.array),
-    '_vRenderScale': (list, numpy.array),
+    '_vAmbientColor': numpy_identity,
+    '_vCollisionScale': numpy_identity,
+    '_vDiffuseColor': numpy_identity,
+    '_vGeomData': numpy_identity,
+    '_vRenderScale': numpy_identity,
     # TODO: What are these?
     #'_mapExtraGeometries': None
+    #15 is not JSON serializable
     #'_trajfollow': None,
 }
 MANIPULATOR_INFO_MAP = {
@@ -314,9 +375,15 @@ MANIPULATOR_INFO_MAP = {
     '_sBaseLinkName': both_identity,
     '_sEffectorLinkName': both_identity,
     '_sIkSolverXMLId': both_identity,
-    '_tLocalTool': (serialize_transform, deserialize_transform),
-    '_vChuckingDirection': (list, numpy.array),
-    '_vClosingDirection': (list, numpy.array),
-    '_vGripperJointNames': (list, numpy.array),
-    '_vdirection': (list, numpy.array),
+    '_tLocalTool': transform_identity,
+    '_vChuckingDirection': numpy_identity,
+    '_vClosingDirection': numpy_identity,
+    '_vGripperJointNames': both_identity,
+    '_vdirection': numpy_identity,
+}
+GRABBED_INFO_MAP = {
+    '_grabbedname': both_identity,
+    '_robotlinkname': both_identity,
+    '_setRobotLinksToIgnore': both_identity,
+    '_trelative': transform_identity,
 }
