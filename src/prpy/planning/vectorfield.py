@@ -160,15 +160,19 @@ class VectorFieldPlanner(BasePlanner):
             Succeed if distance moved is larger than max_distance.
             Cache and continue if distance moved is larger than distance.
             '''
+            from .exceptions import ConstraintViolationPlanningError 
+
             Tnow = manip.GetEndEffectorTransform()
             error = util.GeodesicError(Tstart, Tnow)
             if numpy.fabs(error[3]) > angular_tolerance:
-                raise PlanningError('Deviated from orientation constraint.')
+                raise ConstraintViolationPlanningError(
+                    'Deviated from orientation constraint.')
             distance_moved = numpy.dot(error[0:3], direction)
             position_deviation = numpy.linalg.norm(error[0:3] -
                                                    distance_moved*direction)
             if position_deviation > position_tolerance:
-                raise PlanningError('Deviated from straight line constraint.')
+                raise ConstraintViolationPlanningError(
+                    'Deviated from straight line constraint.')
 
             if distance_moved > max_distance:
                 return Status.TERMINATE
@@ -198,6 +202,12 @@ class VectorFieldPlanner(BasePlanner):
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
+        from .exceptions import (
+            CollisionPlanningError,
+            SelfCollisionPlanningError,
+            TimeoutPlanningError
+        )
+
         start_time = time.time()
 
         try:
@@ -219,28 +229,30 @@ class VectorFieldPlanner(BasePlanner):
                               vlimits)
                 dt_step *= dt_multiplier
                 status = fn_terminate()
+                report = openravepy.CollisionReport()
+
                 while status != Status.TERMINATE:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        raise PlanningError('Reached time limit.')
+                        raise TimeoutPlanningError(timelimit)
 
                     dqout = fn_vectorfield()
                     numsteps = int(math.floor(max(
                         abs(dqout*dt_step/robot.GetActiveDOFResolutions())
                         )))
                     if numsteps == 0:
-                        raise PlanningError('Step size too small, '
-                                            'unable to progress')
+                        raise PlanningError('Step size too small,'
+                                            ' unable to progress')
                     dt = dt_step/numsteps
 
                     for step in xrange(numsteps):
                         # Check for collisions.
-                        if self.env.CheckCollision(robot):
-                            raise PlanningError('Encountered collision.')
-                        if robot.CheckSelfCollision():
-                            raise PlanningError('Encountered self-collision.')
+                        if self.env.CheckCollision(robot, report):
+                            raise CollisionPlanningError.FromReport(report)
+                        if robot.CheckSelfCollision(report):
+                            raise SelfCollisionPlanningError.FromReport(report)
 
                         status = fn_terminate()
                         if status == Status.CACHE_AND_CONTINUE:
