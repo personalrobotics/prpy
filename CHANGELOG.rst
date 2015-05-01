@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.0 (2015-05-01)
+------------------
 * Adding planner and planning_method and trajectory tag constants
 * Removing smooth tag from SBPL trajectory
 * Adding helper function for finding catkin resources
