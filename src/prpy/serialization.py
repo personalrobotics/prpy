@@ -23,8 +23,8 @@ def serialize_kinbody(body):
         'uri': body.GetXMLFilename(),
         'links': map(serialize_link, body.GetLinks()),
         'joints': map(serialize_joint, all_joints),
-        'kinbody_state': serialize_kinbody_state(body),
     }
+    data['kinbody_state'] = serialize_kinbody_state(body),
 
     if body.IsRobot():
         data.update(serialize_robot(body))
@@ -38,10 +38,19 @@ def serialize_robot(robot):
     }
 
 def serialize_kinbody_state(body):
-    return {
+    data = {
         name: get_fn(body)
         for name, (get_fn, _) in KINBODY_STATE_MAP.iteritems()
     }
+
+    link_transforms, dof_branches = body.GetLinkTransformations(True)
+    data.update({
+        'link_transforms': map(serialize_transform, link_transforms),
+        'dof_branches': dof_branches.tolist(),
+        'dof_values': body.GetDOFValues().tolist(),
+    })
+
+    return data
 
 def serialize_robot_state(body):
     data = {
@@ -162,8 +171,15 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
     return kinbody
 
 def deserialize_kinbody_state(body, data):
+    from openravepy import KinBody
+
     for key, (_, set_fn) in KINBODY_STATE_MAP.iteritems():
         set_fn(body, data[key])
+
+    body.SetLinkTransformations(
+        map(deserialize_transform, data['link_transforms']),
+        data['dof_branches']
+    )
 
 def deserialize_robot_state(body, data):
     for key, (_, set_fn) in ROBOT_STATE_MAP.iteritems():
@@ -249,12 +265,6 @@ KINBODY_STATE_MAP = {
     'link_enable_states': (
         lambda x: x.GetLinkEnableStates().tolist(),
         lambda x, value: x.SetLinkEnableStates(value)
-    ),
-    'link_transforms': (
-        lambda x: map(serialize_transform, x.GetLinkTransformations()),
-        lambda x, value: x.SetLinkTransformations(
-            map(deserialize_transform, value)
-        ),
     ),
     'link_velocities': (
         lambda x: x.GetLinkVelocities().tolist(),
