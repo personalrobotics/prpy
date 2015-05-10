@@ -1,21 +1,72 @@
 import numpy
 import openravepy
 import logging
+from .exceptions import UnsupportedTypeSerializationException
+
+TYPE_KEY = '__type__'
 
 serialization_logger = logging.getLogger('prpy.serialization')
 deserialization_logger = logging.getLogger('prpy.deserialization')
 
 # Serialization.
+def _serialize_internal(obj):
+    from numpy import ndarray
+    from openravepy import Environment, KinBody, Robot, Trajectory
+
+    NoneType = type(None)
+
+    if isinstance(obj, (int, float, basestring, NoneType)):
+        return obj
+    elif isinstance(obj, (list, tuple)):
+        return [ serialize(x) for x in obj ]
+    elif isinstance(obj, dict):
+        return { serialize(k): serialize(v) for k, v in obj.iteritems() }
+    elif isinstance(obj, ndarray):
+        return { 'data': serialize(obj.tolist()) }
+    elif isinstance(obj, Environment):
+        return { 'data': serialize_environment(obj) }
+    elif isinstance(obj, (KinBody, Robot)):
+        return { 'name': obj.GetName() }
+    elif isinstance(obj, (KinBody.Link, KinBody.Joint, Robot.Manipulator)):
+        return {
+            'name': obj.GetName(),
+            'parent_name': obj.GetParent().GetName()
+        }
+    elif isinstance(obj, Trajectory):
+        return { 'data': obj.serialize(0) }
+    else:
+        raise UnsupportedTypeSerializationException(obj)
+
+def serialize(obj):
+    data = _serialize_internal(obj)
+    if isinstance(data, dict):
+        data[TYPE_KEY] = type(obj).__name__
+
+    return data
+
 def serialize_environment(env):
     return {
-        'bodies': map(serialize_kinbody, env.GetBodies())
+        'bodies': [ serialize_kinbody(body) for body in env.GetBodies() ],
     }
+
+def serialize_environment_file(env, path, writer=None):
+    if writer is None:
+        import json
+        writer = json.dump
+
+    data = serialize_environment(env)
+
+    if path is not None:
+        with open(path, 'wb') as output_file:
+            writer(data, output_file)
+            serialization_logger.debug('Wrote environment to "%s".', path)
+
+    return data
 
 def serialize_kinbody(body):
     all_joints = []
     all_joints.extend(body.GetJoints())
     all_joints.extend(body.GetPassiveJoints())
-    all_joints.sort(key=lambda x: x.GetJointIndex())
 
     data = {
         'is_robot': body.IsRobot(),
@@ -24,7 +75,7 @@ def serialize_kinbody(body):
         'links': map(serialize_link, body.GetLinks()),
         'joints': map(serialize_joint, all_joints),
     }
-    data['kinbody_state'] = serialize_kinbody_state(body),
+    data['kinbody_state'] = serialize_kinbody_state(body)
 
     if body.IsRobot():
         data.update(serialize_robot(body))
@@ -108,21 +159,115 @@ def serialize_transform(t):
     }
 
 # Deserialization.
-def deserialize_environment(data, env=None):
+def _deserialize_internal(env, data, data_type):
+    from numpy import array, ndarray
+    from openravepy import (Environment, KinBody, Robot, Trajectory,
+                            RaveCreateTrajectory)
+    from .exceptions import UnsupportedTypeDeserializationException
+
+    if data_type == dict.__name__:
+        return {
+            deserialize(env, k): deserialize(env, v)
+            for k, v in data.iteritems()
+            if k != TYPE_KEY
+        }
+    elif data_type == ndarray.__name__:
+        return array(data['data'])
+    elif data_type in [ KinBody.__name__, Robot.__name__ ]:
+        body = env.GetKinBody(data['name'])
+        if body is None:
+            raise ValueError('There is no body with name "{:s}".'.format(
+                data['name']))
+
+        return body
+    elif data_type == KinBody.Link.__name__:
+        body = env.GetKinBody(data['parent_name'])
+        if body is None:
+            raise ValueError('There is no body with name "{:s}".'.format(
+                data['parent_name']))
+
+        link = body.GetLink(data['name'])
+        if link is None:
+            raise ValueError('Body "{:s}" has no link named "{:s}".'.format(
+                data['parent_name'], data['name']))
+
+        return link
+    elif data_type == KinBody.Joint.__name__:
+        body = env.GetKinBody(data['parent_name'])
+        if body is None:
+            raise ValueError('There is no body with name "{:s}".'.format(
+                data['parent_name']))
+
+        joint = body.GetJoint(data['name'])
+        if joint is None:
+            raise ValueError('Body "{:s}" has no joint named "{:s}".'.format(
+                data['parent_name'], data['name']))
+
+        return joint
+    elif data_type == Robot.Manipulator.__name__:
+        body = env.GetKinBody(data['parent_name'])
+        if body is None:
+            raise ValueError('There is no robot with name "{:s}".'.format(
+                data['parent_name']))
+        elif not body.IsRobot():
+            raise ValueError('Body "{:s}" is not a robot.'.format(
+                data['parent_name']))
+
+        manip = body.GetJoint(data['name'])
+        if manip is None:
+            raise ValueError('Robot "{:s}" has no manipulator named "{:s}".'.format(
+                data['parent_name'], data['name']))
+
+        return manip
+    elif data_type == Trajectory.__name__:
+        traj = RaveCreateTrajectory(env, '')
+        traj.deserialize(data['data'])
+        return traj
+    else:
+        raise UnsupportedTypeDeserializationException(type_name)
+
+def deserialize(env, data):
+    if isinstance(data, unicode):
+        return data.encode()
+    elif isinstance(data, list):
+        return [ deserialize(env, x) for x in data ]
+    elif isinstance(data, dict):
+        return _deserialize_internal(env, data, data.get(TYPE_KEY))
+    else:
+        return data
+
+def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
     import openravepy
 
     if env is None:
         env = openravepy.Environment()
 
+    if reuse_bodies is None:
+        reuse_bodies_dict = dict()
+        reuse_bodies_set = set()
+    else:
+        reuse_bodies_dict = { body.GetName(): body for body in reuse_bodies }
+        reuse_bodies_set = set(reuse_bodies)
+
+    # Remove any extra bodies from the environment.
+    for body in env.GetBodies():
+        if body not in reuse_bodies_set:
+            deserialization_logger.debug('Purging body "%s".', body.GetName())
+            env.Remove(body)
+
     # Deserialize the kinematic structure.
     deserialized_bodies = []
     for body_data in data['bodies']:
-        body = deserialize_kinbody(env, body_data, state=False)
-        deserialized_bodies.append(body)
+        body = reuse_bodies_dict.get(body_data['name'], None)
+        if body is None:
+            body = deserialize_kinbody(env, body_data, state=False)
+
+        deserialization_logger.debug('Deserialized body "%s".', body.GetName())
+        deserialized_bodies.append((body, body_data))
 
     # Restore state. We do this in a second pass to insure that any bodies that
     # are grabbed already exist.
-    for body, body_data in zip(deserialized_bodies, data['bodies']):
+    for body, body_data in deserialized_bodies:
         deserialize_kinbody_state(body, body_data['kinbody_state'])
 
         if body.IsRobot():
@@ -132,6 +277,11 @@ def deserialize_environment(data, env=None):
 
 def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
     from openravepy import RaveCreateKinBody, RaveCreateRobot
+
+    deserialization_logger.debug('Deserializing %s "%s".',
+        'Robot' if data['is_robot'] else 'KinBody',
+        data['name']
+    )
 
     link_infos = [
         deserialize_link_info(link_data['info']) \
@@ -173,8 +323,18 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
 def deserialize_kinbody_state(body, data):
     from openravepy import KinBody
 
+    deserialization_logger.debug('Deserializing "%s" KinBody state.',
+        body.GetName())
+
     for key, (_, set_fn) in KINBODY_STATE_MAP.iteritems():
-        set_fn(body, data[key])
+        try:
+            set_fn(body, data[key])
+        except Exception as e:
+            deserialization_logger.error(
+                'Failed deserializing KinBody "%s" state "%s": %s',
+                body.GetName(), key, e.message
+            )
+            raise
 
     body.SetLinkTransformations(
         map(deserialize_transform, data['link_transforms']),
@@ -182,6 +342,9 @@ def deserialize_kinbody_state(body, data):
     )
 
 def deserialize_robot_state(body, data):
+    deserialization_logger.debug('Deserializing "%s" Robot state.',
+        body.GetName())
+
     for key, (_, set_fn) in ROBOT_STATE_MAP.iteritems():
         set_fn(body, data[key])
 
@@ -250,12 +413,23 @@ def deserialize_transform(data):
 # Schema.
 mesh_environment = openravepy.Environment()
 identity = lambda x: x
-both_identity = (identity, identity)
+str_identity = (
+    lambda x: x,
+    lambda x: x.encode()
+)
+both_identity = (
+    lambda x: x,
+    lambda x: x
+)
 numpy_identity = (
     lambda x: x.tolist(),
     lambda x: numpy.array(x)
 )
-transform_identity = (serialize_transform, deserialize_transform)
+transform_identity = (
+    serialize_transform,
+    deserialize_transform
+)
+
 
 KINBODY_STATE_MAP = {
     'description': (
@@ -316,9 +490,9 @@ LINK_INFO_MAP = {
     '_bStatic': both_identity,
     '_mapFloatParameters': both_identity,
     '_mapIntParameters': both_identity,
-    '_mapStringParameters': both_identity,
+    '_mapStringParameters': both_identity, # TODO
     '_mass': both_identity,
-    '_name': both_identity,
+    '_name': str_identity,
     '_t': transform_identity,
     '_tMassFrame': transform_identity,
     '_vForcedAdjacentLinks': both_identity,
@@ -331,15 +505,15 @@ LINK_INFO_MAP = {
 JOINT_INFO_MAP = {
     '_bIsActive': both_identity,
     '_bIsCircular': both_identity,
-    '_linkname0': both_identity,
-    '_linkname1': both_identity,
+    '_linkname0':  str_identity,
+    '_linkname1': str_identity,
     '_mapFloatParameters': both_identity,
     '_mapIntParameters': both_identity,
-    '_mapStringParameters': both_identity,
-    '_name': both_identity,
+    '_mapStringParameters': both_identity, # TODO
+    '_name': str_identity,
     '_type': (
         lambda x: x.name,
-        lambda x: openravepy.KinBody.JointType.names[x]
+        lambda x: openravepy.KinBody.JointType.names[x].encode()
     ),
     '_vanchor': numpy_identity,
     '_vaxes': (
@@ -363,8 +537,8 @@ GEOMETRY_INFO_MAP = {
     '_bModifiable': both_identity,
     '_bVisible': both_identity,
     '_fTransparency': both_identity,
-    '_filenamecollision': both_identity,
-    '_filenamerender': both_identity,
+    '_filenamecollision': str_identity,
+    '_filenamerender': str_identity,
     '_t': transform_identity,
     '_type': (
         lambda x: x.name,
@@ -381,19 +555,19 @@ GEOMETRY_INFO_MAP = {
     #'_trajfollow': None,
 }
 MANIPULATOR_INFO_MAP = {
-    '_name': both_identity,
-    '_sBaseLinkName': both_identity,
-    '_sEffectorLinkName': both_identity,
-    '_sIkSolverXMLId': both_identity,
+    '_name': str_identity,
+    '_sBaseLinkName': str_identity,
+    '_sEffectorLinkName': str_identity,
+    '_sIkSolverXMLId': str_identity,
     '_tLocalTool': transform_identity,
     '_vChuckingDirection': numpy_identity,
     '_vClosingDirection': numpy_identity,
-    '_vGripperJointNames': both_identity,
+    '_vGripperJointNames': both_identity, # TODO
     '_vdirection': numpy_identity,
 }
 GRABBED_INFO_MAP = {
-    '_grabbedname': both_identity,
-    '_robotlinkname': both_identity,
-    '_setRobotLinksToIgnore': both_identity,
+    '_grabbedname': str_identity,
+    '_robotlinkname': str_identity,
+    '_setRobotLinksToIgnore': both_identity, # TODO
     '_trelative': transform_identity,
 }
