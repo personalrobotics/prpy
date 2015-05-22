@@ -693,3 +693,14 @@ def FindCatkinResource(package, relative_path):
     else:
         raise IOError('Loading resource "{:s}" failed.'.format(
                       relative_path))
+
+def TagTrajectoryTiming(traj, tag, timedata):
+    """
+    Tag a trajectory with timing metadata
+    @param traj The trajectory to tag
+    @param tag The name of the tag to add
+    @param timedata The timing data to put in the tag (usually time in seconds)
+    """
+    tags = GetTrajectoryTags(traj)
+    tags.setdefault(tag, timedata)
+    SetTrajectoryTags(traj, tags, append=False)
