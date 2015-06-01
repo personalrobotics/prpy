@@ -37,7 +37,7 @@ from ..planning.base import Sequence, Tags
 from ..planning.ompl import OMPLSimplifier
 from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
-from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags, TagTrajectoryTiming
+from ..util import SetTrajectoryTags
 
 logger = logging.getLogger('robot')
 
@@ -378,7 +378,7 @@ class Robot(openravepy.Robot):
 
             with Timer() as timer:
                 traj = self.PostProcessPath(path, defer=False, **kwargs)
-            TagTrajectoryTiming(traj, Tags.POSTPROCESS_TIME, timer.get_duration())
+            SetTrajectoryTags(traj, {Tags.POSTPROCESS_TIME: timer.get_duration()}, append=True)
 
             logger.info('Post-processing took %.3f seconds and produced a path'
                         ' with %d waypoints and a duration of %.3f seconds.',
@@ -389,7 +389,7 @@ class Robot(openravepy.Robot):
 
             with Timer() as timer:
                 exec_traj = self.ExecuteTrajectory(traj, defer=False, **kwargs)
-            TagTrajectoryTiming(exec_traj, Tags.EXECUTION_TIME, timer.get_duration())
+            SetTrajectoryTags(exec_traj, {Tags.EXECUTION_TIME: timer.get_duration()}, append=True)
             return exec_traj
 
         if defer is True:
@@ -549,7 +549,7 @@ class Robot(openravepy.Robot):
         from ..util import Timer
         with Timer() as timer:
             result = planning_method(self, *args, **kw_args)
-        TagTrajectoryTiming(result, Tags.PLAN_TIME, timer.get_duration())
+        SetTrajectoryTags(result, {Tags.PLAN_TIME: timer.get_duration()}, append=True)
 
         def postprocess_trajectory(traj):
             # Strip inactive DOFs from the trajectory.
