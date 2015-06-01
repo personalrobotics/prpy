@@ -43,6 +43,9 @@ class Tags(object):
     CONSTRAINED = 'constrained'
     PLANNER = 'planner'
     METHOD = 'planning_method'
+    PLAN_TIME = 'planning_time'
+    POSTPROCESS_TIME = 'postprocess_time'
+    EXECUTION_TIME = 'execution_time'
 
 class PlanningError(Exception):
     pass
