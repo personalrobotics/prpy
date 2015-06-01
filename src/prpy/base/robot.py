@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import functools, logging, openravepy, numpy, time
+import functools, logging, openravepy, numpy 
 import prpy.util
 from .. import bind, named_config, planning, util
 from ..clone import Clone, Cloned
