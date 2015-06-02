@@ -12,6 +12,7 @@ deserialization_logger = logging.getLogger('prpy.deserialization')
 def _serialize_internal(obj):
     from numpy import ndarray
     from openravepy import Environment, KinBody, Robot, Trajectory
+    from prpy.tsr import TSR, TSRChain
 
     NoneType = type(None)
 
@@ -34,6 +35,8 @@ def _serialize_internal(obj):
         }
     elif isinstance(obj, Trajectory):
         return { 'data': obj.serialize(0) }
+    elif isinstance(obj, (TSR, TSRChain)):
+        return { 'data': obj.serialize() }
     else:
         raise UnsupportedTypeSerializationException(obj)
 
@@ -224,7 +227,7 @@ def _deserialize_internal(env, data, data_type):
         traj.deserialize(data['data'])
         return traj
     else:
-        raise UnsupportedTypeDeserializationException(type_name)
+        raise UnsupportedTypeDeserializationException(data_type)
 
 def deserialize(env, data):
     if isinstance(data, unicode):
