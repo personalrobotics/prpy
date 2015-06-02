@@ -33,10 +33,11 @@ import prpy.util
 from .. import bind, named_config, planning, util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
-from ..planning.base import Sequence 
+from ..planning.base import Sequence, Tags
 from ..planning.ompl import OMPLSimplifier
 from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
+from ..util import SetTrajectoryTags
 
 logger = logging.getLogger('robot')
 
@@ -377,6 +378,7 @@ class Robot(openravepy.Robot):
 
             with Timer() as timer:
                 traj = self.PostProcessPath(path, defer=False, **kwargs)
+            SetTrajectoryTags(traj, {Tags.POSTPROCESS_TIME: timer.get_duration()}, append=True)
 
             logger.info('Post-processing took %.3f seconds and produced a path'
                         ' with %d waypoints and a duration of %.3f seconds.',
@@ -385,7 +387,10 @@ class Robot(openravepy.Robot):
                 traj.GetDuration()
             )
 
-            return self.ExecuteTrajectory(traj, defer=False, **kwargs)
+            with Timer() as timer:
+                exec_traj = self.ExecuteTrajectory(traj, defer=False, **kwargs)
+            SetTrajectoryTags(exec_traj, {Tags.EXECUTION_TIME: timer.get_duration()}, append=True)
+            return exec_traj
 
         if defer is True:
             from trollius.executor import get_default_executor
@@ -541,7 +546,10 @@ class Robot(openravepy.Robot):
         config_spec = self.GetActiveConfigurationSpecification('linear')
 
         # Call the planner.
-        result = planning_method(self, *args, **kw_args)
+        from ..util import Timer
+        with Timer() as timer:
+            result = planning_method(self, *args, **kw_args)
+        SetTrajectoryTags(result, {Tags.PLAN_TIME: timer.get_duration()}, append=True)
 
         def postprocess_trajectory(traj):
             # Strip inactive DOFs from the trajectory.
