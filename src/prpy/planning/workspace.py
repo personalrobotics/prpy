@@ -152,6 +152,7 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return qtraj configuration space path
         """
+        from .exceptions import TimeoutPlanningError
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -179,7 +180,7 @@ class GreedyIKPlanner(BasePlanner):
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        raise PlanningError('Reached time limit.')
+                        raise TimeoutPlanningError(timelimit)
 
                     # Hypothesize new configuration as closest IK to current
                     qcurr = robot.GetActiveDOFValues()  # Configuration at t.
