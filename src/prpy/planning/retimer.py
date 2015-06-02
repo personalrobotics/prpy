@@ -140,13 +140,20 @@ class ParabolicSmoother(OpenRAVERetimer):
 
 
 class HauserParabolicSmoother(OpenRAVERetimer):
-    def __init__(self, **kwargs):
+    def __init__(self, do_blend=True, do_shortcut=True, blend_radius=0.5,
+                 blend_iterations=4, **kwargs):
         super(HauserParabolicSmoother, self).__init__(
                 'HauserParabolicSmoother', **kwargs)
 
+        self.default_options.update({
+            'do_blend': int(do_blend),
+            'do_shortcut': int(do_shortcut),
+            'blend_radius': float(blend_radius),
+            'blend_iterations': int(blend_iterations),
+        })
+
 
 class OpenRAVEAffineRetimer(BasePlanner):
-
     def __init__(self,):
         super(OpenRAVEAffineRetimer, self).__init__()
 
