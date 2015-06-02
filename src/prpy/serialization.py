@@ -36,7 +36,7 @@ def _serialize_internal(obj):
     elif isinstance(obj, Trajectory):
         return { 'data': obj.serialize(0) }
     elif isinstance(obj, (TSR, TSRChain)):
-        return { 'data': obj.serialize() }
+        return { 'data': obj.serialize_dict() }
     else:
         raise UnsupportedTypeSerializationException(obj)
 
@@ -166,6 +166,7 @@ def _deserialize_internal(env, data, data_type):
     from numpy import array, ndarray
     from openravepy import (Environment, KinBody, Robot, Trajectory,
                             RaveCreateTrajectory)
+    from prpy.tsr import TSR, TSRChain
     from .exceptions import UnsupportedTypeDeserializationException
 
     if data_type == dict.__name__:
@@ -226,6 +227,10 @@ def _deserialize_internal(env, data, data_type):
         traj = RaveCreateTrajectory(env, '')
         traj.deserialize(data['data'])
         return traj
+    elif data_type == TSR.__name__:
+        return TSR.deserialize_dict(data['data'])
+    elif data_type == TSRChain.__name__:
+        return TSRChain.deserialize_dict(data['data'])
     else:
         raise UnsupportedTypeDeserializationException(data_type)
 
