@@ -141,7 +141,7 @@ class ParabolicSmoother(OpenRAVERetimer):
 
 class HauserParabolicSmoother(OpenRAVERetimer):
     def __init__(self, do_blend=True, do_shortcut=True, blend_radius=0.5,
-                 blend_iterations=4, timelimit=-1, **kwargs):
+                 blend_iterations=0, timelimit=3., **kwargs):
         super(HauserParabolicSmoother, self).__init__(
                 'HauserParabolicSmoother', **kwargs)
 
