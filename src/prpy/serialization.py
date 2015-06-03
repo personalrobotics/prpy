@@ -9,7 +9,7 @@ serialization_logger = logging.getLogger('prpy.serialization')
 deserialization_logger = logging.getLogger('prpy.deserialization')
 
 # Serialization.
-def _serialize_internal(obj):
+def serialize(obj):
     from numpy import ndarray
     from openravepy import Environment, KinBody, Robot, Trajectory
     from prpy.tsr import TSR, TSRChain
@@ -21,31 +21,64 @@ def _serialize_internal(obj):
     elif isinstance(obj, (list, tuple)):
         return [ serialize(x) for x in obj ]
     elif isinstance(obj, dict):
-        return { serialize(k): serialize(v) for k, v in obj.iteritems() }
+        obj = { serialize(k): serialize(v) for k, v in obj.iteritems() }
+        obj[TYPE_KEY] = dict.__name__
+        return obj
     elif isinstance(obj, ndarray):
-        return { 'data': serialize(obj.tolist()) }
-    elif isinstance(obj, Environment):
-        return { 'data': serialize_environment(obj) }
-    elif isinstance(obj, (KinBody, Robot)):
-        return { 'name': obj.GetName() }
-    elif isinstance(obj, (KinBody.Link, KinBody.Joint, Robot.Manipulator)):
         return {
+            TYPE_KEY: ndarray.__name__,
+            'data': serialize(obj.tolist())
+        }
+    elif isinstance(obj, Environment):
+        return {
+            TYPE_KEY: Environment.__name__,
+            'data': serialize_environment(obj)
+        }
+    elif isinstance(obj, KinBody):
+        return {
+            TYPE_KEY: KinBody.__name__,
+            'name': obj.GetName()
+        }
+    elif isinstance(obj, Robot):
+        return {
+            TYPE_KEY: Robot.__name__,
+            'name': obj.GetName()
+        }
+    elif isinstance(obj, KinBody.Link):
+        return {
+            TYPE_KEY: KinBody.Link.__name__,
+            'name': obj.GetName(),
+            'parent_name': obj.GetParent().GetName()
+        }
+    elif isinstance(obj, KinBody.Joint):
+        return {
+            TYPE_KEY: KinBody.Joint.__name__,
+            'name': obj.GetName(),
+            'parent_name': obj.GetParent().GetName()
+        }
+    elif isinstance(obj, Robot.Manipulator):
+        return {
+            TYPE_KEY: KinBody.Manipulator.__name__,
             'name': obj.GetName(),
             'parent_name': obj.GetParent().GetName()
         }
     elif isinstance(obj, Trajectory):
-        return { 'data': obj.serialize(0) }
-    elif isinstance(obj, (TSR, TSRChain)):
-        return { 'data': obj.serialize_dict() }
+        return {
+            TYPE_KEY: Trajectory.__name__,
+            'data': obj.serialize(0)
+        }
+    elif isinstance(obj, TSR):
+        return {
+            TYPE_KEY: TSR.__name__,
+            'data': obj.serialize_dict()
+        }
+    elif isinstance(obj, TSRChain):
+        return {
+            TYPE_KEY: TSRChain.__name__,
+            'data': obj.serialize_dict()
+        }
     else:
         raise UnsupportedTypeSerializationException(obj)
-
-def serialize(obj):
-    data = _serialize_internal(obj)
-    if isinstance(data, dict):
-        data[TYPE_KEY] = type(obj).__name__
-
-    return data
 
 def serialize_environment(env):
     return {
