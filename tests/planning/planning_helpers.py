@@ -1,6 +1,7 @@
 import numpy
 
 class BasePlannerTest(object):
+    is_setup = False
     active_dof_indices = range(7)
 
     # Feasible start/goal pair.
@@ -47,10 +48,15 @@ class BasePlannerTest(object):
     ])
 
     def setUp(self):
-        from openravepy import Environment
+        import openravepy
 
-        self.env = Environment()
+        if not self.is_setup:
+            openravepy.RaveInitialize(True)
+            openravepy.misc.InitOpenRAVELogging()
+            openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Fatal)
+            self.is_setup = True
 
+        self.env = openravepy.Environment()
         with self.env:
             self.env.Load('data/wamtest2.env.xml')
             self.robot = self.env.GetRobot('BarrettWAM')
