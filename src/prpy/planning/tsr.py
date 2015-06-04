@@ -44,7 +44,10 @@ class TSRPlanner(BasePlanner):
         self.delegate_planner = delegate_planner
 
     def __str__(self):
-        return 'TSRPlanner'
+        if self.delegate_planner is not None:
+            return 'TSRPlanner({:s})'.format(str(self.delegate_planner))
+        else:
+            return 'TSRPlanner'
 
     # TODO: Temporarily disabled based on Pras' feedback.
     """

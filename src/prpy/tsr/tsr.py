@@ -146,6 +146,24 @@ class TSR(object):  # force new-style class
                                    SerializeTransform12Col(self.Tw_e),
                                    SerializeArray(self.Bw))
 
+    def serialize_dict(self):
+        return {
+            'T0_w': self.T0_w.tolist(),
+            'Tw_e': self.Tw_e.tolist(),
+            'Bw': self.Bw.tolist(),
+            'manipindex': int(self.manipindex),
+            'bodyandlink': str(self.bodyandlink),
+        }
+
+    @staticmethod
+    def deserialize_dict(x):
+        return TSR(
+            T0_w = numpy.array(x['T0_w']),
+            Tw_e = numpy.array(x['Tw_e']),
+            Bw = numpy.array(x['Bw']),
+            manip = numpy.array(x['manipindex']),
+            bodyandlink = numpy.array(x['bodyandlink'])
+        )
 
 class TSRChain(object):
 
@@ -200,8 +218,29 @@ class TSRChain(object):
                                      SerializeArray(self.mimicbodyjoints))
         return outstring
 
-    def sample(self):
+    def serialize_dict(self):
+        return {
+            'sample_goal': self.sample_goal,
+            'sample_start': self.sample_start,
+            'constrain': self.constrain,
+            'mimicbodyname': self.mimicbodyname,
+            'mimicbodyjoints': self.mimicbodyjoints,
+            'tsrs': [ tsr.serialize_dict() for tsr in self.TSRs ],
+        }
 
+
+    @staticmethod
+    def deserialize_dict(x):
+        return TSRChain(
+            sample_start=x['sample_start'],
+            sample_goal=x['sample_goal'],
+            constrain=x['constrain'],
+            TSRs=[ TSR.deserialize_dict(tsr) for tsr in x['tsrs'] ],
+            mimicbodyname=x['mimicbodyname'],
+            mimicbodyjoints=x['mimicbodyjoints'],
+        )
+
+    def sample(self):
         if len(self.TSRs) == 0:
             return None
 
