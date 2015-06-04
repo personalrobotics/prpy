@@ -36,7 +36,7 @@ from ..clone import Clone
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 from .exceptions import PlanningError, UnsupportedPlanningError
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
 
 
 class Tags(object):
@@ -47,6 +47,7 @@ class Tags(object):
     PLAN_TIME = 'planning_time'
     POSTPROCESS_TIME = 'postprocess_time'
     EXECUTION_TIME = 'execution_time'
+
 
 class MetaPlanningError(PlanningError):
     def __init__(self, message, errors):

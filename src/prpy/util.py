@@ -33,7 +33,7 @@ import logging, numpy, openravepy, scipy.misc, time, threading, math
 import scipy.optimize
 
 
-logger = logging.getLogger('prpy.util')
+logger = logging.getLogger(__name__)
 
 
 def create_sensor(env, args, anonymous=True):

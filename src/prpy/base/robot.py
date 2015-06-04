@@ -39,7 +39,8 @@ from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, P
 from ..planning.mac_smoother import MacSmoother
 from ..util import SetTrajectoryTags
 
-logger = logging.getLogger('robot')
+logger = logging.getLogger(__name__)
+
 
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
