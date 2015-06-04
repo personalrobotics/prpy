@@ -8,7 +8,11 @@ __all__ = [
     'SmoothTrajectoryTest',
 ]
 
-from PlanToConfiguration import PlanToConfigurationTest
+from PlanToConfiguration import (
+    PlanToConfigurationTest,
+    PlanToConfigurationCompleteTest,
+    PlanToConfigurationStraightLineTest
+)
 from PlanToEndEffectorPose import PlanToEndEffectorPoseTest
 from RetimeTrajectory import RetimeTrajectoryTest
 from ShortcutPath import ShortcutPathTest

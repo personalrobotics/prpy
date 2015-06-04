@@ -121,7 +121,7 @@ class SnapPlanner(BasePlanner):
         # Create a two-point trajectory that starts at our current
         # configuration and takes us to the goal.
         traj = openravepy.RaveCreateTrajectory(self.env, '')
-        cspec = robot.GetActiveConfigurationSpecification()
+        cspec = robot.GetActiveConfigurationSpecification('linear')
         active_indices = robot.GetActiveDOFIndices()
 
         waypoints = numpy.zeros((2, cspec.GetDOF()))

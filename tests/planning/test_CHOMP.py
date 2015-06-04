@@ -34,7 +34,7 @@ class DistanceFieldManagerTest(TestCase):
         from prpy.planning.chomp import DistanceFieldManager
         from openravepy import Environment
 
-        self.env = openravepy.Environment()
+        self.env = Environment()
         self.env.Load('data/wamtest2.env.xml')
         self.robot = self.env.GetRobot('BarrettWAM')
         self.body = self.env.GetKinBody('mug-table')

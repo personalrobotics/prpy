@@ -1,5 +1,7 @@
 from methods import (
     PlanToConfigurationTest,
+    PlanToConfigurationStraightLineTest,
+    PlanToConfigurationCompleteTest,
     PlanToEndEffectorPoseTest
 )
 from planning_helpers import BasePlannerTest
@@ -9,6 +11,8 @@ from unittest import TestCase
 
 class CBiRRTPlannerTest(BasePlannerTest,
                         PlanToConfigurationTest,
+                        PlanToConfigurationStraightLineTest,
+                        PlanToConfigurationCompleteTest,
                         PlanToEndEffectorPoseTest,
                         TestCase):
     planner_factory = CBiRRTPlanner
