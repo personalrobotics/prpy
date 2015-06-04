@@ -33,7 +33,7 @@ from ..util import SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   PlanningMethod, Tags)
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
 
 def DoNothing(robot):
     return numpy.zeros(robot.GetActiveDOF())

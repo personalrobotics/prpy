@@ -35,7 +35,7 @@ import openravepy
 from base import (BasePlanner, PlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 
-logger = logging.getLogger('prpy.planning.tsr')
+logger = logging.getLogger(__name__)
 
 
 class TSRPlanner(BasePlanner):

@@ -38,7 +38,7 @@ from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   PlanningMethod, Tags)
 import prpy.tsr
 
-logger = logging.getLogger('prpy.planning.chomp')
+logger = logging.getLogger(__name__)
 
 DistanceFieldKey = collections.namedtuple('DistanceFieldKey',
     [ 'kinematics_hash', 'enabled_mask', 'dof_values', 'dof_indices' ])

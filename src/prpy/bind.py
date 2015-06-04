@@ -31,13 +31,13 @@
 import logging
 from clone import CloneException
 
-logger = logging.getLogger('bind')
+logger = logging.getLogger(__name__)
+
 
 class NotCloneableException(CloneException):
     pass
 
 class InstanceDeduplicator(object):
-    logger = logging.getLogger('bind')
     USERDATA_PREFIX = 0xDEADBEEF
     USERDATA_CHILDREN = '__children__'
     USERDATA_DESTRUCTOR = '__destructor__'

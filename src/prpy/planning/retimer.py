@@ -31,9 +31,10 @@
 import logging, numpy, openravepy, os, tempfile
 from ..util import CopyTrajectory, SimplifyTrajectory, HasAffineDOFs
 from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
-from openravepy import PlannerStatus 
+from openravepy import PlannerStatus
 
-logger = logging.getLogger('retimer')
+logger = logging.getLogger(__name__)
+
 
 class OpenRAVERetimer(BasePlanner):
     def __init__(self, algorithm, default_options=None):
