@@ -1,4 +1,5 @@
 import numpy
+from prpy.planning.base import BasePlanner, PlanningMethod
 
 class BasePlannerTest(object):
     is_setup = False
@@ -135,3 +136,105 @@ class BasePlannerTest(object):
 
         self.assertLessEqual(distance, linear_tol)
         self.assertLessEqual(angle, angular_tol)
+
+
+class MockPlanner(BasePlanner):
+    def __init__(self, delay=False):
+        from threading import Condition
+
+        BasePlanner.__init__(self)
+
+        self.num_calls = 0
+        self.delay = delay
+        self.start_condition = Condition()
+        self.done_condition = Condition()
+        self.running = False
+
+    def wait_for_start(self):
+        if self.delay:
+            with self.start_condition:
+                while not self.running:
+                    self.start_condition.wait()
+
+    def finish(self):
+        with self.done_condition:
+            self.done_condition.notify_all()
+
+    def _PlanGeneric(self, delegate_method, *args, **kw_args):
+        # Notify other threads that the planner has started.
+        with self.start_condition:
+            self.num_calls += 1
+            self.running = True
+            self.start_condition.notify_all()
+
+        # Optionally wait before returning
+        if self.delay:
+            with self.done_condition:
+                self.done_condition.wait()
+
+        # Compute the return value and return.
+        try:
+            return delegate_method(*args, **kw_args)
+        finally:
+            with self.start_condition:
+                self.running = False
+
+
+class SuccessPlanner(MockPlanner):
+    def __init__(self, template_traj, delay=False):
+        from openravepy import RaveCreateTrajectory
+
+        MockPlanner.__init__(self, delay=delay)
+        
+        with self.env:
+            # Clone the template trajectory into the planning environment.
+            self.traj = RaveCreateTrajectory(self.env, template_traj.GetXMLId())
+            self.traj.Clone(template_traj, 0)
+
+    @PlanningMethod
+    def PlanTest(self, robot, defer=False):
+        assert not defer
+
+        def Success_impl(robot):
+            import numpy
+            from openravepy import RaveCreateTrajectory
+
+            cspec = robot.GetActiveConfigurationSpecification()
+            traj = RaveCreateTrajectory(self.env, 'GenericTrajectory')
+            traj.Init(cspec)
+            traj.Insert(0, numpy.zeros(cspec.GetDOF()))
+            traj.Insert(1, numpy.ones(cspec.GetDOF()))
+            return traj
+
+        return self._PlanGeneric(Success_impl, robot)
+
+
+class FailPlanner(MockPlanner):
+    @PlanningMethod
+    def PlanTest(self, robot, defer=False):
+        assert not defer
+
+        def Failure_impl(robot):
+            from prpy.planning import PlanningError
+
+            raise PlanningError('FailPlanner')
+
+        return self._PlanGeneric(Failure_impl, robot)
+
+
+class MetaPlannerTests(object):
+    def setUp(self):
+        from openravepy import Environment, RaveCreateTrajectory
+
+        self.join_timeout = 5.0
+        self.env = Environment()
+        self.env.Load('data/lab1.env.xml')
+        self.robot = self.env.GetRobot('BarrettWAM')
+
+        # Create a valid trajectory used to test planner successes.
+        cspec = self.robot.GetActiveConfigurationSpecification()
+        self.traj = RaveCreateTrajectory(self.env, 'GenericTrajectory')
+        self.traj.Init(cspec)
+        self.traj.Insert(0, numpy.zeros(cspec.GetDOF()))
+        self.traj.Insert(1, numpy.ones(cspec.GetDOF()))
+
