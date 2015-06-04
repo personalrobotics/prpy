@@ -11,7 +11,7 @@ class SmoothTrajectoryTest(object):
         self.feasible_path.Insert(1, self.waypoint2)
         self.feasible_path.Insert(2, self.waypoint3)
 
-    def test_SmoothTrajectory_DoesNotModifyStartPoint(self):
+    def test_SmoothTrajectory_DoesNotModifyBoundaryPoints(self):
         from numpy.testing import assert_allclose
 
         # Setup/Test

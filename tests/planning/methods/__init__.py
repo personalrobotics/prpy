@@ -3,6 +3,7 @@
 __all__ = [
     'PlanToConfigurationTest',
     'PlanToEndEffectorPoseTest',
+    'PlanToEndEffectorOffsetTest',
     'RetimeTrajectoryTest',
     'ShortcutPathTest',
     'SmoothTrajectoryTest',
@@ -11,9 +12,10 @@ __all__ = [
 from PlanToConfiguration import (
     PlanToConfigurationTest,
     PlanToConfigurationCompleteTest,
-    PlanToConfigurationStraightLineTest
+    PlanToConfigurationStraightLineTest,
 )
 from PlanToEndEffectorPose import PlanToEndEffectorPoseTest
+from PlanToEndEffectorOffset import PlanToEndEffectorOffsetTest
 from RetimeTrajectory import RetimeTrajectoryTest
 from ShortcutPath import ShortcutPathTest
 from SmoothTrajectory import SmoothTrajectoryTest

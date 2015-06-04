@@ -2,7 +2,8 @@ from methods import (
     PlanToConfigurationTest,
     PlanToConfigurationStraightLineTest,
     PlanToConfigurationCompleteTest,
-    PlanToEndEffectorPoseTest
+    PlanToEndEffectorPoseTest,
+    PlanToEndEffectorOffsetTest,
 )
 from planning_helpers import BasePlannerTest
 from prpy.planning.cbirrt import CBiRRTPlanner
@@ -14,5 +15,6 @@ class CBiRRTPlannerTest(BasePlannerTest,
                         PlanToConfigurationStraightLineTest,
                         PlanToConfigurationCompleteTest,
                         PlanToEndEffectorPoseTest,
+                        PlanToEndEffectorOffsetTest,
                         TestCase):
     planner_factory = CBiRRTPlanner
