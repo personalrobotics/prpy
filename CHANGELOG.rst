@@ -2,6 +2,13 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.0 (2015-06-01)
+------------------
+* Adding tags for capturing trajectory timing data
+* Update README.md
+  Added enum34 dependency instructions into README
+* Contributors: Jennifer King, Michael Koval, Stefanos Nikolaidis
+
 1.0.0 (2015-05-01)
 ------------------
 * Adding planner and planning_method and trajectory tag constants

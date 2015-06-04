@@ -35,6 +35,7 @@ import numpy
 import openravepy
 from ..clone import Clone
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
+from .exceptions import PlanningError, UnsupportedPlanningError
 
 logger = logging.getLogger('planning')
 
@@ -44,15 +45,9 @@ class Tags(object):
     CONSTRAINED = 'constrained'
     PLANNER = 'planner'
     METHOD = 'planning_method'
-
-
-class PlanningError(Exception):
-    pass
-
-
-class UnsupportedPlanningError(PlanningError):
-    pass
-
+    PLAN_TIME = 'planning_time'
+    POSTPROCESS_TIME = 'postprocess_time'
+    EXECUTION_TIME = 'execution_time'
 
 class MetaPlanningError(PlanningError):
     def __init__(self, message, errors):
