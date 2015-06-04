@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 class NotCloneableException(CloneException):
     pass
 
+
 class InstanceDeduplicator(object):
     USERDATA_PREFIX = 0xDEADBEEF
     USERDATA_CHILDREN = '__children__'
@@ -209,11 +210,11 @@ class InstanceDeduplicator(object):
             # skipped
             while children:
                 child = children.pop()
-                InstanceDeduplicator.logger.debug(child)
+                logger.debug(child)
                 clear_referrers(child)
                 # NOTE: this is also an acceptable body for the loop :)
                 # clear_referrers(children[0])
-            InstanceDeduplicator.logger.debug(owner)
+            logger.debug(owner)
             if canonical_instance != None:
                 clear_referrers(canonical_instance)
 
@@ -233,7 +234,7 @@ class InstanceDeduplicator(object):
                 handle = env.RegisterBodyCallback(InstanceDeduplicator.cleanup_callback)
                 user_data[cls.USERDATA_DESTRUCTOR] = handle
             else:
-                cls.logger.warning(
+                logger.warning(
                     'Your version of OpenRAVE does not supply Python bindings'
                     ' for Environment.RegisterBodyCallback. PrPy will leak'
                     ' unless you call prpy.bind.InstanceDeduplicator.remove_storage'
