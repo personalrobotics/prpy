@@ -290,6 +290,10 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
         reuse_bodies_dict = { body.GetName(): body for body in reuse_bodies }
         reuse_bodies_set = set(reuse_bodies)
 
+    # Release anything that's grabbed.
+    for body in reuse_bodies:
+        body.ReleaseAllGrabbed()
+
     # Remove any extra bodies from the environment.
     for body in env.GetBodies():
         if body not in reuse_bodies_set:
