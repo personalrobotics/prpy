@@ -31,9 +31,10 @@
 import logging, numpy, openravepy, os, tempfile
 from ..util import CopyTrajectory, SimplifyTrajectory, HasAffineDOFs
 from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
-from openravepy import PlannerStatus 
+from openravepy import PlannerStatus
 
-logger = logging.getLogger('retimer')
+logger = logging.getLogger(__name__)
+
 
 class OpenRAVERetimer(BasePlanner):
     def __init__(self, algorithm, default_options=None):
@@ -141,7 +142,7 @@ class ParabolicSmoother(OpenRAVERetimer):
 
 class HauserParabolicSmoother(OpenRAVERetimer):
     def __init__(self, do_blend=True, do_shortcut=True, blend_radius=0.5,
-                 blend_iterations=4, **kwargs):
+                 blend_iterations=0, timelimit=3., **kwargs):
         super(HauserParabolicSmoother, self).__init__(
                 'HauserParabolicSmoother', **kwargs)
 
@@ -150,6 +151,7 @@ class HauserParabolicSmoother(OpenRAVERetimer):
             'do_shortcut': int(do_shortcut),
             'blend_radius': float(blend_radius),
             'blend_iterations': int(blend_iterations),
+            'time_limit': float(timelimit),
         })
 
 

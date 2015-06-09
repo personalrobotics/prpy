@@ -35,7 +35,7 @@ from base import (BasePlanner,
                   PlanningError,
                   PlanningMethod)
 
-logger = logging.getLogger('prpy.planning.ik')
+logger = logging.getLogger(__name__)
 
 
 class IKPlanner(BasePlanner):
