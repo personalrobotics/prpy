@@ -571,7 +571,7 @@ class Robot(openravepy.Robot):
                 postprocess_trajectory(traj)
 
                 # Optionally execute the trajectory.
-                if kw_args.get('execute', True):
+                if kw_args.get('execute', False):
                     # We know defer = True if we're in this function, so we
                     # don't have to set it explicitly.
                     traj = yield trollius.From(
@@ -585,7 +585,7 @@ class Robot(openravepy.Robot):
             postprocess_trajectory(result)
 
             # Optionally execute the trajectory.
-            if kw_args.get('execute', True):
+            if kw_args.get('execute', False):
                 result = self.ExecutePath(result, **kw_args)
 
             return result
