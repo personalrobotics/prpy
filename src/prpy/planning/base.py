@@ -32,6 +32,7 @@ import abc
 import functools
 import logging
 import openravepy
+from . import futures
 from ..clone import Clone
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 from .exceptions import PlanningError, UnsupportedPlanningError
@@ -87,10 +88,8 @@ class PlanningMethod(object):
                     cloned_env.Unlock()
 
             if defer is True:
-                from trollius.executor import get_default_executor
-                from trollius.futures import wrap_future
-                executor = kw_args.get('executor') or get_default_executor()
-                return wrap_future(executor.submit(call_planner))
+                executor = kw_args.get('executor', None)
+                return futures.defer(call_planner, executor=executor)
             else:
                 return call_planner()
 
@@ -169,11 +168,9 @@ class MetaPlanner(Planner):
             defer = kw_args.get('defer')
 
             if defer is True:
-                from trollius.executor import get_default_executor
-                from trollius.futures import wrap_future
-                executor = kw_args.get('executor') or get_default_executor()
-                return wrap_future(executor.submit(self.plan, method_name,
-                                                   args, kw_args))
+                executor = kw_args.get('executor', None)
+                return futures.defer(self.plan, executor=executor,
+                                     args=(method_name, args, kw_args))
             else:
                 return self.plan(method_name, args, kw_args)
 
@@ -299,32 +296,30 @@ class Ranked(MetaPlanner):
 
         # Call every planners in parallel using a concurrent executor and
         # return the first non-error result in the ordering when available.
-        from trollius.executor import get_default_executor
-        from trollius.futures import wrap_future
-        from trollius.tasks import as_completed
+        executor = kw_args.get('executor', None)
+        future_list = [futures.defer(call_planner, executor=executor,
+                                     args=(planner))
+                       for planner in planners]
 
-        executor = kw_args.get('executor') or get_default_executor()
-        futures = [wrap_future(executor.submit(call_planner, planner))
-                   for planner in planners]
-
-        # Each time a planner completes, check if we have a valid result
-        # (a planner found a solution and all higher-ranked planners had
-        # already failed).
-        for _ in as_completed(futures):
-            for result in results:
-                if result is None:
-                    break
-                elif isinstance(result, openravepy.Trajectory):
+        # Check the planner results in order and return the first non-failure.
+        results = dict()
+        for planner, future in zip(planners, future_list):
+            try:
+                result = future.result()
+                if result is not None:
                     return result
-                elif not isinstance(result, PlanningError):
-                    logger.warning(
-                        "Planner {:s} returned {} of type {}; "
-                        "expected a trajectory or PlanningError."
-                        .format(str(planner), result, type(result))
-                    )
+                else:
+                    continue
+            except PlanningError as e:
+                results[planner] = e
+            except Exception as e:
+                results[planner] = e
+                logger.warning(
+                    "Planner {:s} failed with unexpected error `{:s}`"
+                    .format(str(planner), str(e))
+                )
+        raise MetaPlanningError("All planners failed.", results)
 
-        raise MetaPlanningError("All planners failed.",
-                                dict(zip(all_planners, results)))
 
 class FirstSupported(MetaPlanner):
     def __init__(self, *planners):

@@ -30,7 +30,7 @@
 
 import functools, logging, openravepy, numpy
 import prpy.util
-from .. import bind, named_config, planning, util
+from .. import bind, futures, named_config, planning, util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence, Tags
@@ -344,17 +344,12 @@ class Robot(openravepy.Robot):
                 return CopyTrajectory(traj, env=self.GetEnv())
 
         if defer is True:
-            from trollius.executor import get_default_executor
-            from trollius.futures import wrap_future
-
-            if executor is None:
-                executor = get_default_executor()
-
-            return wrap_future(executor.submit(do_postprocess))
+            return futures.defer(do_postprocess, executor=executor)
         elif defer is False:
             return do_postprocess()
         else:
-            raise ValueError('Received unexpected value "{:s}" for defer.'.format(defer))
+            raise ValueError('Received unexpected value "{:s}" for defer.'
+                             .format(defer))
 
 
     def ExecutePath(self, path, defer=False, executor=None, **kwargs):
@@ -394,20 +389,15 @@ class Robot(openravepy.Robot):
             return exec_traj
 
         if defer is True:
-            from trollius.executor import get_default_executor
-            from trollius.futures import wrap_future
-
-            if executor is None:
-                executor = get_default_executor()
-
-            return wrap_future(executor.submit(do_execute))
+            return futures.defer(do_execute, executor=executor)
         elif defer is False:
             return do_execute()
         else:
-            raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
+            raise ValueError('Received unexpected value "{:s}" for defer.'
+                             .format(str(defer)))
 
 
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kwargs):
+    def ExecuteTrajectory(self, traj, defer=False, executor=None, timeout=None, period=0.01, **kwargs):
         """ Executes a time trajectory on the robot.
 
         This function directly executes a timed OpenRAVE trajectory on the
@@ -422,7 +412,7 @@ class Robot(openravepy.Robot):
         will be raised). If timeout is a float (including timeout = 0), this
         function will return None once the timeout has ellapsed, even if the
         trajectory is still being executed.
-        
+
         NOTE: We suggest that you either use timeout=None or defer=True. If
         trajectory execution times out, there is no way to tell whether
         execution was successful or not. Other values of timeout are only
@@ -462,28 +452,14 @@ class Robot(openravepy.Robot):
                     'Trajectory includes the base, but no base controller is'
                     ' available. Is self.base.controller set?')
 
-        if defer is True:
-            import time
-            import trollius
-
-            @trollius.coroutine
-            def do_poll():
-                time_stop = time.time() + (timeout if timeout else numpy.inf)
-
-                while time.time() <= time_stop:
-                    is_done = all(controller.IsDone()
-                                  for controller in active_controllers)
-                    if is_done:
-                        raise trollius.Return(traj)
-
-                    yield trollius.From(trollius.sleep(period))
-
-                raise trollius.Return(None)
-
-            return trollius.async(do_poll())
-        elif defer is False:
+        def do_wait():
             util.WaitForControllers(active_controllers, timeout=timeout)
             return traj
+
+        if defer is True:
+            return futures.defer(do_wait, executor=executor)
+        elif defer is False:
+            return do_wait()
         else:
             raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
 
@@ -552,40 +528,23 @@ class Robot(openravepy.Robot):
             result = planning_method(self, *args, **kw_args)
         SetTrajectoryTags(result, {Tags.PLAN_TIME: timer.get_duration()}, append=True)
 
-        def postprocess_trajectory(traj):
+        def do_postprocess(traj):
             # Strip inactive DOFs from the trajectory.
             openravepy.planningutils.ConvertTrajectorySpecification(
                 traj, config_spec
             )
 
-        # Return either the trajectory result or a future to the result.
-        if kw_args.get('defer', False):
-            import trollius
-
-            # Perform postprocessing on a future trajectory.
-            @trollius.coroutine
-            def defer_trajectory(traj_future, kw_args):
-                # Wait for the planner to complete.
-                traj = yield trollius.From(traj_future)
-
-                postprocess_trajectory(traj)
-
-                # Optionally execute the trajectory.
-                if kw_args.get('execute', False):
-                    # We know defer = True if we're in this function, so we
-                    # don't have to set it explicitly.
-                    traj = yield trollius.From(
-                        self.ExecutePath(traj, **kw_args)
-                    )
-
-                raise trollius.Return(traj)
-
-            return trollius.Task(defer_trajectory(result, kw_args))
-        else:
-            postprocess_trajectory(result)
-
             # Optionally execute the trajectory.
             if kw_args.get('execute', False):
-                result = self.ExecutePath(result, **kw_args)
+                # Disable defer in here, we don't want to do it twice.
+                kw_args['defer'] = False
+                traj = self.ExecutePath(traj, **kw_args)
 
-            return result
+            return traj
+
+        # Return either the trajectory result or a future to the result.
+        if kw_args.get('defer', False):
+            executor = kw_args.get('executor', None)
+            return futures.defer(do_postprocess, executor=executor)
+        else:
+            return do_postprocess()

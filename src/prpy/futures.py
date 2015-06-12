@@ -219,3 +219,43 @@ class Future(object):
                 callback_fn(self)
             except Exception:
                 self.logger.exception('Callback raised an exception.')
+
+
+def defer(fn, executor=None, args=(), kwargs={}):
+    """
+    Simple helper to run a function in a thread and pass the result via Future.
+
+    This helper wraps a function call and immediately returns a Future for its
+    result.  It then executes the function in a new thread or on a provided
+    executor and sets the result of the Future as soon as it is available.
+
+    Note that this execution is extremely simplistic.  Cancellation is not
+    supported, and no fixed thread pool is used (unless specified via a custom
+    executor).
+
+    @param fn: the function that will be called
+    @param executor: an executor that has a `.submit()` function, or None
+    @param args: a list of positional arguments to pass to the function
+    @param kwargs: a list of keyword arguments to pass to the function
+    @returns: a future representing the result of this function
+    """
+    # Create a future to store the result of the function.
+    future = Future()
+
+    # Create a wrapper that calls the function and stores the result.
+    def wrapper():
+        try:
+            result = fn(*args, **kwargs)
+            future.set_result(result)
+        except BaseException as e:
+            result.set_exception(e)
+
+    # Use the specified executor or new thread to start running the function.
+    if executor is not None:
+        executor.submit(wrapper)
+    else:
+        t = threading.Thread(target=wrapper)
+        t.start()
+
+    # Return the implicit result as a future.
+    return future
