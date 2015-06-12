@@ -717,8 +717,9 @@ def IsAtTrajectoryStart(robot, trajectory):
         trajectory.GetWaypoint(0), robot, dof_indices)
 
     # Get current configuration of robot for used indices.
-    robot_values = robot.GetDOFValues(dof_indices)
-    dof_resolutions = robot.GetDOFResolutions(dof_indices)
+    with robot.GetEnv():
+        robot_values = robot.GetDOFValues(dof_indices)
+        dof_resolutions = robot.GetDOFResolutions(dof_indices)
 
     # Check deviation in each DOF, using OpenRAVE's SubtractValue function.
     dof_infos = zip(dof_indices, traj_values, robot_values, dof_resolutions)
