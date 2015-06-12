@@ -421,7 +421,7 @@ class Robot(openravepy.Robot):
         will be raised). If timeout is a float (including timeout = 0), this
         function will return None once the timeout has ellapsed, even if the
         trajectory is still being executed.
-        
+
         NOTE: We suggest that you either use timeout=None or defer=True. If
         trajectory execution times out, there is no way to tell whether
         execution was successful or not. Other values of timeout are only
@@ -449,7 +449,13 @@ class Robot(openravepy.Robot):
 
         # If there was only one waypoint, at this point we are done!
         if traj.GetNumWaypoints() == 1:
-            return traj
+            if defer is True:
+                import trollius
+                future = trollius.Future()
+                future.set_result(traj)
+                return future
+            else:
+                return traj
 
         # Verify that the trajectory is timed.
         if traj.GetDuration() <= 0.0:
