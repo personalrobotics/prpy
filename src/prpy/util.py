@@ -697,40 +697,40 @@ def FindCatkinResource(package, relative_path):
 
 def IsAtTrajectoryStart(robot, trajectory):
     """
-    Check if robot's active DOFs match the start configuration of a trajectory.
+    Check if robot's DOFs match the start configuration of a trajectory.
 
-    Examines the current active DOF values of the specified robot and compares
-    these values to the first waypoint of the specified trajectory.  If every
-    DOF value differs by less than the DOF resolution of the specified
-    joint/axis, then the function returns True.  Otherwise, it returns False.
+    This function examines the current DOF values of the specified robot and
+    compares these values to the first waypoint of the specified trajectory.
+    If every DOF value specified in the trajectory differs by less than the
+    DOF resolution of the specified joint/axis then it will return True.
+    Otherwise, it returns False.
 
     @param robot: the robot whose active DOFs will be checked
     @param trajectory: the trajectory whose start configuration will be checked
     @returns: True if the robot's active DOFs match the given trajectory
               False if one or more active DOFs differ by DOF resolution
     """
-    # Get current active configuration of robot.
-    dof_indices = robot.GetActiveDOFIndices()
-    dof_values = robot.GetActiveDOFValues()
-    dof_resolutions = robot.GetActiveDOFResolutions()
-
-    # Get starting configuration from trajectory.
+    # Get used indices and starting configuration from trajectory.
     cspec = trajectory.GetConfigurationSpecification()
-    start_values = cspec.ExtractJointValues(
+    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+    traj_values = cspec.ExtractJointValues(
         trajectory.GetWaypoint(0), robot, dof_indices)
 
-    # Check deviation in each DOF, using OpenRAVE's SubtractValue function.
-    for i, dof_index in enumerate(dof_indices):
+    # Get current configuration of robot for used indices.
+    robot_values = robot.GetDOFValues(dof_indices)
+    dof_resolutions = robot.GetDOFResolutions(dof_indices)
 
+    # Check deviation in each DOF, using OpenRAVE's SubtractValue function.
+    dof_infos = zip(dof_indices, traj_values, robot_values, dof_resolutions)
+    for dof_index, traj_value, robot_value, dof_resolution in dof_infos:
         # Look up the Joint and Axis of the DOF from the robot.
         joint = robot.GetJointFromDOFIndex(dof_index)
         axis = dof_index - joint.GetDOFIndex()
 
-        # If any joint deviated too much, return False.
-        delta_value = abs(joint.SubtractValue(
-            start_values[i], dof_values[i], axis))
-        if delta_value > dof_resolutions[i]:
+        # If any joint deviates too much, return False.
+        delta_value = abs(joint.SubtractValue(traj_value, robot_value, axis))
+        if delta_value > dof_resolution:
             return False
 
-    # If all joints matched, return True.
+    # If all joints match, return True.
     return True
