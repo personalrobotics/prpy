@@ -32,7 +32,7 @@ import abc
 import functools
 import logging
 import openravepy
-from . import futures
+from .. import futures
 from ..clone import Clone
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 from .exceptions import PlanningError, UnsupportedPlanningError

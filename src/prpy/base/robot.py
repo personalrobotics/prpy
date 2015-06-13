@@ -522,13 +522,16 @@ class Robot(openravepy.Robot):
     def _PlanWrapper(self, planning_method, args, kw_args):
         config_spec = self.GetActiveConfigurationSpecification('linear')
 
-        # Call the planner.
-        from ..util import Timer
-        with Timer() as timer:
-            result = planning_method(self, *args, **kw_args)
-        SetTrajectoryTags(result, {Tags.PLAN_TIME: timer.get_duration()}, append=True)
+        def do_plan(is_deferred):
+            kw_args['defer'] = False
 
-        def do_postprocess(traj):
+            # Call the planner.
+            from ..util import Timer
+            with Timer() as timer:
+                traj = planning_method(self, *args, **kw_args)
+            SetTrajectoryTags(traj, {Tags.PLAN_TIME: timer.get_duration()},
+                              append=True)
+
             # Strip inactive DOFs from the trajectory.
             openravepy.planningutils.ConvertTrajectorySpecification(
                 traj, config_spec
@@ -537,7 +540,6 @@ class Robot(openravepy.Robot):
             # Optionally execute the trajectory.
             if kw_args.get('execute', False):
                 # Disable defer in here, we don't want to do it twice.
-                kw_args['defer'] = False
                 traj = self.ExecutePath(traj, **kw_args)
 
             return traj
@@ -545,6 +547,7 @@ class Robot(openravepy.Robot):
         # Return either the trajectory result or a future to the result.
         if kw_args.get('defer', False):
             executor = kw_args.get('executor', None)
-            return futures.defer(do_postprocess, executor=executor)
+            return futures.defer(do_plan,
+                                 executor=executor, args=(True))
         else:
-            return do_postprocess()
+            return do_plan(False)
