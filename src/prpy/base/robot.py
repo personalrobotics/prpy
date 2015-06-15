@@ -576,4 +576,4 @@ class Robot(openravepy.Robot):
             executor = kw_args.get('executor', None)
             return futures.defer(do_plan, executor=executor)
         else:
-            return do_plan(False)
+            return do_plan()
