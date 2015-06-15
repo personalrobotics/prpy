@@ -29,7 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import functools, logging, openravepy, numpy
-import prpy.util
 from .. import bind, futures, named_config, planning, util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
@@ -281,7 +280,7 @@ class Robot(openravepy.Robot):
                 # Extract active DOFs from teh trajectory and set them as active.
                 dof_indices, _ = cspec.ExtractUsedIndices(self)
 
-                if prpy.util.HasAffineDOFs(cspec):
+                if util.HasAffineDOFs(cspec):
                     affine_dofs = (DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
                     
                     # Bug in OpenRAVE ExtractUsedIndices function makes 
@@ -428,10 +427,30 @@ class Robot(openravepy.Robot):
         @param period poll rate, in seconds, for checking trajectory status
         @return trajectory executed on the robot
         """
+        # Don't execute trajectories that don't have at least one waypoint.
+        if traj.GetNumWaypoints() <= 0:
+            raise ValueError('Trajectory must contain at least one waypoint.')
 
-        # TODO: Verify that the trajectory is timed.
+        # Check that the current configuration of the robot matches the
+        # initial configuration specified by the trajectory.
+        if not util.IsAtTrajectoryStart(self, traj):
+            raise exceptions.TrajectoryAborted(
+                'Trajectory started from different configuration than robot.')
+
+        # If there was only one waypoint, at this point we are done!
+        if traj.GetNumWaypoints() == 1:
+            if defer is True:
+                future = futures.Future()
+                future.set_result(traj)
+                return future
+            else:
+                return traj
+
+        # Verify that the trajectory is timed.
+        if traj.GetDuration() <= 0.0:
+            raise ValueError('Attempted to execute untimed trajectory.')
+
         # TODO: Check if this trajectory contains the base.
-
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
