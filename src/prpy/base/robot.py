@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import functools, logging, openravepy, numpy
-from .. import bind, futures, named_config, planning, util
+from .. import bind, futures, named_config, exceptions, util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence, Tags
@@ -205,8 +205,8 @@ class Robot(openravepy.Robot):
            curve through the waypoints (not implemented). If this curve is
            not collision free, then we fall back on...
         4. By default, we run a smoother that jointly times and smooths the
-           path via self.smoother. This algorithm can change the geometric path to
-           optimize runtime.
+           path via self.smoother. This algorithm can change the geometric path
+           to optimize runtime.
 
         The behavior in (2) and (3) can be forced by passing constrained=True
         or smooth=True. By default, the case is inferred by the tag(s) attached
