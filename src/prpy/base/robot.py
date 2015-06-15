@@ -459,7 +459,10 @@ class Robot(openravepy.Robot):
 
         # Verify that the trajectory is timed.
         if traj.GetDuration() <= 0.0:
-            raise ValueError('Attempted to execute untimed trajectory.')
+            import warnings
+            warnings.warn('Executing zero-length trajectory. Please update the'
+                          ' function that produced this trajectory to return a'
+                          ' single-waypoint trajectory.', FutureWarning)
 
         # TODO: Check if this trajectory contains the base.
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
