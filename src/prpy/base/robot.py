@@ -546,7 +546,7 @@ class Robot(openravepy.Robot):
     def _PlanWrapper(self, planning_method, args, kw_args):
         config_spec = self.GetActiveConfigurationSpecification('linear')
 
-        def do_plan(is_deferred):
+        def do_plan():
             kw_args['defer'] = False
 
             # Call the planner.
@@ -571,7 +571,6 @@ class Robot(openravepy.Robot):
         # Return either the trajectory result or a future to the result.
         if kw_args.get('defer', False):
             executor = kw_args.get('executor', None)
-            return futures.defer(do_plan,
-                                 executor=executor, args=(True))
+            return futures.defer(do_plan, executor=executor)
         else:
             return do_plan(False)
