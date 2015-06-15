@@ -277,14 +277,17 @@ class Robot(openravepy.Robot):
                         'Robot "{:s}" is not in the trajectory.'.format(
                             self.GetName()))
 
-                # Extract active DOFs from teh trajectory and set them as active.
+                # Extract active DOFs from trajectory and set them as active.
                 dof_indices, _ = cspec.ExtractUsedIndices(self)
 
                 if util.HasAffineDOFs(cspec):
-                    affine_dofs = (DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
-                    
-                    # Bug in OpenRAVE ExtractUsedIndices function makes 
-                    # dof_indices = affine_dofs. Temporary workaround for that bug.
+                    affine_dofs = (DOFAffine.X |
+                                   DOFAffine.Y |
+                                   DOFAffine.RotationAxis)
+
+                    # A bug in OpenRAVE's ExtractUsedIndices() function makes
+                    # dof_indices = affine_dofs. This is a temporary
+                    # workaround for that bug.
                     dof_indices = []
                     logger.warning(
                         'Trajectory contains affine DOFs. Any regular DOFs'
@@ -312,15 +315,17 @@ class Robot(openravepy.Robot):
                     if smooth:
                         logger.warning(
                             'Post-processing smooth paths is not supported.'
-                            ' Using the default post-processing logic; this may'
-                            ' significantly change the geometric path.'
+                            ' Using the default post-processing logic; this'
+                            ' may significantly change the geometric path.'
                         )
 
-                    # The trajectory is constrained. Retime it without changing the
-                    # geometric path.
+                    # The trajectory is constrained. Retime it without
+                    # changing the geometric path.
                     if constrained:
-                        logger.debug('Retiming a constrained path. The output'
-                                     ' trajectory will stop at every waypoint.')
+                        logger.debug(
+                            'Retiming a constrained path. The output'
+                            ' trajectory will stop at every waypoint.'
+                        )
                         traj = self.retimer.RetimeTrajectory(
                             cloned_robot, path, defer=False, **retiming_options)
                     # The trajectory is not constrained, so we can shortcut it
@@ -350,7 +355,6 @@ class Robot(openravepy.Robot):
             raise ValueError('Received unexpected value "{:s}" for defer.'
                              .format(defer))
 
-
     def ExecutePath(self, path, defer=False, executor=None, **kwargs):
         """ Post-process and execute an un-timed path.
 
@@ -369,14 +373,15 @@ class Robot(openravepy.Robot):
 
         def do_execute():
             logger.info('Post-processing path with %d waypoints.',
-                path.GetNumWaypoints())
+                        path.GetNumWaypoints())
 
             with Timer() as timer:
                 traj = self.PostProcessPath(path, defer=False, **kwargs)
             SetTrajectoryTags(traj, {Tags.POSTPROCESS_TIME: timer.get_duration()}, append=True)
 
-            logger.info('Post-processing took %.3f seconds and produced a path'
-                        ' with %d waypoints and a duration of %.3f seconds.',
+            logger.info(
+                'Post-processing took %.3f seconds and produced a path with %d'
+                ' waypoints and a duration of %.3f seconds.',
                 timer.get_duration(),
                 traj.GetNumWaypoints(),
                 traj.GetDuration()
@@ -395,8 +400,8 @@ class Robot(openravepy.Robot):
             raise ValueError('Received unexpected value "{:s}" for defer.'
                              .format(str(defer)))
 
-
-    def ExecuteTrajectory(self, traj, defer=False, executor=None, timeout=None, period=0.01, **kwargs):
+    def ExecuteTrajectory(self, traj, defer=False, executor=None, timeout=None,
+                          period=0.01, **kwargs):
         """ Executes a time trajectory on the robot.
 
         This function directly executes a timed OpenRAVE trajectory on the
@@ -457,8 +462,8 @@ class Robot(openravepy.Robot):
 
         active_manipulators = self.GetTrajectoryManipulators(traj)
         active_controllers = [
-            active_manipulator.controller \
-            for active_manipulator in active_manipulators \
+            active_manipulator.controller
+            for active_manipulator in active_manipulators
             if hasattr(active_manipulator, 'controller')
         ]
 
@@ -480,8 +485,8 @@ class Robot(openravepy.Robot):
         elif defer is False:
             return do_wait()
         else:
-            raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
-
+            raise ValueError('Received unexpected value "{:s}" for defer.'
+                             .format(str(defer)))
 
     def ViolatesVelocityLimits(self, traj):
         """
@@ -510,7 +515,7 @@ class Robot(openravepy.Robot):
         for idx in range(0, num_waypoints):
 
             wpt = traj.GetWaypoint(idx)
-            
+
             if has_velocity_group:
                 # First check the velocities defined for the waypoint
                 velocities = config_spec.ExtractJointValues(wpt, self, traj_indices, 1)
