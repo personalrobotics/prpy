@@ -99,7 +99,8 @@ class Future(object):
         @returns: the result of the call wrapped by the future
         """
         with self.lock:
-            self._condition.wait(timeout)
+            if not self._is_done:
+                self._condition.wait(timeout)
 
             if not self._is_done:
                 raise TimeoutError()
@@ -129,7 +130,8 @@ class Future(object):
         @returns: the exception raised by the call, None if completed normally
         """
         with self.lock:
-            self._condition.wait(timeout)
+            if not self._is_done:
+                self._condition.wait(timeout)
 
             if not self._is_done:
                 raise TimeoutError()
