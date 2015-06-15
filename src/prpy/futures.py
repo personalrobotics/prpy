@@ -248,7 +248,7 @@ def defer(fn, executor=None, args=(), kwargs={}):
             result = fn(*args, **kwargs)
             future.set_result(result)
         except BaseException as e:
-            result.set_exception(e)
+            future.set_exception(e)
 
     # Use the specified executor or new thread to start running the function.
     if executor is not None:
