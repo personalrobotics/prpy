@@ -61,8 +61,7 @@ class MacSmoother(BasePlanner):
         # environment and/or (2) the retimer modifies the trajectory in-place.
         output_traj = CopyTrajectory(path, env=self.env)
 
-        # Remove co-linear waypoints. Some of the default OpenRAVE retimers do
-        # not perform this check internally (e.g. ParabolicTrajectoryRetimer).
+        # Remove co-linear waypoints.
         if not IsTimedTrajectory(output_traj):
             output_traj = SimplifyTrajectory(output_traj, robot)
 
