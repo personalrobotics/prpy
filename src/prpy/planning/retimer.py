@@ -32,9 +32,7 @@ import logging
 import openravepy
 from ..util import (CreatePlannerParametersString, CopyTrajectory,
                     SimplifyTrajectory, HasAffineDOFs, IsTimedTrajectory)
-from base import (BasePlanner,
-                  PlanningError,
-                  PlanningMethod,
+from base import (BasePlanner, PlanningError, PlanningMethod,
                   UnsupportedPlanningError)
 from openravepy import PlannerStatus, Planner
 
