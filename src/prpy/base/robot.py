@@ -459,8 +459,7 @@ class Robot(openravepy.Robot):
 
         # Verify that the trajectory is timed by checking whether the first
         # waypoint has a valid deltatime value.
-        cspec = traj.GetConfigurationSpecification()
-        if cspec.ExtractDeltaTime(traj.GetWaypoint(0)) is None:
+        if not util.IsTimedTrajectory(traj):
             raise ValueError('Trajectory cannot be executed, it is not timed.')
 
         # Verify that the trajectory has non-zero duration.

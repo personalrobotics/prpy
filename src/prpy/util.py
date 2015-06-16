@@ -735,3 +735,17 @@ def IsAtTrajectoryStart(robot, trajectory):
 
     # If all joints match, return True.
     return True
+
+
+def IsTimedTrajectory(trajectory):
+    """
+    Returns True if the trajectory is timed.
+
+    This function checks whether a trajectory has a valid `deltatime` group,
+    indicating that it is a timed trajectory.
+
+    @param trajectory: an OpenRAVE trajectory
+    @returns: True if the trajectory is timed, False otherwise
+    """
+    cspec = trajectory.GetConfigurationSpecification()
+    return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
