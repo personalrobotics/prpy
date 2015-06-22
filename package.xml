@@ -17,6 +17,7 @@
   <run_depend>manipulation2</run_depend>
   <run_depend>openrave</run_depend>
   <run_depend>python-scipy</run_depend>
+  <run_depend>python-termcolor</run_depend>
   <test_depend>python-nose</test_depend>
   <test_depend>unittest</test_depend>
 </package>
