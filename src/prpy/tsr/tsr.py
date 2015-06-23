@@ -25,11 +25,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# @package libherb.tsr Utilities for TSRs and TSR chains.
-
 import openravepy
 import numpy
 import numpy.random
@@ -146,7 +141,8 @@ class TSR(object):  # force new-style class
                                    SerializeTransform12Col(self.Tw_e),
                                    SerializeArray(self.Bw))
 
-    def serialize_dict(self):
+    def to_dict(self):
+        """ Convert this TSR to a python dict. """
         return {
             'T0_w': self.T0_w.tolist(),
             'Tw_e': self.Tw_e.tolist(),
@@ -156,14 +152,48 @@ class TSR(object):  # force new-style class
         }
 
     @staticmethod
-    def deserialize_dict(x):
+    def from_dict(x):
+        """ Construct a TSR from a python dict. """
         return TSR(
-            T0_w = numpy.array(x['T0_w']),
-            Tw_e = numpy.array(x['Tw_e']),
-            Bw = numpy.array(x['Bw']),
-            manip = numpy.array(x['manipindex']),
-            bodyandlink = numpy.array(x['bodyandlink'])
+            T0_w=numpy.array(x['T0_w']),
+            Tw_e=numpy.array(x['Tw_e']),
+            Bw=numpy.array(x['Bw']),
+            manip=numpy.array(x.get('manipindex', -1)),
+            bodyandlink=numpy.array(x.get('bodyandlink', 'NULL'))
         )
+
+    def to_json(self):
+        """ Convert this TSR to a JSON string. """
+        import json
+        return json.dumps(self.to_dict())
+
+    @staticmethod
+    def from_json(x, *args, **kw_args):
+        """
+        Construct a TSR from a JSON string.
+
+        This method internally forwards all arguments to `json.loads`.
+        """
+        import json
+        x_dict = json.loads(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
+
+    def to_yaml(self):
+        """ Convert this TSR to a YAML string. """
+        import yaml
+        return yaml.dumps(self.to_dict())
+
+    @staticmethod
+    def from_yaml(x, *args, **kw_args):
+        """
+        Construct a TSR from a YAML string.
+
+        This method internally forwards all arguments to `yaml.safe_load`.
+        """
+        import yaml
+        x_dict = yaml.safe_load(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
+
 
 class TSRChain(object):
 
@@ -218,27 +248,60 @@ class TSRChain(object):
                                      SerializeArray(self.mimicbodyjoints))
         return outstring
 
-    def serialize_dict(self):
+    def to_dict(self):
+        """ Construct a TSR chain from a python dict. """
         return {
             'sample_goal': self.sample_goal,
             'sample_start': self.sample_start,
             'constrain': self.constrain,
             'mimicbodyname': self.mimicbodyname,
             'mimicbodyjoints': self.mimicbodyjoints,
-            'tsrs': [ tsr.serialize_dict() for tsr in self.TSRs ],
+            'tsrs': [tsr.serialize_dict() for tsr in self.TSRs],
         }
 
-
     @staticmethod
-    def deserialize_dict(x):
+    def from_dict(x):
+        """ Construct a TSR chain from a python dict. """
         return TSRChain(
             sample_start=x['sample_start'],
             sample_goal=x['sample_goal'],
             constrain=x['constrain'],
-            TSRs=[ TSR.deserialize_dict(tsr) for tsr in x['tsrs'] ],
+            TSRs=[TSR.from_dict(tsr) for tsr in x['tsrs']],
             mimicbodyname=x['mimicbodyname'],
             mimicbodyjoints=x['mimicbodyjoints'],
         )
+
+    def to_json(self):
+        """ Convert this TSR chain to a JSON string. """
+        import json
+        return json.dumps(self.to_dict())
+
+    @staticmethod
+    def from_json(x, *args, **kw_args):
+        """
+        Construct a TSR chain from a JSON string.
+
+        This method internally forwards all arguments to `json.loads`.
+        """
+        import json
+        x_dict = json.loads(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
+
+    def to_yaml(self):
+        """ Convert this TSR chain to a YAML string. """
+        import yaml
+        return yaml.dumps(self.to_dict())
+
+    @staticmethod
+    def from_yaml(x, *args, **kw_args):
+        """
+        Construct a TSR chain from a YAML string.
+
+        This method internally forwards all arguments to `yaml.safe_load`.
+        """
+        import yaml
+        x_dict = yaml.safe_load(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
 
     def sample(self):
         if len(self.TSRs) == 0:
