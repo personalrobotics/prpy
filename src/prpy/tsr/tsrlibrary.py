@@ -81,7 +81,7 @@ class TSRLibrary(object):
         @return list of TSRChains
         """
         kinbody_name = kw_args.get('kinbody_name', None)
-        if kinbody_name is None:
+        if kinbody_name is None and kinbody is not None:
             kinbody_name = self.get_object_type(kinbody)
             logger.debug('Inferred KinBody name "%s" for TSR.', kinbody_name)
 
