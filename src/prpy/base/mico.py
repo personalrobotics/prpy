@@ -28,231 +28,71 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy, rospy
+import openravepy
 from manipulator import Manipulator
-from prpy.clone import Clone
-from .. import util
-from .. import exceptions
-from IPython import embed
 
 class Mico(Manipulator):
-    def _load_controllers(self, controllers, timeout=10):
-        from controller_manager_msgs.srv import SwitchController, ListControllers
-        """Load a list of ros_control controllers by name."""
-
-        rospy.wait_for_service('controller_manager/switch_controller', timeout=10)
-        rospy.wait_for_service('controller_manager/list_controllers', timeout=10)
-
-        switch_controllers = rospy.ServiceProxy(
-                'controller_manager/switch_controller', SwitchController)
-        list_controllers = rospy.ServiceProxy(
-                'controller_manager/list_controllers', ListControllers)
-
-        running = set([c.name for c in list_controllers().controller  if c.state == "running"])
-        controllers = set(controllers)
-        switch_controllers(list(controllers - running), list(running - controllers), 2)
-    
-    def _unload_controllers(self, controllers):
-        from controller_manager_msgs.srv import SwitchController, ListControllers
-        """Unload a list of ros_control controllers by name"""
-
-        rospy.wait_for_service('controller_manager/switch_controller')
-        rospy.wait_for_service('controller_manager/list_controllers')
-
-        switch_controllers = rospy.ServiceProxy(
-                'controller_manager/switch_controller', SwitchController)
-        list_controllers = rospy.ServiceProxy(
-                'controller_manager/list_controllers', ListControllers)
-
-        running = set([c.name for c in list_controllers().controller
-            if c.state == "running"])
-        controllers = set(controllers)
-        switch_controllers([], list(controllers & running), 2)
-
-
-    def __init__(self, sim, controller_namespace,
+    def __init__(self, sim,
                  iktype=openravepy.IkParameterization.Type.Transform6D):
         Manipulator.__init__(self)
 
         self.simulated = sim
-        # TODO: learn how to attach an ideal controller controller
-        #self.controller = self.GetRobot().AttachController(name=self.GetName(),
-            #args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
-            #dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
-       # self.controller = self.GetRobot().AttachController(name=self.GetName(),
-       #     args='MicoController {0:s} {1:s}'.format('prpy', controller_namespace),
-       #     dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
-     # Load the IK database.
+        self.iktype = iktype
+
         robot = self.GetRobot()
-        if (sim == True):
-            self.controller = self.GetRobot().AttachController(name=self.GetName(),
-            args='idealcontroller'.format('prpy', controller_namespace),
-            dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)        
-        else:
-            #self.controller = self.GetRobot().AttachController(name=self.GetName(),
-            #args='roscontroller openrave {0} 1'.format(rospy.get_namespace()),
+        env = robot.GetEnv()
 
-            self.or_physical_controller = ('roscontroller openrave {0} 1'.format(rospy.get_namespace()))
-            self.ros_controllers = [
-                "traj_controller",
-                "joint_state_controller",
-            ]
-            or_controller_string = self.or_physical_controller
-            self._load_controllers(self.ros_controllers)
-            env = robot.GetEnv()
-            with env:
-                self.controller = openravepy.RaveCreateController(env,
-                    or_controller_string)
-            m = robot.GetActiveDOFIndices()
-            c = self.controller
-            robot.SetController(c, m, 0)
+        with env:
+            dof_indices = self.GetIndices()
+            accel_limits = robot.GetDOFAccelerationLimits()
+            accel_limits[dof_indices[0:3]] = 1.2
+            accel_limits[dof_indices[3:6]] = 1.0
+            robot.SetDOFAccelerationLimits(accel_limits)
 
-    #self.hand_controller = self.GetRobot().AttachController(name=self.GetRobot().GetName(),
-            #args='MicoHandController {0:s} {1:s}'.format('prpy', '/mico_hand_controller'),
-            #dof_indices=self.GetGripperIndices(), affine_dofs=0, simulated=sim)
-
-   
-
-        '''
+        # Load or_nlopt_ik as the IK solver. Unfortunately, IKFast doesn't work
+        # on the Mico.
         if iktype is not None:
-            with robot:
-                self.SetActive()
-                self.ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot, iktype=iktype)
-                if not self.ikmodel.load():
-                    self.ikmodel.autogenerate()
-    '''
-        # Enable servo motions in simulation mode.
-        from prpy.simulation import ServoSimulator
-        self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)
+            self.iksolver = openravepy.RaveCreateIkSolver(env, 'NloptIK')
+            self.SetIKSolver(self.iksolver)
+
+        # Load simulation controllers.
+        if sim:
+            from prpy.simulation import ServoSimulator
+
+            self.controller = robot.AttachController(
+                self.GetName(), '', self.GetArmIndices(), 0, True)
+            self.servo_simulator = ServoSimulator(self, rate=20,
+                                                  watchdog_timeout=0.1)
 
     def CloneBindings(self, parent):
-        self.__init__(True, None)
+        super(Mico, self).CloneBindings(parent)
 
-    def PlanToNamedConfiguration(self, name, execute=True, **kw_args):
+        self.simulated = True
+        self.iktype = parent.iktype
+
+        self.servo_simulator = None
+
+        # TODO: This is broken on nlopt_ik
         """
-        Plan this arm to saved configuration stored in robot.configurations by
-        ignoring any other DOFs specified in the named configuration.
-        @param name name of a saved configuration
-        @param **kw_args optional arguments passed to PlanToConfiguration
-        @returns traj trajectory
+        if parent.iktype is not None:
+            self.iksolver = openravepy.RaveCreateIkSolver(env, 'NloptIK')
+            self.SetIKSolver(self.iksolver)
         """
-        robot = self.GetRobot()
-        saved_dof_indices, saved_dof_values = robot.configurations.get_configuration(name)
 
-        with Clone(robot.GetEnv()) as cloned_env:
-            cloned_env.Cloned(self).SetActive()
-            cloned_robot = cloned_env.Cloned(robot)
-
-            arm_dof_indices = cloned_robot.GetActiveDOFIndices()
-            arm_dof_values = cloned_robot.GetActiveDOFValues()
-
-            for arm_dof_index, arm_dof_value in zip(saved_dof_indices, saved_dof_values):
-                if arm_dof_index in arm_dof_indices:
-                    i = list(arm_dof_indices).index(arm_dof_index)
-                    arm_dof_values[i] = arm_dof_value
-
-            traj = cloned_robot.PlanToConfiguration(arm_dof_values, execute=False, **kw_args)
-
-            # Copy the trajectory back to the original environment.
-            from ..util import CopyTrajectory
-            live_traj = CopyTrajectory(traj, env=robot.GetEnv())
-
-        if execute:
-            return robot.ExecuteTrajectory(live_traj, **kw_args)
-        else:
-            return live_traj
-
-    def SetStiffness(manipulator, stiffness):
-        """
-        Set the Mico's stiffness. This enables or disables gravity compensation.
-        Values between 0 and 1 are experimental.
-        @param stiffness value between 0.0 and 1.0
-        """
-        if not (0 <= stiffness <= 1):
-            raise Exception('Stiffness must in the range [0, 1]; got %f.' % stiffness)
-
-        if not manipulator.simulated:
-            manipulator.controller.SendCommand('SetStiffness {0:f}'.format(stiffness))
-
-    def Servo(manipulator, velocities):
+    def Servo(self, velocities):
         """
         Servo with an instantaneous vector of joint velocities.
         @param velocities instantaneous joint velocities in radians per second
         """
-        num_dof = len(manipulator.GetArmIndices())
+        num_dof = len(self.GetArmIndices())
+
         if len(velocities) != num_dof:
-            raise ValueError('Incorrect number of joint velocities. Expected {0:d}; got {0:d}.'.format(
-                             num_dof, len(velocities)))
+            raise ValueError(
+                'Incorrect number of joint velocities.'
+                ' Expected {:d}; got {:d}.'.format(num_dof, len(velocities)))
 
-        if not manipulator.simulated:
-            manipulator.controller.SendCommand('Servo ' + ' '.join([ str(qdot) for qdot in velocities ]))
+        if self.simulated:
+            self.GetRobot().GetController().Reset(0)
+            self.servo_simulator.SetVelocity(velocities)
         else:
-            manipulator.controller.Reset(0)
-            manipulator.servo_simulator.SetVelocity(velocities)
-
-    def ServoTo(manipulator, target, duration, timeStep = 0.05, collisionChecking= True):
-        """
-        Servo's the Mico to the target taking the duration passed to it
-        @param target desired joint angles
-        @param duration duration in seconds
-        @param timestep period of the control loop
-        @param collisionchecking check collisions in the simulation environment
-        """
-        steps = int(math.ceil(duration/timeStep))
-        original_dofs = manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices())
-        velocity = numpy.array(target-manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices()))
-        velocities = v/steps#[v/steps for v in velocity]
-        inCollision = False 
-        if collisionChecking==True:
-            inCollision = manipulator.CollisionCheck(target)
-        if inCollision == False:       
-            for i in range(1,steps):
-                manipulator.Servo(velocities)
-                time.sleep(timeStep)
-            manipulator.Servo([0] * len(manipulator.GetArmIndices()))
-            new_dofs = manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices())
-            return True
-        return False
-
-    def SetVelocityLimits(self, velocity_limits, min_accel_time,
-                          openrave=True, owd=True):
-        """
-        Change the OpenRAVE and OWD joint velocity limits. Joint velocities
-        that exceed these limits will trigger a velocity fault.
-        @param velocity_limits vector of joint velocity limits in radians per second
-        @param min_accel_time minimum acceleration time used to compute acceleration limits
-        @param openrave flag to set the OpenRAVE velocity limits
-        @param owd flag to set the OWD velocity limits
-        """
-        # Update the OpenRAVE limits.
-        if openrave:
-            Manipulator.SetVelocityLimits(self, velocity_limits, min_accel_time)
-
-        # Update the OWD limits.
-        if owd and not self.simulated:
-            args  = [ 'SetSpeed' ]
-            args += [ str(min_accel_time) ]
-            args += [ str(velocity) for velocity in velocity_limits ]
-            args_str = ' '.join(args)
-            self.controller.SendCommand(args_str)
-
-    def GetTrajectoryStatus(manipulator):
-        """
-        Gets the status of the current (or previous) trajectory executed by the
-        controller.
-        @return status of the current (or previous) trajectory executed
-        """
-        if not manipulator.simulated:
-            return manipulator.controller.SendCommand('GetStatus')
-        else:
-            if manipulator.controller.IsDone():
-                return 'done'
-            else:
-                return 'active'
-
-    def ClearTrajectoryStatus(manipulator):
-        """
-        Clears the current trajectory execution status.
-        """
-        if not manipulator.simulated:
-            manipulator.controller.SendCommand('ClearStatus')
+            raise NotImplementedError('Servo is not implemented.') 

@@ -28,7 +28,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy
+import numpy
+import openravepy
 from manipulator import Manipulator
 from prpy.clone import Clone
 from .. import util
@@ -40,27 +41,42 @@ class WAM(Manipulator):
         Manipulator.__init__(self)
 
         self.simulated = sim
-        self.controller = self.GetRobot().AttachController(name=self.GetName(),
-            args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
-            dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim)
+        self._iktype = iktype
 
-        # Load the IK database.
-        robot = self.GetRobot()
         if iktype is not None:
-            from openravepy.databases.inversekinematics import InverseKinematicsModel
-            self.ikmodel = InverseKinematicsModel(robot=robot, manip=self, iktype=iktype)
-            if not self.ikmodel.load():
-                self.ikmodel.generate(iktype=iktype, precision=4,
-                                      freeindices=[ self.GetIndices()[2] ])
-                self.ikmodel.save()
+            self._SetupIK(iktype)
 
         # Enable servo motions in simulation mode.
+        self.controller = self.GetRobot().AttachController(name=self.GetName(),
+            args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
+            dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim
+        )
+
         if sim:
             from prpy.simulation import ServoSimulator
-            self.servo_simulator = ServoSimulator(self, rate=20, watchdog_timeout=0.1)
+            self.servo_simulator = ServoSimulator(
+                    self, rate=20, watchdog_timeout=0.1)
 
     def CloneBindings(self, parent):
-        self.__init__(True, None)
+        Manipulator.CloneBindings(self, parent)
+
+        self.simulated = True
+        self.controller = None
+        self._iktype = parent._iktype
+
+        if self._iktype is not None:
+            self._SetupIK(self._iktype)
+
+    def _SetupIK(self, iktype):
+        from openravepy.databases.inversekinematics import InverseKinematicsModel
+
+        robot = self.GetRobot()
+        self.ikmodel = InverseKinematicsModel(robot=robot, manip=self,
+                                              iktype=iktype)
+        if not self.ikmodel.load():
+            self.ikmodel.generate(iktype=iktype, precision=4,
+                                  freeindices=[ self.GetIndices()[2] ])
+            self.ikmodel.save()
 
     def SetStiffness(manipulator, stiffness):
         """Set the WAM's stiffness.

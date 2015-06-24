@@ -54,7 +54,6 @@ def initialize_logging():
     # Remove all of the existing handlers.
     base_logger = logging.getLogger()
     for handler in base_logger.handlers:
-        print 'REMOVING', handler
         base_logger.removeHandler(handler)
 
     # Add the custom handler.
@@ -72,7 +71,11 @@ def initialize_logging():
         logging.warning('Install termcolor to colorize log messages.')
 
     # Disable spammy and ROS loggers.
-    spammy_logger_names = [ 'rospy.topics', 'openravepy.databases.inversekinematics' ]
+    spammy_logger_names = [
+        'rospy.topics',
+        'openravepy.inversekinematics',
+        'openravepy.databases.inversekinematics',
+    ]
     for spammy_logger_name in spammy_logger_names:
         spammy_logger = logging.getLogger(spammy_logger_name)
         spammy_logger.setLevel(logging.WARNING)

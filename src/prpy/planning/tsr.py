@@ -32,17 +32,34 @@ import time
 import itertools
 import numpy
 import openravepy
-from base import BasePlanner, PlanningMethod, PlanningError
+from base import (BasePlanner, PlanningMethod, PlanningError,
+                  UnsupportedPlanningError)
 
-logger = logging.getLogger('prpy.planning.tsr')
+logger = logging.getLogger(__name__)
 
 
 class TSRPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, delegate_planner=None):
         super(TSRPlanner, self).__init__()
+        self.delegate_planner = delegate_planner
 
     def __str__(self):
-        return 'TSRPlanner'
+        if self.delegate_planner is not None:
+            return 'TSRPlanner({:s})'.format(str(self.delegate_planner))
+        else:
+            return 'TSRPlanner'
+
+    # TODO: Temporarily disabled based on Pras' feedback.
+    """
+    @PlanningMethod
+    def PlanToIK(self, robot, goal_pose, **kw_args):
+        from ..tsr import TSR, TSRChain
+
+        tsr = TSR(T0_w=goal_pose, Tw_e=numpy.eye(4), Bw=numpy.zeros((6,2)))
+        tsr_chain = TSRChain(sample_goal=True, TSR=tsr)
+
+        return self.PlanToTSR(robot, [tsr_chain], **kw_args)
+    """
 
     @PlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=2.0,
@@ -51,7 +68,8 @@ class TSRPlanner(BasePlanner):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
         samples a fixed number of goals from the specified TSRs up-front, then
-        uses robot.planner.PlanToIK to attempt to plan to the resulting affine
+        uses another planner's PlanToConfiguration (chunk_size = 1) or
+        PlanToConfigurations (chunk_size > 1) to plan to the resulting affine
         transformations.
 
         This planner will return failure if the provided TSR chains require
@@ -67,6 +85,9 @@ class TSRPlanner(BasePlanner):
                              that can be considered a valid sample.
         @return traj a trajectory that satisfies the specified TSR chains
         """
+        # Delegate to robot.planner by default.
+        delegate_planner = self.delegate_planner or robot.planner
+
         # Plan using the active manipulator.
         with robot.GetEnv():
             manipulator = robot.GetActiveManipulator()
@@ -80,7 +101,7 @@ class TSRPlanner(BasePlanner):
         # Test for tsrchains that cannot be handled.
         for tsrchain in tsrchains:
             if tsrchain.sample_start or tsrchain.constrain:
-                raise PlanningError(
+                raise UnsupportedPlanningError(
                     'Cannot handle start or trajectory-wide TSR constraints.')
         tsrchains = [t for t in tsrchains if t.sample_goal]
 
@@ -101,7 +122,9 @@ class TSRPlanner(BasePlanner):
             ik_param = IkParameterization(
                 tsrchain.sample(), IkParameterizationType.Transform6D)
             ik_solution = manipulator.FindIKSolutions(
-                ik_param, IkFilterOptions.CheckEnvCollisions)
+                ik_param, IkFilterOptions.CheckEnvCollisions,
+                ikreturn=False, releasegil=True
+            )
             if ik_solution.shape[0] > 0:
                 ik_solutions.append(ik_solution)
 
@@ -138,11 +161,11 @@ class TSRPlanner(BasePlanner):
             for i, ik_set in ik_set_list:
                 try:
                     if ik_set.shape[0] > 1:
-                        traj = robot.planner.PlanToConfigurations(
-                            robot, ik_set)
+                        traj = delegate_planner.PlanToConfigurations(
+                            robot, ik_set, **kw_args)
                     else:
-                        traj = robot.planner.PlanToConfiguration(
-                            robot, ik_set[0])
+                        traj = delegate_planner.PlanToConfiguration(
+                            robot, ik_set[0], **kw_args)
 
                     logger.info('Planned to IK solution set %d of %d.',
                                 i + 1, num_attempts)

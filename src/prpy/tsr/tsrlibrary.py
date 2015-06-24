@@ -31,7 +31,8 @@
 # -*- coding: utf-8 -*-
 import collections, functools, logging, numpy, os.path
 
-logger = logging.getLogger('tsr')
+logger = logging.getLogger(__name__)
+
 
 class TSRFactory(object):
     

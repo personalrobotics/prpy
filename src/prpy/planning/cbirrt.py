@@ -29,7 +29,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import copy, logging, numpy, openravepy, os, tempfile
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from ..util import SetTrajectoryTags
+from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
+                  PlanningMethod, Tags)
 import prpy.kin, prpy.tsr
 
 class CBiRRTPlanner(BasePlanner):
@@ -54,7 +56,6 @@ class CBiRRTPlanner(BasePlanner):
         @return traj output path
         """
         return self.Plan(robot, jointgoals=goals, smoothingitrs=0, **kw_args)
-
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
@@ -93,6 +94,8 @@ class CBiRRTPlanner(BasePlanner):
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
+        direction = numpy.array(direction, dtype=float)
+
         if direction.shape != (3,):
             raise ValueError('Direction must be a three-dimensional vector.')
         if not (distance >= 0):
@@ -177,6 +180,12 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
+        from openravepy import CollisionOptions, CollisionOptionsStateSaver
+
+        # TODO We may need this work-around because CBiRRT doesn't like it when
+        # an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
+        #self.ClearIkSolver(robot.GetActiveManipulator())
+
         self.env.LoadProblem(self.problem, robot.GetName())
 
         args = [ 'RunCBiRRT' ]
@@ -243,7 +252,10 @@ class CBiRRTPlanner(BasePlanner):
         args += [ 'filename', traj_path ]
         args_str = ' '.join(args)
 
-        response = self.problem.SendCommand(args_str, True)
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+            response = self.problem.SendCommand(args_str, True)
+
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response)
          
@@ -253,15 +265,29 @@ class CBiRRTPlanner(BasePlanner):
             traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
 
+        # Tag the trajectory as constrained if a constraint TSR is present.
+        if (tsr_chains is not None
+                and any(tsr_chain.constrain for tsr_chain in tsr_chains)):
+            SetTrajectoryTags(traj, {Tags.CONSTRAINED: True}, append=True)
+
         # Strip extraneous groups from the output trajectory.
         # TODO: Where are these groups coming from!?
-        cspec = robot.GetActiveConfigurationSpecification()
+        cspec = robot.GetActiveConfigurationSpecification('linear')
         openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
 
         return traj
+
+    def ClearIkSolver(self, manip):
+        manip.SetIkSolver(None)
+        manip.SetLocalToolTransform(manip.GetLocalToolTransform())
+        manip.SetIkSolver(None)
+        if manip.GetIkSolver() is not None:
+            raise ValueError('Unable to clear IkSolver')
+
 
     @staticmethod
     def serialize_dof_values(dof_values):
         return [ str(len(dof_values)), 
                  ' '.join([ str(x) for x in dof_values]) ]
 
+   

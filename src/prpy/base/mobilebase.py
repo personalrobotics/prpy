@@ -31,7 +31,6 @@
 import copy, functools, numpy, openravepy
 from .. import bind
 from prpy.clone import Clone
-from ..planning.retimer import OpenRAVEAffineRetimer
 
 def create_affine_trajectory(robot, poses):
     doft = openravepy.DOFAffine.X | openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis
@@ -50,8 +49,6 @@ class MobileBase(object):
     def __init__(self, sim, robot):
         self.simulated = sim
         self.robot = robot
-
-        self.retimer = OpenRAVEAffineRetimer()
 
     def __dir__(self):
         # Add planning methods to the tab-completion list.
@@ -95,11 +92,11 @@ class MobileBase(object):
                 offset_pose[0:3, 3] = meters * direction
                 goal_pose = numpy.dot(start_pose, offset_pose)
 
-            traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
+            path = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
             if execute:
-                return self.robot.ExecuteTrajectory(traj, **kw_args)
+                return self.robot.ExecutePath(path, **kw_args)
             else:
-                return traj
+                return path
         else:
             raise NotImplementedError('DriveForward is not implemented')
 
@@ -116,11 +113,11 @@ class MobileBase(object):
             relative_pose = openravepy.matrixFromAxisAngle([ 0., 0., angle_rad ])
             goal_pose = numpy.dot(start_pose, relative_pose)
 
-            traj = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
+            path = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
             if execute:
-                return self.robot.ExecuteTrajectory(traj, **kw_args)
+                return self.robot.ExecutePath(path, **kw_args)
             else:
-                return traj
+                return path
         else:
             raise NotImplementedError('Rotate is not implemented')
 
@@ -147,6 +144,7 @@ class MobileBase(object):
             raise NotImplementedError('DriveStraightUntilForce is not implemented')
 
     def _BasePlanWrapper(self, planning_method, args, kw_args):
+
         robot = self.robot
         with Clone(robot.GetEnv()) as cloned_env:
             cloned_robot = cloned_env.Cloned(robot)
@@ -158,7 +156,6 @@ class MobileBase(object):
             )
             cloned_traj = planning_method(cloned_robot, *args, **kw_args)
 
-            # Strip inactive DOFs from the trajectory
             config_spec = cloned_robot.GetActiveConfigurationSpecification()
             openravepy.planningutils.ConvertTrajectorySpecification(
                 cloned_traj, config_spec
@@ -170,41 +167,7 @@ class MobileBase(object):
 
             # Optionally execute the trajectory.
             if 'execute' not in kw_args or kw_args['execute']:
-                return self.ExecuteBasePath(traj, **kw_args)
+                return self.robot.ExecutePath(traj, **kw_args)
             else:
                 return traj
-
-    def ExecuteBasePath(self, path, defer=False, **kwargs):
-
-        def do_execute(path, **kwargs):
-            robot = self.robot
-            with Clone(robot.GetEnv()) as cloned_env:
-
-                cloned_robot = cloned_env.Cloned(robot)
-                cloned_robot.SetActiveDOFs(
-                    [],
-                    affine=(openravepy.DOFAffine.X |
-                            openravepy.DOFAffine.Y |
-                            openravepy.DOFAffine.RotationAxis)
-                    )
-
-                cloned_timed_traj = self.retimer.RetimeTrajectory(cloned_robot, path, defer=False, **kwargs)
-
-                # Copy the trajectory back to the original environment.
-                from ..util import CopyTrajectory
-                timed_traj = CopyTrajectory(cloned_timed_traj, env=robot.GetEnv())
-
-            return robot.ExecuteTrajectory(timed_traj, defer=False, **kwargs)
-
-        if defer:
-            from trollius.executor import get_default_executor
-            from trollius.futures import wrap_future
-
-            executor = kwargs.get('executor') or get_default_executor()
-            return wrap_future(
-                executor.submit(do_execute,
-                    path, **kwargs
-                )
-            )
-        else:
-            return do_execute(path, **kwargs)
+    

@@ -65,6 +65,8 @@ Additionally, PrPy provides several simple planners of its own:
   workspace trajectories
 - `SnapPlanner`: attempts to execute a straight-line joint-space trajectory to
   the goal
+- `GreedyIKPlanner`: follows a workspace path by greedily picking IK solutions
+- `VectorFieldPlanner`: follows any custom cspace vector field until a custom termination
 
 Finally, PrPy provides several meta-planners for combining the above
 planners:
@@ -413,6 +415,9 @@ object is referenced.
 
 See the classes in `prpy.base` for example implementations of `CloneBindings`.
 
+## Dependencies
+To run prpy, you will need to have installed the pacakge enum34. To do that, go to a local directory and run 
+``sudo pip install enum34``
 
 ## License
 

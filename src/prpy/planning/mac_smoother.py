@@ -28,9 +28,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from ..util import CopyTrajectory, SimplifyTrajectory
-from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
-from openravepy import Planner, PlannerStatus, RaveCreatePlanner, openrave_exception
+from ..util import (CopyTrajectory, SimplifyTrajectory, SetTrajectoryTags,
+                    IsTimedTrajectory)
+from base import (BasePlanner, PlanningError, PlanningMethod,
+                  UnsupportedPlanningError, Tags)
+from openravepy import (Planner, PlannerStatus, RaveCreatePlanner,
+                        openrave_exception)
 
 
 class MacSmoother(BasePlanner):
@@ -43,7 +46,7 @@ class MacSmoother(BasePlanner):
                 'Unable to create PrSplineMacBlender planner. Is or_pr_spline'
                 ' installed and in your OPENRAVE_PLUGIN path?'
             )
-            
+
         self.retimer = RaveCreatePlanner(self.env, 'PrSplineMacTimer')
         if self.retimer is None:
             raise UnsupportedPlanningError(
@@ -57,7 +60,10 @@ class MacSmoother(BasePlanner):
         # necessary for two reasons: (1) the input trajectory may be in another
         # environment and/or (2) the retimer modifies the trajectory in-place.
         output_traj = CopyTrajectory(path, env=self.env)
-        output_traj = SimplifyTrajectory(output_traj, robot)
+
+        # Remove co-linear waypoints.
+        if not IsTimedTrajectory(output_traj):
+            output_traj = SimplifyTrajectory(output_traj, robot)
 
         # Blend the piecewise-linear input trajectory. The blender outputs a
         # collision-free path, consisting of piecewise-linear segments and
@@ -84,5 +90,6 @@ class MacSmoother(BasePlanner):
         except openrave_exception as e:
             raise PlanningError('Timing trajectory failed: ' + str(e))
 
+        SetTrajectoryTags(output_traj, {Tags.SMOOTH: True}, append=True)
         return output_traj
 

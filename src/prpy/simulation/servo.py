@@ -33,6 +33,7 @@ import atexit, logging, numpy, openravepy, threading, time
 class ServoSimulator(object):
     def __init__(self, manip, rate, watchdog_timeout):
         self.manip = manip
+
         # enabling threading and the following lines causes robot (and hence 
         # the environment) to not be garbage collected. It seems that threading
         # somehow blocks self.robot from being garbage collected
@@ -80,17 +81,17 @@ class ServoSimulator(object):
 
     def Step(self):
         while True:
+            start_time = time.time()
             with self.mutex:
                 # Copy the velocity for thread safety.
                 q_dot = self.q_dot.copy()
                 running = self.running
 
                 # Stop servoing when the watchdog times out.
-                now = time.time()
-                if running and now - self.watchdog > self.watchdog_timeout:
+                if running and start_time - self.watchdog > self.watchdog_timeout:
                     self.q_dot = numpy.zeros(self.num_dofs)
                     self.running = False
-                    logging.warning('Servo motion timed out in %.3f seconds.', now - self.watchdog)
+                    logging.warning('Servo motion timed out in %.3f seconds.', start_time - self.watchdog)
 
             if running:
                 env = self.manip.GetRobot().GetEnv()
@@ -121,7 +122,6 @@ class ServoSimulator(object):
                     else:
                         self.running = False 
                         logging.warning('Servo motion hit a joint limit.')
-
-            if self.event.wait(self.period):
+            if self.event.wait(max(self.period - (time.time()-start_time), 0.)):
                 break
 

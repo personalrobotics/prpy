@@ -29,11 +29,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging, numpy, openravepy, os, tempfile
-from ..util import CopyTrajectory
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
-from openravepy import PlannerStatus 
+from ..util import CopyTrajectory, SetTrajectoryTags
+from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
+                  PlanningMethod, Tags)
+from openravepy import PlannerStatus
 
-logger = logging.getLogger('pypy.planning.ompl')
+logger = logging.getLogger(__name__)
+
 
 class OMPLPlanner(BasePlanner):
     def __init__(self, algorithm='RRTConnect'):
@@ -42,10 +44,12 @@ class OMPLPlanner(BasePlanner):
         self.setup = False
         self.algorithm = algorithm
 
-        try:
-            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_' + algorithm)
-        except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create OMPL planner.')
+        planner_name = 'OMPL_{:s}'.format(algorithm)
+        self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
+
+        if self.planner is None:
+            raise UnsupportedPlanningError(
+                'Unable to create "{:s}" planner.'.format(planner_name))
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
@@ -117,6 +121,7 @@ class OMPLPlanner(BasePlanner):
             
         return self._Plan(robot, formatted_extra_params=extraParams, **kw_args)
 
+
 class RRTConnect(OMPLPlanner):
     def __init__(self):
         OMPLPlanner.__init__(self, algorithm='RRTConnect')
@@ -184,10 +189,12 @@ class OMPLSimplifier(BasePlanner):
     def __init__(self):
         super(OMPLSimplifier, self).__init__()
 
-        try:
-            self.planner = openravepy.RaveCreatePlanner(self.env, 'OMPL_Simplifier')
-        except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create OMPL planner.')
+        planner_name = 'OMPL_Simplifier'
+        self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
+
+        if self.planner is None:
+            raise UnsupportedPlanningError(
+                'Unable to create OMPL_Simplifier planner.')
 
     def __str__(self):
         return 'OMPL Simplifier'
@@ -214,4 +221,5 @@ class OMPLSimplifier(BasePlanner):
             raise PlanningError('Simplifier returned with status {0:s}.'.format(
                                 str(status)))
 
+        SetTrajectoryTags(output_path, {Tags.SMOOTH: True}, append=True)
         return output_path

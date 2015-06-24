@@ -29,19 +29,21 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import functools, logging, openravepy, numpy
-from .. import bind, named_config, planning, util
-import prpy.util
+from .. import bind, named_config, exceptions, util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
-from ..planning.base import Sequence 
+from ..planning.base import Sequence, Tags
 from ..planning.ompl import OMPLSimplifier
-from ..planning.retimer import ParabolicRetimer, ParabolicSmoother
+from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
+from ..util import SetTrajectoryTags
 
-logger = logging.getLogger('robot')
+logger = logging.getLogger(__name__)
+
 
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
+        self.actions = None
         self.planner = None
         self.robot_name = robot_name
 
@@ -66,53 +68,76 @@ class Robot(openravepy.Robot):
         # Path post-processing for execution. This includes simplification of
         # the geometric path, retiming a path into a trajectory, and smoothing
         # (joint simplificaiton and retiming).
-        self.simplifier = OMPLSimplifier()
+        self.simplifier = None
         self.retimer = ParabolicRetimer()
         self.smoother = Sequence(
-            ParabolicSmoother(),
+            HauserParabolicSmoother(),
             self.retimer
         )
+        self.affine_retimer = OpenRAVEAffineRetimer()
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
-        # Add planning methods to the tab-completion list.
+        # Add planning and action methods to the tab-completion list.
         method_names = set(self.__dict__.keys())
-        method_names.update(self.planner.get_planning_method_names())
+
+        if hasattr(self, 'planner') and self.planner is not None:
+            method_names.update(self.planner.get_planning_method_names())
+        if hasattr(self, 'actions') and self.actions is not None:
+            method_names.update(self.actions.get_actions())
+
         return list(method_names)
 
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
-        delegate_method = getattr(self.planner, name)
 
-        # Resolve planner calls through the robot.planner field.
-        if self.planner.has_planning_method(name):
+        if (hasattr(self, 'planner') and self.planner is not None
+            and self.planner.has_planning_method(name)):
+
+            delegate_method = getattr(self.planner, name)
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
+        elif (hasattr(self, 'actions') and self.actions is not None
+              and self.actions.has_action(name)):
+
+            delegate_method = self.actions.get_action(name)
+            @functools.wraps(delegate_method)
+            def wrapper_method(obj, *args, **kw_args):
+                return delegate_method(self, obj, *args, **kw_args)
+            return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
 
     def CloneBindings(self, parent):
-        Robot.__init__(self, parent.robot_name)
         self.planner = parent.planner
-        self.manipulators = [Cloned(manipulator, into=self.GetEnv())
-                             for manipulator in parent.manipulators]
+
+        # TODO: This is a bit of a mess. We need to clean this up when we
+        # finish the smoothing refactor.
+        self.simplifier = parent.simplifier
+        self.retimer = parent.retimer
+        self.smoother = parent.smoother
+
+        self.robot_name = parent.robot_name
+        self.tsrlibrary = parent.tsrlibrary
         self.configurations = parent.configurations
 
-        self.multicontroller = openravepy.RaveCreateMultiController(self.GetEnv(), '')
-        self.SetController(self.multicontroller)
+        self.controllers = []
+        self.SetController(None)
 
+        self.manipulators = [Cloned(manipulator, into=self.GetEnv())
+                             for manipulator in parent.manipulators]
+
+        # TODO: Do we really need this in cloned environments?
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
-        self.ompl_simplifier = OMPLSimplifier()
-
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
@@ -120,7 +145,9 @@ class Robot(openravepy.Robot):
         simulated is False, a controller is created using 'args' and is attached
         to the multicontroller. In simulation mode an IdealController is
         created instead. Regardless of the simulation mode, the multicontroller
-        must be finalized before use.  @param name user-readable name used to identify this controller
+        must be finalized before use.
+
+        @param name user-readable name used to identify this controller
         @param args real controller arguments
         @param dof_indices controlled joint DOFs
         @param affine_dofs controleld affine DOFs
@@ -158,67 +185,312 @@ class Robot(openravepy.Robot):
 
         return active_manipulators
 
-    def ExecutePath(self, path, simplify=True, smooth=True, defer=False,
-                    timeout=1., **kwargs):
+    def PostProcessPath(self, path, defer=False, executor=None,
+                        constrained=None, smooth=None, default_timelimit=0.5,
+                        shortcut_options=None, smoothing_options=None,
+                        retiming_options=None, affine_retiming_options=None,
+                        **kwargs):
+        """ Post-process a geometric path to prepare it for execution.
 
-        logger.debug('Begin ExecutePath')
+        This method post-processes a geometric path by (optionally) optimizing
+        it and timing it. Four different post-processing pipelines are used:
 
-        def do_execute(path, simplify, smooth, timeout, **kwargs):
+        1. For base trajectories (i..e affine DOFs), we time the trajectory
+           using self.affine_retimer. This function does not currently support
+           trajectories that contain both regular and affine DOFs.
+        2. For constrained trajectories, we do not modify the geometric path
+           and retime the path to be time-optimal via self.retimer. This
+           trajectory must stop at every waypoint. The only exception is for...
+        3. For smooth trajectories, we attempt to fit a time-optimal smooth
+           curve through the waypoints (not implemented). If this curve is
+           not collision free, then we fall back on...
+        4. By default, we run a smoother that jointly times and smooths the
+           path via self.smoother. This algorithm can change the geometric path to
+           optimize runtime.
 
+        The behavior in (2) and (3) can be forced by passing constrained=True
+        or smooth=True. By default, the case is inferred by the tag(s) attached
+        to the trajectory: (1) is triggered by the CONSTRAINED tag and (2) is
+        tiggered by the SMOOTH tag.
+
+        Options an be passed to each post-processing routine using the
+        affine_retiming_options, shortcut_options, smoothing_options, and
+        retiming_options **kwargs dictionaries. If no "timelimit" is specified
+        in any of these dictionaries, it defaults to default_timelimit seconds.
+
+        @param path un-timed OpenRAVE trajectory
+        @param defer return immediately with a future trajectory
+        @param executor executor to use when defer = True
+        @param constrained the path is constrained; do not change it
+        @param smooth the path is smooth; attempt to execute it directly
+        @param default_timelimit timelimit for all operations, if not set
+        @param shortcut_options kwargs to self.simplifier
+        @param smoothing_options kwargs to self.smoother
+        @param retiming_options kwargs to self.retimer
+        @param affine_retiming_options kwargs to self.affine_retimer
+        @return trajectory ready for execution
+        """
+        from ..planning.base import Tags
+        from ..util import GetTrajectoryTags, CopyTrajectory
+        from openravepy import DOFAffine
+
+        # Default parameters.
+        if shortcut_options is None:
+            shortcut_options = dict()
+        if smoothing_options is None:
+            smoothing_options = dict()
+        if retiming_options is None:
+            retiming_options = dict()
+        if affine_retiming_options is None:
+            affine_retimer_options = dict()
+
+        shortcut_options.setdefault('timelimit', default_timelimit)
+        smoothing_options.setdefault('timelimit', default_timelimit)
+        retiming_options.setdefault('timelimit', default_timelimit)
+        affine_retimer_options.setdefault('timelimit', default_timelimit)
+
+        # Read default parameters from the trajectory's tags.
+        tags = GetTrajectoryTags(path)
+
+        if constrained is None:
+            constrained = tags.get(Tags.CONSTRAINED, False)
+            logger.debug('Detected "%s" tag on trajectory: Setting'
+                         ' constrained = True.', Tags.CONSTRAINED)
+
+        if smooth is None:
+            smooth = tags.get(Tags.SMOOTH, False)
+            logger.debug('Detected "%s" tag on trajectory: Setting smooth'
+                         ' = True', Tags.SMOOTH)
+
+        def do_postprocess():
             with Clone(self.GetEnv()) as cloned_env:
-                traj_dofs = util.GetTrajectoryIndices(path)
-                cloned_env.Cloned(self).SetActiveDOFs(traj_dofs)
                 cloned_robot = cloned_env.Cloned(self)
 
-                if simplify:
-                    path = self.simplifier.ShortcutPath(cloned_robot, path, defer=False,
-                                                        timeout=timeout, **kwargs)
+                # Planners only operate on the active DOFs. We'll set any DOFs
+                # in the trajectory as active.
+                env = path.GetEnv()
+                cspec = path.GetConfigurationSpecification()
 
-                retimer = self.smoother if smooth else self.retimer
-                cloned_timed_traj = retimer.RetimeTrajectory(cloned_robot, path, defer=False, **kwargs)
+                used_bodies = cspec.ExtractUsedBodies(env)
+                if self not in used_bodies:
+                    raise ValueError(
+                        'Robot "{:s}" is not in the trajectory.'.format(
+                            self.GetName()))
 
-                # Copy the trajectory back to the original environment.
-                from ..util import CopyTrajectory
-                timed_traj = CopyTrajectory(cloned_timed_traj, env=self.GetEnv())
+                # Extract active DOFs from teh trajectory and set them as active.
+                dof_indices, _ = cspec.ExtractUsedIndices(self)
 
-            return self.ExecuteTrajectory(timed_traj, defer=False, **kwargs)
+                if util.HasAffineDOFs(cspec):
+                    affine_dofs = (DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
+                    
+                    # Bug in OpenRAVE ExtractUsedIndices function makes 
+                    # dof_indices = affine_dofs. Temporary workaround for that bug.
+                    dof_indices = []
+                    logger.warning(
+                        'Trajectory contains affine DOFs. Any regular DOFs'
+                        ' will be ignored.'
+                    )
+                else:
+                    affine_dofs = 0
 
-        if defer:
+                cloned_robot.SetActiveDOFs(dof_indices, affine_dofs)
+                logger.debug(
+                    'Setting robot "%s" DOFs %s (affine? %d) as active for'
+                    ' post-processing.',
+                    cloned_robot.GetName(), list(dof_indices), affine_dofs
+                )
+
+                if len(dof_indices) and affine_dofs:
+                    raise ValueError(
+                        'Trajectory contains both affine and regular DOFs.')
+                # Special case for timing affine-only trajectories.
+                elif affine_dofs:
+                    traj = self.affine_retimer.RetimeTrajectory(
+                        cloned_robot, path, defer=False, **affine_retimer_options)
+                else:
+                    # Directly compute a timing of smooth trajectories.
+                    if smooth:
+                        logger.warning(
+                            'Post-processing smooth paths is not supported.'
+                            ' Using the default post-processing logic; this may'
+                            ' significantly change the geometric path.'
+                        )
+
+                    # The trajectory is constrained. Retime it without changing the
+                    # geometric path.
+                    if constrained:
+                        logger.debug('Retiming a constrained path. The output'
+                                     ' trajectory will stop at every waypoint.')
+                        traj = self.retimer.RetimeTrajectory(
+                            cloned_robot, path, defer=False, **retiming_options)
+                    # The trajectory is not constrained, so we can shortcut it
+                    # before execution.
+                    else:
+                        if self.simplifier is not None:
+                            logger.debug('Shortcutting an unconstrained path.')
+                            shortcut_path = self.simplifier.ShortcutPath(
+                                cloned_robot, path, defer=False, **shortcut_options)
+                        else:
+                            logger.debug('Skipping shortcutting; no simplifier'
+                                         ' available.')
+                            shortcut_path = path
+
+                        logger.debug('Smoothing an unconstrained path.')
+                        traj = self.smoother.RetimeTrajectory(
+                            cloned_robot, shortcut_path, defer=False,
+                            **smoothing_options)
+
+                return CopyTrajectory(traj, env=self.GetEnv())
+
+        if defer is True:
             from trollius.executor import get_default_executor
             from trollius.futures import wrap_future
 
-            executor = kwargs.get('executor') or get_default_executor()
-            return wrap_future(
-                executor.submit(do_execute,
-                    path, simplify=simplify, smooth=smooth, timeout=timeout,
-                    **kwargs
-                )
-            )
+            if executor is None:
+                executor = get_default_executor()
+
+            return wrap_future(executor.submit(do_postprocess))
+        elif defer is False:
+            return do_postprocess()
         else:
-            return do_execute(path, simplify=simplify, smooth=smooth,
-                              timeout=timeout, **kwargs)
+            raise ValueError('Received unexpected value "{:s}" for defer.'.format(defer))
 
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kw_args):
-        # TODO: Verify that the trajectory is timed.
+
+    def ExecutePath(self, path, defer=False, executor=None, **kwargs):
+        """ Post-process and execute an un-timed path.
+
+        This method calls PostProcessPath, then passes the result to
+        ExecuteTrajectory. Any extra **kwargs are forwarded to both of these
+        methods. This function returns the timed trajectory that was executed
+        on the robot.
+
+        @param path OpenRAVE trajectory representing an un-timed path
+        @param defer execute asynchronously and return a future
+        @param executor if defer = True, which executor to use
+        @param **kwargs forwarded to PostProcessPath and ExecuteTrajectory
+        @return timed trajectory executed on the robot
+        """
+        from ..util import Timer
+
+        def do_execute():
+            logger.info('Post-processing path with %d waypoints.',
+                path.GetNumWaypoints())
+
+            with Timer() as timer:
+                traj = self.PostProcessPath(path, defer=False, **kwargs)
+            SetTrajectoryTags(traj, {Tags.POSTPROCESS_TIME: timer.get_duration()}, append=True)
+
+            logger.info('Post-processing took %.3f seconds and produced a path'
+                        ' with %d waypoints and a duration of %.3f seconds.',
+                timer.get_duration(),
+                traj.GetNumWaypoints(),
+                traj.GetDuration()
+            )
+
+            with Timer() as timer:
+                exec_traj = self.ExecuteTrajectory(traj, defer=False, **kwargs)
+            SetTrajectoryTags(exec_traj, {Tags.EXECUTION_TIME: timer.get_duration()}, append=True)
+            return exec_traj
+
+        if defer is True:
+            from trollius.executor import get_default_executor
+            from trollius.futures import wrap_future
+
+            if executor is None:
+                executor = get_default_executor()
+
+            return wrap_future(executor.submit(do_execute))
+        elif defer is False:
+            return do_execute()
+        else:
+            raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
+
+
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kwargs):
+        """ Executes a time trajectory on the robot.
+
+        This function directly executes a timed OpenRAVE trajectory on the
+        robot. If you have a geometric path, such as those returned by a
+        geometric motion planner, you should first time the path using
+        PostProcessPath. Alternatively, you could use the ExecutePath helper
+        function to time and execute the path in one function call.
+
+        If timeout = None (the default), this function does not return until
+        execution has finished. Termination occurs if the trajectory is
+        successfully executed or if a fault occurs (in this case, an exception
+        will be raised). If timeout is a float (including timeout = 0), this
+        function will return None once the timeout has ellapsed, even if the
+        trajectory is still being executed.
+
+        NOTE: We suggest that you either use timeout=None or defer=True. If
+        trajectory execution times out, there is no way to tell whether
+        execution was successful or not. Other values of timeout are only
+        supported for legacy reasons.
+
+        This function returns the trajectory that was actually executed on the
+        robot, including controller error. If this is not available, the input
+        trajectory will be returned instead.
+
+        @param traj timed OpenRAVE trajectory to be executed
+        @param defer execute asynchronously and return a trajectory Future
+        @param timeout maximum time to wait for execution to finish
+        @param period poll rate, in seconds, for checking trajectory status
+        @return trajectory executed on the robot
+        """
+        # Don't execute trajectories that don't have at least one waypoint.
+        if traj.GetNumWaypoints() <= 0:
+            raise ValueError('Trajectory must contain at least one waypoint.')
+
+        # Check that the current configuration of the robot matches the
+        # initial configuration specified by the trajectory.
+        if not util.IsAtTrajectoryStart(self, traj):
+            raise exceptions.TrajectoryAborted(
+                'Trajectory started from different configuration than robot.')
+
+        # If there was only one waypoint, at this point we are done!
+        if traj.GetNumWaypoints() == 1:
+            if defer is True:
+                import trollius
+                future = trollius.Future()
+                future.set_result(traj)
+                return future
+            else:
+                return traj
+
+        # Verify that the trajectory is timed by checking whether the first
+        # waypoint has a valid deltatime value.
+        if not util.IsTimedTrajectory(traj):
+            raise ValueError('Trajectory cannot be executed, it is not timed.')
+
+        # Verify that the trajectory has non-zero duration.
+        if traj.GetDuration() <= 0.0:
+            import warnings
+            warnings.warn('Executing zero-length trajectory. Please update the'
+                          ' function that produced this trajectory to return a'
+                          ' single-waypoint trajectory.', FutureWarning)
+
         # TODO: Check if this trajectory contains the base.
-
-        logger.debug('Begin ExecuteTrajectory')
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
 
         active_manipulators = self.GetTrajectoryManipulators(traj)
         active_controllers = [
-            active_manipulator.controller \
-            for active_manipulator in active_manipulators \
+            active_manipulator.controller
+            for active_manipulator in active_manipulators
             if hasattr(active_manipulator, 'controller')
         ]
 
         if needs_base:
-            if hasattr(self, 'base') and hasattr(self.base, 'controller'):
+            if (hasattr(self, 'base') and hasattr(self.base, 'controller')
+                    and self.base.controller is not None):
                 active_controllers.append(self.base.controller)
+            else:
+                logger.warning(
+                    'Trajectory includes the base, but no base controller is'
+                    ' available. Is self.base.controller set?')
 
-        if defer:
+        if defer is True:
             import time
             import trollius
 
@@ -237,10 +509,12 @@ class Robot(openravepy.Robot):
                 raise trollius.Return(None)
 
             return trollius.async(do_poll())
-        else:
+        elif defer is False:
             util.WaitForControllers(active_controllers, timeout=timeout)
-
-        return traj
+            return traj
+        else:
+            raise ValueError('Received unexpected value "{:s}" for defer.'
+                             .format(str(defer)))
 
     def ViolatesVelocityLimits(self, traj):
         """
@@ -301,7 +575,10 @@ class Robot(openravepy.Robot):
         config_spec = self.GetActiveConfigurationSpecification('linear')
 
         # Call the planner.
-        result = planning_method(self, *args, **kw_args)
+        from ..util import Timer
+        with Timer() as timer:
+            result = planning_method(self, *args, **kw_args)
+        SetTrajectoryTags(result, {Tags.PLAN_TIME: timer.get_duration()}, append=True)
 
         def postprocess_trajectory(traj):
             # Strip inactive DOFs from the trajectory.
@@ -322,7 +599,7 @@ class Robot(openravepy.Robot):
                 postprocess_trajectory(traj)
 
                 # Optionally execute the trajectory.
-                if kw_args.get('execute', True):
+                if kw_args.get('execute', False):
                     # We know defer = True if we're in this function, so we
                     # don't have to set it explicitly.
                     traj = yield trollius.From(
@@ -336,7 +613,7 @@ class Robot(openravepy.Robot):
             postprocess_trajectory(result)
 
             # Optionally execute the trajectory.
-            if kw_args.get('execute', True):
+            if kw_args.get('execute', False):
                 result = self.ExecutePath(result, **kw_args)
 
             return result

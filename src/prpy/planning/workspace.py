@@ -33,9 +33,10 @@ import logging
 import numpy
 import openravepy
 import time
-from base import BasePlanner, PlanningError, PlanningMethod
+from ..util import SetTrajectoryTags
+from base import BasePlanner, PlanningError, PlanningMethod, Tags
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
 
 
 class GreedyIKPlanner(BasePlanner):
@@ -151,6 +152,7 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return qtraj configuration space path
         """
+        from .exceptions import TimeoutPlanningError
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -170,19 +172,23 @@ class GreedyIKPlanner(BasePlanner):
             ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
 
             start_time = time.time()
+            epsilon = 1e-6
+
             try:
-                while not numpy.isclose(t, traj.GetDuration()):
+                while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        raise PlanningError('Reached time limit.')
+                        raise TimeoutPlanningError(timelimit)
 
                     # Hypothesize new configuration as closest IK to current
                     qcurr = robot.GetActiveDOFValues()  # Configuration at t.
                     qnew = manip.FindIKSolution(
                         openravepy.matrixFromPose(traj.Sample(t+dt)[0:7]),
-                        ik_options
+                        ik_options,
+                        ikreturn=False,
+                        releasegil=True
                     )
 
                     # Check if the step was within joint DOF resolution.
@@ -221,4 +227,5 @@ class GreedyIKPlanner(BasePlanner):
                                    t, traj.GetDuration(), e.message)
 
         # Return as much of the trajectory as we have solved.
+        SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: True}, append=True)
         return qtraj

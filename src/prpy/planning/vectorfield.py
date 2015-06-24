@@ -32,11 +32,12 @@ import logging
 import numpy
 import openravepy
 import time
-from base import BasePlanner, PlanningError, PlanningMethod
-import prpy.util
+from .. import util
+from base import BasePlanner, PlanningError, PlanningMethod, Tags
 from enum import Enum
+import math
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
 
 
 class Status(Enum):
@@ -74,25 +75,31 @@ class VectorFieldPlanner(BasePlanner):
         manip = robot.GetActiveManipulator()
 
         def vf_geodesic():
-            twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
+            twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             goal_pose)
-            dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
+            dqout, tout = util.ComputeJointVelocityFromTwist(
                                 robot, twist)
             # Go as fast as possible
-            dqout = min(abs(robot.GetDOFVelocityLimits()/dqout))*dqout
+            vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
+            dqout = min(abs(vlimits/dqout))*dqout
 
             return dqout
 
         def CloseEnough():
-            pose_error = prpy.util.GeodesicDistance(
+            pose_error = util.GeodesicDistance(
                         manip.GetEndEffectorTransform(),
                         goal_pose)
             if pose_error < pose_error_tol:
                 return Status.TERMINATE
             return Status.CONTINUE
 
-        return self.FollowVectorField(robot, vf_geodesic,
-                                      CloseEnough, timelimit)
+        traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
+                                      timelimit)
+
+        # Flag this trajectory as unconstrained. This overwrites the
+        # constrained flag set by FollowVectorField.
+        util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
+        return traj
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
@@ -136,14 +143,15 @@ class VectorFieldPlanner(BasePlanner):
         Tstart = manip.GetEndEffectorTransform()
 
         def vf_straightline():
-            twist = prpy.util.GeodesicTwist(manip.GetEndEffectorTransform(),
+            twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             Tstart)
             twist[0:3] = direction
-            dqout, tout = prpy.util.ComputeJointVelocityFromTwist(
+            dqout, tout = util.ComputeJointVelocityFromTwist(
                     robot, twist)
 
             # Go as fast as possible
-            dqout = min(abs(robot.GetDOFVelocityLimits()/dqout))*dqout
+            vlimits= robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
+            dqout = min(abs(vlimits/dqout))*dqout
             return dqout
 
         def TerminateMove():
@@ -152,15 +160,19 @@ class VectorFieldPlanner(BasePlanner):
             Succeed if distance moved is larger than max_distance.
             Cache and continue if distance moved is larger than distance.
             '''
+            from .exceptions import ConstraintViolationPlanningError 
+
             Tnow = manip.GetEndEffectorTransform()
-            error = prpy.util.GeodesicError(Tstart, Tnow)
+            error = util.GeodesicError(Tstart, Tnow)
             if numpy.fabs(error[3]) > angular_tolerance:
-                raise PlanningError('Deviated from orientation constraint.')
+                raise ConstraintViolationPlanningError(
+                    'Deviated from orientation constraint.')
             distance_moved = numpy.dot(error[0:3], direction)
             position_deviation = numpy.linalg.norm(error[0:3] -
                                                    distance_moved*direction)
             if position_deviation > position_tolerance:
-                raise PlanningError('Deviated from straight line constraint.')
+                raise ConstraintViolationPlanningError(
+                    'Deviated from straight line constraint.')
 
             if distance_moved > max_distance:
                 return Status.TERMINATE
@@ -170,12 +182,12 @@ class VectorFieldPlanner(BasePlanner):
 
             return Status.CONTINUE
 
-        return self.FollowVectorField(robot, vf_straightline,
-                                      TerminateMove, timelimit)
+        return self.FollowVectorField(robot, vf_straightline, TerminateMove,
+                                      timelimit, **kw_args)
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
-                          timelimit=5.0, dq_tol=0.0001, **kw_args):
+                          timelimit=5.0, dt_multiplier=1.01, **kw_args):
         """
         Follow a joint space vectorfield to termination.
 
@@ -183,10 +195,19 @@ class VectorFieldPlanner(BasePlanner):
         @param fn_vectorfield a vectorfield of joint velocities
         @param fn_terminate custom termination condition
         @param timelimit time limit before giving up
-        @param dq_tol velocity tolerance for termination
+        @param dt_multiplier multiplier of the minimum resolution at which
+               the vector field will be followed. Defaults to 1.0.
+               Any larger value means the vectorfield will be re-evaluated
+               floor(dt_multiplier) steps
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
+        from .exceptions import (
+            CollisionPlanningError,
+            SelfCollisionPlanningError,
+            TimeoutPlanningError
+        )
+
         start_time = time.time()
 
         try:
@@ -203,45 +224,52 @@ class VectorFieldPlanner(BasePlanner):
                 qtraj.Init(cspec)
                 cached_traj = None
 
-                dqout = robot.GetActiveDOFVelocities()
-                dt = min(robot.GetDOFResolutions() /
-                         robot.GetDOFVelocityLimits())
-                while True:
+                vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
+                dt_step = min(robot.GetActiveDOFResolutions() /
+                              vlimits)
+                dt_step *= dt_multiplier
+                status = fn_terminate()
+                report = openravepy.CollisionReport()
+
+                while status != Status.TERMINATE:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        raise PlanningError('Reached time limit.')
+                        raise TimeoutPlanningError(timelimit)
 
-                    # Check for collisions.
-                    if self.env.CheckCollision(robot):
-                        raise PlanningError('Encountered collision.')
-                    if robot.CheckSelfCollision():
-                        raise PlanningError('Encountered self-collision.')
-
-                    # Add to trajectory
-                    waypoint = []
-                    q_curr = robot.GetActiveDOFValues()
-                    waypoint.append(q_curr)  # joint position
-                    waypoint.append(dqout)   # joint velocity
-                    waypoint.append([dt])    # delta time
-                    waypoint = numpy.concatenate(waypoint)
-                    qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
                     dqout = fn_vectorfield()
-                    if (numpy.linalg.norm(dqout) < dq_tol):
-                        raise PlanningError('Local minimum, \
-                                             unable to progress')
+                    numsteps = int(math.floor(max(
+                        abs(dqout*dt_step/robot.GetActiveDOFResolutions())
+                        )))
+                    if numsteps == 0:
+                        raise PlanningError('Step size too small,'
+                                            ' unable to progress')
+                    dt = dt_step/numsteps
 
-                    status = fn_terminate()
+                    for step in xrange(numsteps):
+                        # Check for collisions.
+                        if self.env.CheckCollision(robot, report):
+                            raise CollisionPlanningError.FromReport(report)
+                        if robot.CheckSelfCollision(report):
+                            raise SelfCollisionPlanningError.FromReport(report)
 
-                    if status == Status.CACHE_AND_CONTINUE:
-                        cached_traj = prpy.util.CopyTrajectory(qtraj)
+                        status = fn_terminate()
+                        if status == Status.CACHE_AND_CONTINUE:
+                            cached_traj = util.CopyTrajectory(qtraj)
+                        if status == Status.TERMINATE:
+                            break
 
-                    if status == Status.TERMINATE:
-                        break
-
-                    qnew = q_curr + dqout*dt
-                    robot.SetActiveDOFValues(qnew)
+                        # Add to trajectory
+                        waypoint = []
+                        q_curr = robot.GetActiveDOFValues()
+                        waypoint.append(q_curr)       # joint position
+                        waypoint.append(dqout)        # joint velocity
+                        waypoint.append([dt])    # delta time
+                        waypoint = numpy.concatenate(waypoint)
+                        qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
+                        qnew = q_curr + dt*dqout
+                        robot.SetActiveDOFValues(qnew)
 
         except PlanningError as e:
             if cached_traj is not None:
@@ -249,5 +277,8 @@ class VectorFieldPlanner(BasePlanner):
                 return cached_traj
             else:
                 raise
+
+        # TODO: Flag this trajectory as timed.
+        util.SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: 'true'}, append=True)
 
         return qtraj

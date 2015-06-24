@@ -35,15 +35,16 @@ from base import (BasePlanner,
                   PlanningError,
                   PlanningMethod)
 
-logger = logging.getLogger('prpy.planning.ik')
+logger = logging.getLogger(__name__)
 
 
 class IKPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, delegate_planner=None):
         super(IKPlanner, self).__init__()
+        self.delegate_planner = delegate_planner
 
     def __str__(self):
-        return 'IKConfigurationPlanner'
+        return 'IKPlanner'
 
     @PlanningMethod
     def PlanToIK(self, robot, goal_pose, ranker=ik_ranking.JointLimitAvoidance,
@@ -62,7 +63,9 @@ class IKPlanner(BasePlanner):
             ik_param = IkParameterization(
                 goal_pose, IkParameterizationType.Transform6D)
             ik_solutions = manipulator.FindIKSolutions(
-                ik_param, IkFilterOptions.CheckEnvCollisions)
+                ik_param, IkFilterOptions.CheckEnvCollisions,
+                ikreturn=False, releasegil=True
+            )
 
         if ik_solutions.shape[0] == 0:
             raise PlanningError('There is no IK solution at the goal pose.')
@@ -79,14 +82,16 @@ class IKPlanner(BasePlanner):
             raise PlanningError('All IK solutions have infinite cost.')
 
         # Sequentially plan to the solutions in descending order of cost.
+        planner = self.delegate_planner or robot.planner
         p = openravepy.KinBody.SaveParameters
+
         with robot.CreateRobotStateSaver(p.ActiveDOF):
             robot.SetActiveDOFs(manipulator.GetArmIndices())
 
             num_attempts = min(ranked_ik_solutions.shape[0], num_attempts)
             for i, ik_sol in enumerate(ranked_ik_solutions[0:num_attempts, :]):
                 try:
-                    traj = robot.planner.PlanToConfiguration(robot, ik_sol)
+                    traj = planner.PlanToConfiguration(robot, ik_sol)
                     logger.info('Planned to IK solution %d of %d.',
                                 i + 1, num_attempts)
                     return traj

@@ -2,6 +2,264 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.0 (2015-06-01)
+------------------
+* Adding tags for capturing trajectory timing data
+* Update README.md
+  Added enum34 dependency instructions into README
+* Contributors: Jennifer King, Michael Koval, Stefanos Nikolaidis
+
+1.0.0 (2015-05-01)
+------------------
+* Adding planner and planning_method and trajectory tag constants
+* Removing smooth tag from SBPL trajectory
+* Adding helper function for finding catkin resources
+* Fixing bug in name of returned variable from Rotate and Forward
+* Simplified logic in PostProcessPath.
+* Removing need for ExecuteBasePath. Instead base planning now uses ExecutePath.
+* Removing unecessary logging
+* Various fixes/enhancements: 1. Base planners no longer add non-PlanningMethod functions as attributes to robot, 2. Removed double call to SimplifyTrajectory in retimer.py, 3. Changed default smoother to HauserParabolicSmoother, 4. Changed default simplifier to None
+* Fixing format error when raising value error. Fixing logic error in handling defer flag.
+* Restructured defer fixes to raise exception.
+  Instead of printing a warning, this restructures the `defer` argument
+  checking to raise an exception if an invalid value has been provided.
+* Print a warning if defer is not a boolean.
+* Print a warning if GetTrajectoryTags is not JSON.
+* Mico Refactor
+* Changed defer checks to use explicit `is True`.
+  Using `if defer is True:` for checks instead of `if defer:` catches a
+  lot of weird errors that can occur if the positional args to any of the
+  reflected planning-method functions are shifted by one.
+  The previous check would return a Future if an extra argument got
+  passed, which concealed exceptions indicating that the arguments made
+  no sense, and would be passed to subsequent code until something
+  actually tried to query a Trajectory method on the Future.
+* Changed GetTrajectoryTags() to EAFP-style.
+  Instead of using an if-check, GetTrajectoryTags() now just tries
+  JSON deserialization and catches a ValueError. This is more robust as
+  it also catches situations where the deserialization fails due to the
+  trajectory description being invalid or whitespace, but not None.
+* added kwargs to ExecuteTrajectory and PostProcessPath
+* Switched to emprical acceleration limits.
+* CBiRRT and OpenRAVERetimer now use CO_ActiveOnly
+* increased the accelearation limtis
+* Clear UserData in prpy.Clone (fixes `#111 <https://github.com/personalrobotics/prpy/issues/111>`_ and `#114 <https://github.com/personalrobotics/prpy/issues/114>`_)
+* Convert CBiRRT "direction" to a NumPy array.
+* Removed references to numpy.isclose (`#63 <https://github.com/personalrobotics/prpy/issues/63>`_).
+* Added `releasegil` flags to every FindIKSolution(s) call in prpy.
+* Released GIL during TSR Planner.
+  This prevents unnecessary hangs during planning when using python
+  threads.  I see no cases where this would not be necessary.
+* Contributors: ADA Demo, Jennifer King, Michael Koval, Pras, Pras Velagapudi, Rachel Holladay, Stefanos Nikolaidis
+
+0.5.1 (2015-04-15)
+------------------
+* Merge branch 'feature/MICORefactor' of github.com:personalrobotics/prpy into feature/MICORefactor
+* Fixed ParabolicSmoother bug (thanks @rdiankov)
+* added code to cleanup ik solver, changed acceleration to 1.5
+* Added some hacks for ParabolicSmoother.
+* More retiming fixes.
+* Added a few useful log messages.
+* Cleaned up wrappers for OpenRAVE retimers.
+* Fixed Open/Close/CloseTight functions on MicoHand.
+* Set acceleration limits by default.
+* Convert CBiRRT "direction" to a NumPy array.
+* Merge branch 'master' into feature/MICORefactor
+  Conflicts:
+  src/prpy/base/robot.py
+* Merge pull request `#95 <https://github.com/personalrobotics/prpy/issues/95>`_ from personalrobotics/feature/SmoothingRefactor2
+  Trajectory timing/smoothing refactor 2.0.
+* Merge pull request `#108 <https://github.com/personalrobotics/prpy/issues/108>`_ from personalrobotics/bugfix/issue99
+  Fixed two bugs in vectorfield planner.
+* Made robot.simplifier optional.
+* Load an IdealController in simulation.
+* Fixed two bugs in planner
+  Fixed two bugs:
+  1. Missing `abs`
+  2. Changed default `dt_multiplier` to 1.01 so that `numsteps` floors to 1 by default.
+* Fixed weird superclass issue.
+* Removed multi-controller references from Mico.
+* More MicoHand cleanup.
+* Started removing BH-specific code from MicoHand
+* Removed MICORobot, since it does nothing.
+* Load or_nlopt_ik by default.
+* PEP-8 fixes.
+* Removed more dead code from Mico.
+* Rearranged Mico file.
+* Removed PlanToNamedConfiguration from Mico.
+* Removed OWD-specific code from the Mico.
+* Documented ExecutePath and ExecuteTrajectory.
+* Simplified PostProcessPath with defer=True.
+* Rough PostProcessPath function.
+* Contributors: Michael Koval, Siddhartha Srinivasa, Stefanos Nikolaidis
+
+0.5.0 (2015-04-07)
+------------------
+* Fixed the OMPL planner creation test.
+* Modified CBiRRT to output linear interpolation.
+* Fixed __getattr__ and __dir__ on Manipulator (`#89 <https://github.com/personalrobotics/prpy/issues/89>`_)
+* Fixed infinite recursion in `#89 <https://github.com/personalrobotics/prpy/issues/89>`_
+  robot.planner or robot.actions not being defined caused infinite
+  recursion in __getattr__. This patch explicitly checks for those
+  attributes before querying them.
+* Added robot_name pass-through argument.
+* Various fixes: Added logic to catch openrave excpetion and reraise as planning exception in CHOMP. Added PlanToConfiguration to BiRRT. Changed SetTrajectoryTags to util.SetTrajectoryTags in vectorfield planner.
+* Feature/action library
+* Changed RenderPose to RenderPoses. Made RenderTSRChains call RenderPoses. Added render flag to RenderTSRChains, RenderPoses and RenderVector so that they can be used optionally.
+* Adding RenderPose function to allow rendering an axis from a with block
+* for servo simulation, sleep time takes into account how much time already was spend on computation
+* Merge pull request `#81 <https://github.com/personalrobotics/prpy/issues/81>`_ from personalrobotics/feature/PlanningRefactor
+  Added new MethodMask and FirstSupported meta-planners
+* Disabled PlanToIK on TSRPlanner.
+* Renamed new meta-planners.
+  - Only to MethodMask
+  - Fallback to FirstSupported
+* made default quadraticObjective, changed to allow you to specify arguments for joint limit avoidance
+* Tag trajectories with information necessary to control smoothing.
+* Moved common tags into an Enum.
+* Switched from XML to JSON to trajectory tagging.
+* Added python-enum dependency.
+* Added PlanToIK to TSRPlanner.
+* Added new MetaPlanners and refactored planning.
+  - Added the Fallback meta-planner. This meta-planner operates on a list
+  of planners and calls the first planner in the list that supports the
+  desired planning method.
+  - Added the Only meta-planner. This meta-planner operates on a single
+  planner by only allowing access to a subset of its planning methods.
+  - Added support for explicitly passing a delegate planner to:
+  - IKPlanner
+  - NamedPlanner
+  - TSRPlanner
+  - Modified TSRPlanner to raise an UnsupportedPlanningError when it
+  receives unsupported TSRs. This is necessary to trigger the fallback
+  behavior implemented in the Fallback meta-planner.
+* feature added to avoid joint limit with ComputeJointVelocityFromTwist
+* Cleaned up CloneBindings functions
+  - Reference the TSRLibrary from the parent environment.
+  - Reference the NamedConfigurations from the parent environment.
+  - Don't load ServoSimulatored in cloned environments.
+  - Don't load any controllers in cloned environments.
+  - Avoid calling __init__ to prevent future nasty surprises.
+  - NOTE: This fixes a memory leak caught by Pras.
+* Merge pull request `#76 <https://github.com/personalrobotics/prpy/issues/76>`_ from personalrobotics/feature/vector_field_planner_timestepping
+  Added variable time steps for vector field planner
+* Hide IK log spam when cloning environments.
+* Tag trajectories with constrained and optimized
+* More CHOMP module refactoring.
+* Cleaned up CHOPM file.
+* Added variable time steps for vector field planner
+* Tag trajectories with planner and planning method.
+* Renaming robot.actionlibrary to robot.actions
+* Adding logic to explicitely clear handles arrays in visualization helper functions
+* Fixing logic that adds actions as methods on robot. Adding logic to add actions as methods on manipulator. Updating visualization of TSR lists to have parameter for axis length. Removing reference to push_grasp from prpy/action init.
+* Adding logic to expose actions as methods on robot
+* Initial action library implementation
+* Contributors: Jennifer King, Michael Koval, Shervin Javdani, Siddhartha Srinivasa
+
+0.4.0 (2015-03-30)
+------------------
+* Planning with vector fields.
+* Documentation update
+* Go as fast as possible!
+* Fixed status logic bug
+* Added caching
+* Added exception handling for min distance
+* More code refactoring and testing of end effector offset
+* First pass at plan to end effector offset
+* Added termination function
+* Trajectory execution refactor
+* Modify OptimizeTrajectory in chomp to catch generic exceptions and raise them as PlanningError
+* Adding support for execution of base trajectories
+* Fixing two typos in cbirrt that cause failures
+* Changing parabolic smoother to use HauserParabolicSmoother by default
+* Adding logic to clone the environment eshen simplifying and smoothing a path. This allows us to set the dofs in the trajectory as active.
+* Refactored vectorfield planner to input function pointer
+* Implemented defer=True on ExecuteTrajectory.
+* Eat kwargs in OMPLSimplifier.
+* Added defer=True support to ExecutePath.
+* Fixed typo in vectorfield planner
+* Fixed bug when getting DOF resolutions
+* Added a few cleanups for syntax and simplicity.
+* First pass at vector field planner to end effector transform
+* Cleaned up optimized joint velocity computation
+* Added gradient for objective function
+* Implemented and tested ComputeJointVelocityFromTwist in util
+* Added workspace planner to prpy.planning __init__.py
+* Fixed a number of bugs related to workspace planner.
+  This commit addresses several major bugs unmasked by the workspace planner.
+  1) Fixed a bug in cloning an environment into itself
+  (needed for recursive `@PlanningMethod`s)
+  2) Fixed a bug in incorrect formatting of RetimeTrajectory error messages.
+  3) Fixed numerous small issues in the workspace planner:
+  a) Returning a 1-waypoint trajectory when started in-contact with an object.
+  b) Fixed max_distance calculation error from missing `numpy.copy()`
+  c) Simplified some of the workspace planning logic.
+* Changed Clone() to lock by default.
+  This emulates the functions of `with env:` more closely,
+  which is useful because the call `with Clone(env):` looks
+  extremely similar.
+* Added workspace planner to prpy.planning init.py
+  This just adds the new workspace planner to __init__.py so it can be imported from `prpy.planning`.
+* Bugfixes for SimplifyTrajectory and NominalConfiguration.
+  - SimplifyTrajectory has been modified to gracefully return if passed a trajectory with only one waypoint.
+  - NominalConfiguration optionally takes a maximum allowable DOF range, which allows robots with fully redundant configurations (i.e. multiple rotation joints) to ignore IK configurations for which a closer solution must exist.
+* Changed default chunksize of tsr_planner to be 1.
+* Added PlanToEndEffectorOffset method. Untested.
+* Added fix to make ik_ranking default to ignoring multirotation IK solutions.
+* Added fix for SimplifyTrajectory to handle 1-waypoint trajectories.
+* Added patch for correctly cloning grabbed objects.
+  Due to a bug in OpenRAVE, cloned grabbed objects may have incorrect
+  adjacency properties, causing them to not be evaluated correctly
+  for self collisions (with the robot).  This bugfix forces cloned
+  environments to regrab all objects, which resets these incorrect links.
+* Added PlanToEndEffectorPose method that creates a geodesic workspace trajectory from start to goal and sends it off to PlanWorkspacePath
+* Added default 1 rotation offset to nominal configuration.
+* Fixed missing and child-referencing constructors in CloneBindings.
+* Changed Cloned(clone_env=...) to Cloned(into=...).  Also added docs.
+* Enabled syntax highlighting.
+* Added a new subsection.
+* Added InstanceDeduplicator examples.
+* Improved the planning README (thanks @cdellin).
+* First pass at greedy IK planner
+* Added numerous bugfixes for cloning and deferred planning.
+  * Deferred planning now consistently returns trollius.futures.Future
+  * Fixed bug in robot PlanWrapper that caused deferred planning to terminate early.
+  * Cloned() references are now explicitly passed their clone environment.
+  * .Cloned() helper method added to environments created by Clone(env)
+  * Existing clone references consolidated to minimize Cloned() lookups.
+* Stripped WAMRobot to the bare basics.
+* Fixed indexing bug in IK ranking function.
+* Generalized the nominalconfiguration ranker to accept angle bounds.
+* Adjusted default chunk size for tsr sampler and removed unused param.
+* Added multirotation filtering to nominal configuration IK ranker.
+* Added a MacSmoother test.
+* Simplify the trajectory in MacSmoother.
+* Made the Timer log message optional.
+* Fixed the ParabolicSmoother wrapper class.
+* Call SimplifyTrajectory before an OpenRAVE retimer.
+* Fixed argument names in robot.SimplifyPath.
+* Modified _PlanWrapper to set linear interpolation.
+* Added MacSmoother to wrap or_pr_spline.
+* Update README.md
+* More planner documentation.
+* Switched fallback retimer from linear to parabolic.
+* Added env lock to get active manipulator and DOF values at start.
+* Fixed incorrect swapping between Arm DOF Indices and Robot DOF Indices.
+* Implemented TsrPlanner as standalone from IkPlanner.
+* Added explicit chunk size parameter.
+* Added restructured IK and TSR planners that can do multiple goals.
+* Wrapped OpenRAVE retimers in the planning pipeline.
+* Added SimplifyPath tests.
+* Added SimplifyPath method using OMPL.
+* Fixed NamedPlanner in cloned environments.
+* Added PlanToEndEffectorPose tests.
+* Added more PlanToConfiguration tests.
+* Strip extraneous groups from the CBiRRT output.
+* Added basic planning unit tests.
+* Disabled smoothing in OMPL.
+* Disabled smoothing in CBiRRT.
+* Contributors: Jennifer King, Michael Koval, Pras, Pras Velagapudi, Siddhartha Srinivasa, Stefanos Nikolaidis
+
 0.3.1 (2015-02-10)
 ------------------
 * Added fix for error caused by clone_env being set to None.
