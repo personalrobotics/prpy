@@ -98,8 +98,11 @@ class TSRLibrary(object):
                 raise KeyError('There is no TSR factory registered for action "{:s}"'
                                ' with robot "{:s}" and object "{:s}".'.format(
                         action_name, self.robot_name, kinbody_name))
-
-        return f(self.robot, kinbody=kinbody, *args, **kw_args)
+       
+        if kinbody is None:
+            return f(self.robot, *args, **kw_args)
+        else:
+            return f(self.robot, kinbody, *args, **kw_args)
 
     def load_yaml(self, yaml_file):
         """
