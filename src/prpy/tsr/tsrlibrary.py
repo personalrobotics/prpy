@@ -99,7 +99,7 @@ class TSRLibrary(object):
                                ' with robot "{:s}" and object "{:s}".'.format(
                         action_name, self.robot_name, kinbody_name))
 
-        return f(self.robot, kinbody, *args, **kw_args)
+        return f(self.robot, kinbody=kinbody, *args, **kw_args)
 
     def load_yaml(self, yaml_file):
         """
