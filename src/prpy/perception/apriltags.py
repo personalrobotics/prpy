@@ -45,7 +45,7 @@ class ApriltagsModule(PerceptionModule):
         self.marker_data_path = marker_data_path
         self.kinbody_path = kinbody_path
         self.detection_frame = detection_frame
-        self.destination_frame=destination_frame
+        self.destination_frame = destination_frame
         
         
     def __str__(self):

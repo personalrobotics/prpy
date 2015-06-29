@@ -31,3 +31,4 @@
 from base import PerceptionModule
 from apriltags import ApriltagsModule
 from simulated import SimulatedPerceptionModule
+from rock_module import RockModule
