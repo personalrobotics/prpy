@@ -30,62 +30,9 @@ import numpy
 import numpy.random
 import kin
 
-"""
-Functions for Serializing TSRs and TSR Chains
 
-SerializeTSR(manipindex,bodyandlink,T0_w,Tw_e,Bw)
-
-Input:
-manipindex (int): the 0-indexed index of the robot's manipulator
-bodyandlink (str): body and link which is used as the 0 frame. Format
-                   'body_name link_name'. To use world frame, specify 'NULL'
-T0_w (double 4x4): transform matrix of the TSR's reference frame relative to
-                   the 0 frame
-Tw_e (double 4x4): transform matrix of the TSR's offset frame relative to the
-                   w frame
-Bw (double 1x12): bounds in x y z roll pitch yaw.
-                  Format: [x_min, x_max, y_min, y_max ...]
-
-Output:
-outstring (str): string to use for SerializeTSRChain function
-
-SerializeTSRChain(bSampleFromChain,
-                  bConstrainToChain,
-                  numTSRs,
-                  allTSRstring,
-                  mimicbodyname,
-                  mimicbodyjoints)
-
-Input:
-bSampleStartFromChain (0/1): 1: Use this chain for sampling start configs
-                             0: Ignore for sampling starts
-bSampleGoalFromChain (0/1): 1: Use this chain for sampling goal configs
-                            0: Ignore for sampling goals
-bConstrainToChain (0/1): 1: Use this chain for constraining configs
-                         0: Ignore for constraining
-numTSRs (int): Number of TSRs in this chain (must be > 0)
-allTSRstring (str): string of concetenated TSRs generated using SerializeTSR.
-                    Should be like [TSRstring 1 ' ' TSRstring2 ...]
-mimicbodyname (str): name of associated mimicbody for this chain
-                     (NULL if none associated)
-mimicbodyjoints (int [1xn]): 0-indexed indices of the mimicbody's joints that
-                             are mimiced (MUST BE INCREASING AND CONSECUTIVE)
-
-Output:
-outstring (str): string to include in call to cbirrt planner
-"""
-
-
-def SerializeTransform12Col(tm, format='%.5f'):
-    return ' '.join([(format % (i,)) for i in tm[0:3, :].T.reshape(12)])
-
-
-def SerializeArray(a, format='%.5f'):
-    return ' '.join([(format % (i,)) for i in a.reshape(-1)])
-
-
-class TSR(object):  # force new-style class
-
+class TSR(object):
+    """ A Task-Space-Region (TSR) represents a motion constraint. """
     def __init__(self, T0_w=None, Tw_e=None, Bw=None,
                  manip=None, bodyandlink='NULL'):
         if T0_w is None:
@@ -134,12 +81,6 @@ class TSR(object):  # force new-style class
 
         trans = numpy.dot(numpy.dot(self.T0_w, Tw), self.Tw_e)
         return trans
-
-    def serialize(self):
-        return '%d %s %s %s %s' % (self.manipindex, self.bodyandlink,
-                                   SerializeTransform12Col(self.T0_w),
-                                   SerializeTransform12Col(self.Tw_e),
-                                   SerializeArray(self.Bw))
 
     def to_dict(self):
         """ Convert this TSR to a python dict. """
@@ -234,19 +175,6 @@ class TSRChain(object):
 
     def append(self, tsr):
         self.TSRs.append(tsr)
-
-    def serialize(self):
-        allTSRstring = ' '.join([tsr.serialize() for tsr in self.TSRs])
-        numTSRs = len(self.TSRs)
-        outstring = '%d %d %d' % (int(self.sample_start),
-                                  int(self.sample_goal),
-                                  int(self.constrain))
-        outstring += ' %d %s' % (numTSRs, allTSRstring)
-        outstring += ' ' + self.mimicbodyname
-        if len(self.mimicbodyjoints) > 0:
-            outstring += ' %d %s' % (len(self.mimicbodyjoints),
-                                     SerializeArray(self.mimicbodyjoints))
-        return outstring
 
     def to_dict(self):
         """ Construct a TSR chain from a python dict. """
