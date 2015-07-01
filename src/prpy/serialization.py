@@ -261,7 +261,7 @@ def _deserialize_internal(env, data, data_type):
         traj.deserialize(data['data'])
         return traj
     elif data_type == TSR.__name__:
-        return TSR.to_dict(data['data'])
+        return TSR.from_dict(data['data'])
     elif data_type == TSRChain.__name__:
         return TSRChain.from_dict(data['data'])
     else:
