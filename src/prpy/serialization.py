@@ -70,12 +70,12 @@ def serialize(obj):
     elif isinstance(obj, TSR):
         return {
             TYPE_KEY: TSR.__name__,
-            'data': obj.serialize_dict()
+            'data': obj.to_dict()
         }
     elif isinstance(obj, TSRChain):
         return {
             TYPE_KEY: TSRChain.__name__,
-            'data': obj.serialize_dict()
+            'data': obj.to_dict()
         }
     else:
         raise UnsupportedTypeSerializationException(obj)
@@ -261,9 +261,9 @@ def _deserialize_internal(env, data, data_type):
         traj.deserialize(data['data'])
         return traj
     elif data_type == TSR.__name__:
-        return TSR.deserialize_dict(data['data'])
+        return TSR.to_dict(data['data'])
     elif data_type == TSRChain.__name__:
-        return TSRChain.deserialize_dict(data['data'])
+        return TSRChain.from_dict(data['data'])
     else:
         raise UnsupportedTypeDeserializationException(data_type)
 

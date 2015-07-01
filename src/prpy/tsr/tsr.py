@@ -256,7 +256,7 @@ class TSRChain(object):
             'constrain': self.constrain,
             'mimicbodyname': self.mimicbodyname,
             'mimicbodyjoints': self.mimicbodyjoints,
-            'tsrs': [tsr.serialize_dict() for tsr in self.TSRs],
+            'tsrs': [tsr.to_dict() for tsr in self.TSRs],
         }
 
     @staticmethod
