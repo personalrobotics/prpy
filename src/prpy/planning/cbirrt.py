@@ -245,7 +245,7 @@ class CBiRRTPlanner(BasePlanner):
 
         if tsr_chains is not None:
             for tsr_chain in tsr_chains:
-                args += ['TSRChain', _SerializeTSRChain(tsr_chain)]
+                args += ['TSRChain', SerializeTSRChain(tsr_chain)]
 
         # FIXME: Why can't we write to anything other than cmovetraj.txt or
         # /tmp/cmovetraj.txt with CBiRRT?
