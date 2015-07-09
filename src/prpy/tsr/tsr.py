@@ -133,7 +133,7 @@ class TSR(object):  # force new-style class
 
         @param vals   (optional) a 6-vector of Bw with float('nan') for
                       dimensions to sample uniformly.
-        @return trans a 4x4 transform
+        @return       4x4 transform
         """
         if len(vals) != 6:
             raise ValueError('vals must be of length 6')
@@ -165,12 +165,13 @@ class TSR(object):  # force new-style class
     @staticmethod
     def deserialize_dict(x):
         return TSR(
-            T0_w = numpy.array(x['T0_w']),
-            Tw_e = numpy.array(x['Tw_e']),
-            Bw = numpy.array(x['Bw']),
-            manip = numpy.array(x['manipindex']),
-            bodyandlink = numpy.array(x['bodyandlink'])
+            T0_w=numpy.array(x['T0_w']),
+            Tw_e=numpy.array(x['Tw_e']),
+            Bw=numpy.array(x['Bw']),
+            manip=numpy.array(x['manipindex']),
+            bodyandlink=numpy.array(x['bodyandlink'])
         )
+
 
 class TSRChain(object):
 
@@ -232,9 +233,8 @@ class TSRChain(object):
             'constrain': self.constrain,
             'mimicbodyname': self.mimicbodyname,
             'mimicbodyjoints': self.mimicbodyjoints,
-            'tsrs': [ tsr.serialize_dict() for tsr in self.TSRs ],
+            'tsrs': [tsr.serialize_dict() for tsr in self.TSRs],
         }
-
 
     @staticmethod
     def deserialize_dict(x):
@@ -242,19 +242,30 @@ class TSRChain(object):
             sample_start=x['sample_start'],
             sample_goal=x['sample_goal'],
             constrain=x['constrain'],
-            TSRs=[ TSR.deserialize_dict(tsr) for tsr in x['tsrs'] ],
+            TSRs=[TSR.deserialize_dict(tsr) for tsr in x['tsrs']],
             mimicbodyname=x['mimicbodyname'],
             mimicbodyjoints=x['mimicbodyjoints'],
         )
 
-    def sample(self):
+    def sample(self, vals=None):
+        """
+        Samples from the Bw chain to generate an end-effector transform.
+        Can specify some Bw values optionally.
+
+        @param vals   (optional) a 6-vector of Bw with float('nan') for
+                      dimensions to sample uniformly.
+        @return T0_w  4x4 transform
+        """
+
         if len(self.TSRs) == 0:
             return None
+        if vals is None:
+            vals = [numpy.ones(6)*float('nan')]*len(self.TSRs)
 
         T0_w = self.TSRs[0].T0_w
         for idx in range(len(self.TSRs)):
             tsr_current = self.TSRs[idx]
             tsr_current.T0_w = T0_w
-            T0_w = tsr_current.sample()
+            T0_w = tsr_current.sample(vals[idx])
 
         return T0_w
