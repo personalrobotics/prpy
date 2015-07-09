@@ -110,35 +110,42 @@ class TSR(object):  # force new-style class
             self.manipindex = manip
         self.bodyandlink = bodyandlink
 
-    def sample(self, vals=None):
-        Bwdims = 0
-        for i in range(6):
-            if self.Bw[i, 0] != self.Bw[i, 1]:
-                Bwdims += 1
+    def to_transform(self, vals):
+        """
+        Converts a [x y z roll pitch yaw] into an
+        end-effector transform.
 
-        if vals is None:
-            Bwvals = self.Bw[:, 0] + (self.Bw[:, 1] - self.Bw[:, 0]) \
-                * numpy.random.random_sample(6)
-        elif len(vals) == Bwdims:
-            Bwvals = numpy.zeros(6)
-            vals_i = 0
-            for i in range(6):
-                if self.Bw[i, 0] != self.Bw[i, 1]:
-                    Bwvals[i] = vals[vals_i]
-                    vals_i += 1
-                else:
-                    Bwvals[i] = self.Bw[i, 0]
-        elif len(vals) == 6:
-            Bwvals = vals
-        else:
-            raise ValueError('vals must be of length %d or 6!' % Bwdims)
-        # print 'Bwvals[5]:', Bwvals[5]
-        xyzypr = [Bwvals[0], Bwvals[1], Bwvals[2],
-                  Bwvals[5], Bwvals[4], Bwvals[3]]
+        @param  vals [x y z roll pitch yaw]
+        @return trans 4x4 transform
+        """
+        if len(vals) != 6:
+            raise ValueError('vals must be of length 6')
+        xyzypr = [vals[0], vals[1], vals[2],
+                  vals[5], vals[4], vals[3]]
         Tw = kin.pose_to_H(kin.pose_from_xyzypr(xyzypr))
-
         trans = numpy.dot(numpy.dot(self.T0_w, Tw), self.Tw_e)
         return trans
+
+    def sample(self, vals=numpy.ones(6)*float('nan')):
+        """
+        Samples from Bw to generate an end-effector transform.
+        Can specify some Bw values optionally.
+
+        @param vals   (optional) a 6-vector of Bw with float('nan') for
+                      dimensions to sample uniformly.
+        @return trans a 4x4 transform
+        """
+        if len(vals) != 6:
+            raise ValueError('vals must be of length 6')
+        if any([(x < self.Bw[i, 0]) or (x > self.Bw[i, 1])
+                and not numpy.isnan(x) for i, x in enumerate(vals)]):
+            raise ValueError('specified vals must be within bounds')
+
+        Bwvals = [self.Bw[i, 0] + (self.Bw[i, 1] - self.Bw[i, 0]) *
+                  numpy.random.random_sample()
+                  if numpy.isnan(val) else val for i, val in enumerate(vals)]
+
+        return self.to_transform(Bwvals)
 
     def serialize(self):
         return '%d %s %s %s %s' % (self.manipindex, self.bodyandlink,
