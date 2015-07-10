@@ -142,9 +142,9 @@ class TSR(object):  # force new-style class
                   ypr[2], ypr[1], ypr[0]]
         return Bwvals
 
-    def in_tsr(self, trans):
+    def contains(self, trans):
         """
-        Checks if a transform is within a TSR
+        Checks if the TSR contains the transform
         @param  trans 4x4 transform
         @return       True if inside and False if not
         """
