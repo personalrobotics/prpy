@@ -126,6 +126,33 @@ class TSR(object):  # force new-style class
         trans = numpy.dot(numpy.dot(self.T0_w, Tw), self.Tw_e)
         return trans
 
+    def to_Bwvals(self, trans):
+        """
+        Converts an end-effector transform to Bw values
+        @param  trans  4x4 transform
+        @return Bwvals 6x1 vector of Bw values
+        """
+        Tw = numpy.dot(numpy.dot(numpy.linalg.inv(self.T0_w), trans),
+                       numpy.linalg.inv(self.Tw_e))
+        pose = kin.pose_from_H(Tw)
+        ypr = kin.quat_to_ypr(pose[3:7])
+        Bwvals = [pose[0], pose[1], pose[2],
+                  ypr[2], ypr[1], ypr[0]]
+        return Bwvals
+
+    def in_tsr(self, trans):
+        """
+        Checks if a transform is within a TSR
+        @param  trans 4x4 transform
+        @return       True if inside and False if not
+        """
+        EPSILON = 0.001
+        Bwvals = self.to_Bwvals(trans)
+        check = [((x >= self.Bw[i, 0]) and (x <= self.Bw[i, 1]))
+                 or (self.Bw[i, 1] - self.Bw[i, 0] < EPSILON)
+                 for i, x in enumerate(Bwvals)]
+        return all(check)
+
     def sample(self, vals=numpy.ones(6)*float('nan')):
         """
         Samples from Bw to generate an end-effector transform.
