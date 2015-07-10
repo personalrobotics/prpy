@@ -110,7 +110,7 @@ class TSR(object):
             bwtrans = self.to_transform(bw)
             return prpy.util.GeodesicDistance(bwtrans, trans)
 
-        bwinit = numpy.zeros(6)
+        bwinit = (self.Bw[:, 0] + self.Bw[:, 1])/2
         bwbounds = [(self.Bw[i, 0], self.Bw[i, 1]) for i in range(6)]
 
         if self.contains(trans):
@@ -306,7 +306,7 @@ class TSRChain(object):
         if len(self.TSRs) == 0:
             return None
         if vals is None:
-            vals = NANBW*len(self.TSRs)
+            vals = [NANBW]*len(self.TSRs)
 
         T0_w = self.TSRs[0].T0_w
         for idx in range(len(self.TSRs)):
