@@ -35,6 +35,8 @@ import numpy
 import numpy.random
 import kin
 
+NANBW = numpy.ones(6)*float('nan')
+
 """
 Functions for Serializing TSRs and TSR Chains
 
@@ -153,7 +155,7 @@ class TSR(object):  # force new-style class
                  for i, x in enumerate(Bwvals)]
         return all(check)
 
-    def sample(self, vals=numpy.ones(6)*float('nan')):
+    def sample(self, vals=NANBW):
         """
         Samples from Bw to generate an end-effector transform.
         Can specify some Bw values optionally.
@@ -287,7 +289,7 @@ class TSRChain(object):
         if len(self.TSRs) == 0:
             return None
         if vals is None:
-            vals = [numpy.ones(6)*float('nan')]*len(self.TSRs)
+            vals = NANBW*len(self.TSRs)
 
         T0_w = self.TSRs[0].T0_w
         for idx in range(len(self.TSRs)):
