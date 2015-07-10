@@ -204,7 +204,7 @@ class TSR(object):
     def to_yaml(self):
         """ Convert this TSR to a YAML string. """
         import yaml
-        return yaml.dumps(self.to_dict())
+        return yaml.dump(self.to_dict())
 
     @staticmethod
     def from_yaml(x, *args, **kw_args):
@@ -300,7 +300,7 @@ class TSRChain(object):
     def to_yaml(self):
         """ Convert this TSR chain to a YAML string. """
         import yaml
-        return yaml.dumps(self.to_dict())
+        return yaml.dump(self.to_dict())
 
     @staticmethod
     def from_yaml(x, *args, **kw_args):
