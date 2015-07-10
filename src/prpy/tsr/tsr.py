@@ -34,8 +34,11 @@ import openravepy
 import numpy
 import numpy.random
 import kin
+import prpy.util
 
 NANBW = numpy.ones(6)*float('nan')
+EPSILON = 0.001
+
 
 """
 Functions for Serializing TSRs and TSR Chains
@@ -148,12 +151,36 @@ class TSR(object):  # force new-style class
         @param  trans 4x4 transform
         @return       True if inside and False if not
         """
-        EPSILON = 0.001
         Bwvals = self.to_Bwvals(trans)
         check = [((x >= self.Bw[i, 0]) and (x <= self.Bw[i, 1]))
                  or (self.Bw[i, 1] - self.Bw[i, 0] < EPSILON)
                  for i, x in enumerate(Bwvals)]
         return all(check)
+
+    def distance(self, trans):
+        """
+        Computes the Geodesic Distance from the TSR to a transform
+        @param trans 4x4 transform
+        @return dist Geodesic distance to TSR
+        @return bwopt Closest Bw value to trans
+        """
+        import scipy.optimize
+
+        def objective(bw):
+            bwtrans = self.to_transform(bw)
+            return prpy.util.GeodesicDistance(bwtrans, trans)
+
+        bwinit = numpy.zeros(6)
+        bwbounds = [(self.Bw[i, 0], self.Bw[i, 1]) for i in range(6)]
+
+        if self.contains(trans):
+            return 0.
+
+        bwopt, dist, info = scipy.optimize.fmin_l_bfgs_b(
+                                objective, bwinit, fprime=None,
+                                args=(),
+                                bounds=bwbounds, approx_grad=True)
+        return dist, bwopt
 
     def sample(self, vals=NANBW):
         """
