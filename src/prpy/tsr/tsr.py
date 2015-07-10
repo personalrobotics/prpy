@@ -55,35 +55,55 @@ class TSR(object):
             self.manipindex = manip
         self.bodyandlink = bodyandlink
 
-    def to_transform(self, vals):
+    def to_transform(self, xyzrpy):
         """
         Converts a [x y z roll pitch yaw] into an
         end-effector transform.
 
-        @param  vals [x y z roll pitch yaw]
+        @param  xyzrpy [x y z roll pitch yaw]
         @return trans 4x4 transform
         """
-        if len(vals) != 6:
+        if len(xyzrpy) != 6:
             raise ValueError('vals must be of length 6')
-        xyzypr = [vals[0], vals[1], vals[2],
-                  vals[5], vals[4], vals[3]]
+        xyzypr = [xyzrpy[0], xyzrpy[1], xyzrpy[2],
+                  xyzrpy[5], xyzrpy[4], xyzrpy[3]]
         Tw = kin.pose_to_H(kin.pose_from_xyzypr(xyzypr))
         trans = numpy.dot(numpy.dot(self.T0_w, Tw), self.Tw_e)
         return trans
 
-    def to_Bwvals(self, trans):
+    def to_xyzrpy(self, trans):
         """
-        Converts an end-effector transform to Bw values
+        Converts an end-effector transform to xyzrpy values
         @param  trans  4x4 transform
-        @return Bwvals 6x1 vector of Bw values
+        @return xyzrpy 6x1 vector of Bw values
         """
         Tw = numpy.dot(numpy.dot(numpy.linalg.inv(self.T0_w), trans),
                        numpy.linalg.inv(self.Tw_e))
         pose = kin.pose_from_H(Tw)
         ypr = kin.quat_to_ypr(pose[3:7])
-        Bwvals = [pose[0], pose[1], pose[2],
+        xyzrpy = [pose[0], pose[1], pose[2],
                   ypr[2], ypr[1], ypr[0]]
-        return Bwvals
+        return xyzrpy
+
+    def is_valid(self, xyzrpy):
+        """
+        Checks if a xyzrpy is a valid sample from the TSR.
+        Two main issues: dealing with roundoff issues for zero bounds and
+        Wraparound for rpy.
+        @param xyzrpy 6x1 vector of Bw values
+        @return True if valid and False if not
+        """
+        from math import pi
+
+        Bw_xyz = self.Bw[0:3, :]
+        xyzcheck = [((x >= Bw_xyz[i, 0]) and (x <= Bw_xyz[i, 1]))
+                    or (Bw_xyz[i, 1] - Bw_xyz[i, 0] < EPSILON)
+                    for i, x in enumerate(xyzrpy[0:3])]
+        Bw_rpy = (self.Bw[4:6, :] + pi) % (2*pi) - pi
+        rpycheck = [((x >= Bw_rpy[i, 0]) and (x <= Bw_rpy[i, 1]))
+                    or (Bw_rpy[i, 1] - Bw_rpy[i, 0] < EPSILON)
+                    for i, x in enumerate(xyzrpy[3:6])]
+        return all(xyzcheck) and all(rpycheck)
 
     def contains(self, trans):
         """
@@ -91,10 +111,10 @@ class TSR(object):
         @param  trans 4x4 transform
         @return       True if inside and False if not
         """
-        Bwvals = self.to_Bwvals(trans)
+        xyzrpy = self.to_xyzrpy(trans)
         check = [((x >= self.Bw[i, 0]) and (x <= self.Bw[i, 1]))
                  or (self.Bw[i, 1] - self.Bw[i, 0] < EPSILON)
-                 for i, x in enumerate(Bwvals)]
+                 for i, x in enumerate(xyzrpy)]
         return all(check)
 
     def distance(self, trans):
