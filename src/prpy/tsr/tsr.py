@@ -85,12 +85,13 @@ class TSR(object):
                   ypr[2], ypr[1], ypr[0]]
         return xyzrpy
 
-    def is_valid(self, xyzrpy):
+    def is_valid(self, xyzrpy, ignoreNAN=False):
         """
         Checks if a xyzrpy is a valid sample from the TSR.
         Two main issues: dealing with roundoff issues for zero bounds and
         Wraparound for rpy.
         @param xyzrpy 6x1 vector of Bw values
+        @param ignoreNAN (optional, defaults to False) ignore NaN xyzrpy
         @return True if valid and False if not
         """
         from math import pi
@@ -99,11 +100,21 @@ class TSR(object):
         xyzcheck = [((x >= Bw_xyz[i, 0]) and (x <= Bw_xyz[i, 1]))
                     or (Bw_xyz[i, 1] - Bw_xyz[i, 0] < EPSILON)
                     for i, x in enumerate(xyzrpy[0:3])]
+
+        # Unwrap all rotations to [-pi, pi]
         Bw_rpy = (self.Bw[4:6, :] + pi) % (2*pi) - pi
+        rpy = (xyzrpy[4:6] + pi) % (2*pi) - pi
         rpycheck = [((x >= Bw_rpy[i, 0]) and (x <= Bw_rpy[i, 1]))
                     or (Bw_rpy[i, 1] - Bw_rpy[i, 0] < EPSILON)
-                    for i, x in enumerate(xyzrpy[3:6])]
-        return all(xyzcheck) and all(rpycheck)
+                    for i, x in enumerate(rpy)]
+
+        check = numpy.hstack(xyzcheck, rpycheck)
+
+        # Strip out Nans if needed
+        if ignoreNAN is True:
+            check = check[~numpy.isnan(xyzrpy)]
+
+        return all(check)
 
     def contains(self, trans):
         """
@@ -112,10 +123,7 @@ class TSR(object):
         @return       True if inside and False if not
         """
         xyzrpy = self.to_xyzrpy(trans)
-        check = [((x >= self.Bw[i, 0]) and (x <= self.Bw[i, 1]))
-                 or (self.Bw[i, 1] - self.Bw[i, 0] < EPSILON)
-                 for i, x in enumerate(xyzrpy)]
-        return all(check)
+        return self.is_valid(xyzrpy)
 
     def distance(self, trans):
         """
@@ -142,27 +150,23 @@ class TSR(object):
                                 bounds=bwbounds, approx_grad=True)
         return dist, bwopt
 
-    def sample(self, vals=NANBW):
+    def sample(self, xyzrpy=NANBW):
         """
         Samples from Bw to generate an end-effector transform.
         Can specify some Bw values optionally.
 
-        @param vals   (optional) a 6-vector of Bw with float('nan') for
-                      dimensions to sample uniformly.
-        @return       4x4 transform
+        @param xyzrpy   (optional) a 6-vector of Bw with float('nan') for
+                        dimensions to sample uniformly.
+        @return         4x4 transform
         """
-        if len(vals) != 6:
-            raise ValueError('vals must be of length 6')
-        if any([(x < self.Bw[i, 0]) or (x > self.Bw[i, 1])
-                and not numpy.isnan(x) for i, x in enumerate(vals)]):
+        if not self.is_valid(xyzrpy, ignoreNAN=True):
             raise ValueError('specified vals must be within bounds')
 
-        Bwvals = [self.Bw[i, 0] + (self.Bw[i, 1] - self.Bw[i, 0]) *
+        sample = [self.Bw[i, 0] + (self.Bw[i, 1] - self.Bw[i, 0]) *
                   numpy.random.random_sample()
-                  if numpy.isnan(val) else val for i, val in enumerate(vals)]
+                  if numpy.isnan(x) else x for i, x in enumerate(xyzrpy)]
 
-        return self.to_transform(Bwvals)
-
+        return self.to_transform(sample)
 
     def to_dict(self):
         """ Convert this TSR to a python dict. """
