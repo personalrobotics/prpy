@@ -30,9 +30,12 @@ import numpy
 import numpy.random
 import kin
 import prpy.util
+from math import pi
+
 
 NANBW = numpy.ones(6)*float('nan')
 EPSILON = 0.001
+
 
 class TSR(object):
     """ A Task-Space-Region (TSR) represents a motion constraint. """
@@ -44,6 +47,8 @@ class TSR(object):
             Tw_e = numpy.eye(4)
         if Bw is None:
             Bw = numpy.zeros((6, 2))
+        elif any((Bw[:, 1]-Bw[:, 0]) > 2*pi + EPSILON):
+            raise(ValueError('Bw range must be within 2*PI'))
         self.T0_w = T0_w
         self.Tw_e = Tw_e
         self.Bw = Bw
@@ -94,8 +99,6 @@ class TSR(object):
         @param ignoreNAN (optional, defaults to False) ignore NaN xyzrpy
         @return True if valid and False if not
         """
-        from math import pi
-
         Bw_xyz = self.Bw[0:3, :]
         xyzcheck = [((x >= Bw_xyz[i, 0]) and (x <= Bw_xyz[i, 1]))
                     or (Bw_xyz[i, 1] - Bw_xyz[i, 0] < EPSILON)
