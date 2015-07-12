@@ -114,7 +114,7 @@ class TSR(object):
         check = numpy.hstack(xyzcheck, rpycheck)
 
         # Strip out Nans if needed
-        if ignoreNAN is True:
+        if ignoreNAN:
             check = check[~numpy.isnan(xyzrpy)]
 
         return all(check)
@@ -135,6 +135,9 @@ class TSR(object):
         @return dist Geodesic distance to TSR
         @return bwopt Closest Bw value to trans
         """
+        if self.contains(trans):
+            return 0.
+
         import scipy.optimize
 
         def objective(bw):
@@ -143,9 +146,6 @@ class TSR(object):
 
         bwinit = (self.Bw[:, 0] + self.Bw[:, 1])/2
         bwbounds = [(self.Bw[i, 0], self.Bw[i, 1]) for i in range(6)]
-
-        if self.contains(trans):
-            return 0.
 
         bwopt, dist, info = scipy.optimize.fmin_l_bfgs_b(
                                 objective, bwinit, fprime=None,
