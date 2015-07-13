@@ -105,13 +105,13 @@ class TSR(object):
                     for i, x in enumerate(xyzrpy[0:3])]
 
         # Unwrap all rotations to [-pi, pi]
-        Bw_rpy = (self.Bw[4:6, :] + pi) % (2*pi) - pi
-        rpy = (xyzrpy[4:6] + pi) % (2*pi) - pi
+        Bw_rpy = (self.Bw[3:6, :] + pi) % (2*pi) - pi
+        rpy = numpy.add(xyzrpy[3:6], pi) % (2*pi) - pi
         rpycheck = [((x >= Bw_rpy[i, 0]) and (x <= Bw_rpy[i, 1]))
                     or (Bw_rpy[i, 1] - Bw_rpy[i, 0] < EPSILON)
                     for i, x in enumerate(rpy)]
 
-        check = numpy.hstack(xyzcheck, rpycheck)
+        check = numpy.hstack((xyzcheck, rpycheck))
 
         # Strip out Nans if needed
         if ignoreNAN:
