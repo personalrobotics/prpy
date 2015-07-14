@@ -30,6 +30,7 @@
 
 import numpy
 
+
 def NoRanking(robot, ik_solutions):
     """
     Return IK solutions with an arbitrary ranking.
