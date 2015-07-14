@@ -25,72 +25,14 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# @package libherb.tsr Utilities for TSRs and TSR chains.
-
 import openravepy
 import numpy
 import numpy.random
 import kin
 
-"""
-Functions for Serializing TSRs and TSR Chains
 
-SerializeTSR(manipindex,bodyandlink,T0_w,Tw_e,Bw)
-
-Input:
-manipindex (int): the 0-indexed index of the robot's manipulator
-bodyandlink (str): body and link which is used as the 0 frame. Format
-                   'body_name link_name'. To use world frame, specify 'NULL'
-T0_w (double 4x4): transform matrix of the TSR's reference frame relative to
-                   the 0 frame
-Tw_e (double 4x4): transform matrix of the TSR's offset frame relative to the
-                   w frame
-Bw (double 1x12): bounds in x y z roll pitch yaw.
-                  Format: [x_min, x_max, y_min, y_max ...]
-
-Output:
-outstring (str): string to use for SerializeTSRChain function
-
-SerializeTSRChain(bSampleFromChain,
-                  bConstrainToChain,
-                  numTSRs,
-                  allTSRstring,
-                  mimicbodyname,
-                  mimicbodyjoints)
-
-Input:
-bSampleStartFromChain (0/1): 1: Use this chain for sampling start configs
-                             0: Ignore for sampling starts
-bSampleGoalFromChain (0/1): 1: Use this chain for sampling goal configs
-                            0: Ignore for sampling goals
-bConstrainToChain (0/1): 1: Use this chain for constraining configs
-                         0: Ignore for constraining
-numTSRs (int): Number of TSRs in this chain (must be > 0)
-allTSRstring (str): string of concetenated TSRs generated using SerializeTSR.
-                    Should be like [TSRstring 1 ' ' TSRstring2 ...]
-mimicbodyname (str): name of associated mimicbody for this chain
-                     (NULL if none associated)
-mimicbodyjoints (int [1xn]): 0-indexed indices of the mimicbody's joints that
-                             are mimiced (MUST BE INCREASING AND CONSECUTIVE)
-
-Output:
-outstring (str): string to include in call to cbirrt planner
-"""
-
-
-def SerializeTransform12Col(tm, format='%.5f'):
-    return ' '.join([(format % (i,)) for i in tm[0:3, :].T.reshape(12)])
-
-
-def SerializeArray(a, format='%.5f'):
-    return ' '.join([(format % (i,)) for i in a.reshape(-1)])
-
-
-class TSR(object):  # force new-style class
-
+class TSR(object):
+    """ A Task-Space-Region (TSR) represents a motion constraint. """
     def __init__(self, T0_w=None, Tw_e=None, Bw=None,
                  manip=None, bodyandlink='NULL'):
         if T0_w is None:
@@ -140,13 +82,8 @@ class TSR(object):  # force new-style class
         trans = numpy.dot(numpy.dot(self.T0_w, Tw), self.Tw_e)
         return trans
 
-    def serialize(self):
-        return '%d %s %s %s %s' % (self.manipindex, self.bodyandlink,
-                                   SerializeTransform12Col(self.T0_w),
-                                   SerializeTransform12Col(self.Tw_e),
-                                   SerializeArray(self.Bw))
-
-    def serialize_dict(self):
+    def to_dict(self):
+        """ Convert this TSR to a python dict. """
         return {
             'T0_w': self.T0_w.tolist(),
             'Tw_e': self.Tw_e.tolist(),
@@ -156,14 +93,48 @@ class TSR(object):  # force new-style class
         }
 
     @staticmethod
-    def deserialize_dict(x):
+    def from_dict(x):
+        """ Construct a TSR from a python dict. """
         return TSR(
-            T0_w = numpy.array(x['T0_w']),
-            Tw_e = numpy.array(x['Tw_e']),
-            Bw = numpy.array(x['Bw']),
-            manip = numpy.array(x['manipindex']),
-            bodyandlink = numpy.array(x['bodyandlink'])
+            T0_w=numpy.array(x['T0_w']),
+            Tw_e=numpy.array(x['Tw_e']),
+            Bw=numpy.array(x['Bw']),
+            manip=numpy.array(x.get('manipindex', -1)),
+            bodyandlink=numpy.array(x.get('bodyandlink', 'NULL'))
         )
+
+    def to_json(self):
+        """ Convert this TSR to a JSON string. """
+        import json
+        return json.dumps(self.to_dict())
+
+    @staticmethod
+    def from_json(x, *args, **kw_args):
+        """
+        Construct a TSR from a JSON string.
+
+        This method internally forwards all arguments to `json.loads`.
+        """
+        import json
+        x_dict = json.loads(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
+
+    def to_yaml(self):
+        """ Convert this TSR to a YAML string. """
+        import yaml
+        return yaml.dumps(self.to_dict())
+
+    @staticmethod
+    def from_yaml(x, *args, **kw_args):
+        """
+        Construct a TSR from a YAML string.
+
+        This method internally forwards all arguments to `yaml.safe_load`.
+        """
+        import yaml
+        x_dict = yaml.safe_load(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
+
 
 class TSRChain(object):
 
@@ -205,40 +176,60 @@ class TSRChain(object):
     def append(self, tsr):
         self.TSRs.append(tsr)
 
-    def serialize(self):
-        allTSRstring = ' '.join([tsr.serialize() for tsr in self.TSRs])
-        numTSRs = len(self.TSRs)
-        outstring = '%d %d %d' % (int(self.sample_start),
-                                  int(self.sample_goal),
-                                  int(self.constrain))
-        outstring += ' %d %s' % (numTSRs, allTSRstring)
-        outstring += ' ' + self.mimicbodyname
-        if len(self.mimicbodyjoints) > 0:
-            outstring += ' %d %s' % (len(self.mimicbodyjoints),
-                                     SerializeArray(self.mimicbodyjoints))
-        return outstring
-
-    def serialize_dict(self):
+    def to_dict(self):
+        """ Construct a TSR chain from a python dict. """
         return {
             'sample_goal': self.sample_goal,
             'sample_start': self.sample_start,
             'constrain': self.constrain,
             'mimicbodyname': self.mimicbodyname,
             'mimicbodyjoints': self.mimicbodyjoints,
-            'tsrs': [ tsr.serialize_dict() for tsr in self.TSRs ],
+            'tsrs': [tsr.to_dict() for tsr in self.TSRs],
         }
 
-
     @staticmethod
-    def deserialize_dict(x):
+    def from_dict(x):
+        """ Construct a TSR chain from a python dict. """
         return TSRChain(
             sample_start=x['sample_start'],
             sample_goal=x['sample_goal'],
             constrain=x['constrain'],
-            TSRs=[ TSR.deserialize_dict(tsr) for tsr in x['tsrs'] ],
+            TSRs=[TSR.from_dict(tsr) for tsr in x['tsrs']],
             mimicbodyname=x['mimicbodyname'],
             mimicbodyjoints=x['mimicbodyjoints'],
         )
+
+    def to_json(self):
+        """ Convert this TSR chain to a JSON string. """
+        import json
+        return json.dumps(self.to_dict())
+
+    @staticmethod
+    def from_json(x, *args, **kw_args):
+        """
+        Construct a TSR chain from a JSON string.
+
+        This method internally forwards all arguments to `json.loads`.
+        """
+        import json
+        x_dict = json.loads(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
+
+    def to_yaml(self):
+        """ Convert this TSR chain to a YAML string. """
+        import yaml
+        return yaml.dumps(self.to_dict())
+
+    @staticmethod
+    def from_yaml(x, *args, **kw_args):
+        """
+        Construct a TSR chain from a YAML string.
+
+        This method internally forwards all arguments to `yaml.safe_load`.
+        """
+        import yaml
+        x_dict = yaml.safe_load(x, *args, **kw_args)
+        return TSR.from_dict(x_dict)
 
     def sample(self):
         if len(self.TSRs) == 0:

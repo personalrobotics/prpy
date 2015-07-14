@@ -28,11 +28,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import copy, logging, numpy, openravepy, os, tempfile
+import numpy, openravepy
 from ..util import SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   PlanningMethod, Tags)
 import prpy.kin, prpy.tsr
+
 
 class CBiRRTPlanner(BasePlanner):
     def __init__(self):
@@ -109,7 +110,7 @@ class CBiRRTPlanner(BasePlanner):
             # 'object frame w' is at ee, z pointed along direction to move
             H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
             H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
-        
+
             # Serialize TSR string (goal)
             Hw_end = numpy.eye(4)
             Hw_end[2,3] = distance
@@ -135,7 +136,7 @@ class CBiRRTPlanner(BasePlanner):
                                    Bw = Bw, 
                                    manip = robot.GetActiveManipulatorIndex())
             traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True, TSRs=[trajtsr])
-        
+
         return self.Plan(robot,
             psample=0.1,
             tsr_chains=[goal_tsr_chain, traj_tsr_chain],
@@ -227,7 +228,7 @@ class CBiRRTPlanner(BasePlanner):
                             robot.GetActiveDOF(), len(start_config)
                         )
                     )
-                
+
                 args += ['jointstarts'] + self.serialize_dof_values(start_config)
 
         if jointgoals is not None:
@@ -239,12 +240,12 @@ class CBiRRTPlanner(BasePlanner):
                             robot.GetActiveDOF(), len(goal_config)
                         )
                     )
-            
+
                 args += ['jointgoals'] + self.serialize_dof_values(goal_config)
 
         if tsr_chains is not None:
             for tsr_chain in tsr_chains:
-                args += [ 'TSRChain', tsr_chain.serialize() ]
+                args += ['TSRChain', SerializeTSRChain(tsr_chain)]
 
         # FIXME: Why can't we write to anything other than cmovetraj.txt or
         # /tmp/cmovetraj.txt with CBiRRT?
@@ -258,7 +259,7 @@ class CBiRRTPlanner(BasePlanner):
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response)
-         
+
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
@@ -290,4 +291,75 @@ class CBiRRTPlanner(BasePlanner):
         return [ str(len(dof_values)), 
                  ' '.join([ str(x) for x in dof_values]) ]
 
-   
+
+def SerializeTransform12Col(tm, format='%.5f'):
+    return ' '.join([(format % (i,)) for i in tm[0:3, :].T.reshape(12)])
+
+
+def SerializeArray(a, format='%.5f'):
+    return ' '.join([(format % (i,)) for i in a.reshape(-1)])
+
+
+def SerializeTSR(self):
+    """
+    Function for Serializing TSRs for CBIRRT.
+
+    SerializeTSR(manipindex,bodyandlink,T0_w,Tw_e,Bw)
+
+    Input:
+    manipindex (int): the 0-indexed index of the robot's manipulator
+    bodyandlink (str): body and link which is used as the 0 frame. Format
+                       'body_name link_name'. For world frame, specify 'NULL'
+    T0_w (double 4x4): transform matrix of the TSR's reference frame relative
+                       to the 0 frame
+    Tw_e (double 4x4): transform matrix of the TSR's offset frame relative to
+                       the w frame
+    Bw (double 1x12): bounds in x y z roll pitch yaw.
+                      Format: [x_min, x_max, y_min, y_max ...]
+
+    Output:
+    outstring (str): string to use for SerializeTSRChain function
+    """
+    return '%d %s %s %s %s' % (self.manipindex, self.bodyandlink,
+                               SerializeTransform12Col(self.T0_w),
+                               SerializeTransform12Col(self.Tw_e),
+                               SerializeArray(self.Bw))
+
+
+def SerializeTSRChain(self):
+    """
+    Function for Serializing TSR Chains for CBIRRT.
+
+    _SerializeTSRChain(bSampleFromChain, bConstrainToChain,
+                       numTSRs, allTSRstring,
+                       mimicbodyname, mimicbodyjoints)
+
+    Input:
+    bSampleStartFromChain (0/1): 1: Use this chain for sampling start configs
+                                 0: Ignore for sampling starts
+    bSampleGoalFromChain (0/1): 1: Use this chain for sampling goal configs
+                                0: Ignore for sampling goals
+    bConstrainToChain (0/1): 1: Use this chain for constraining configs
+                             0: Ignore for constraining
+    numTSRs (int): Number of TSRs in this chain (must be > 0)
+    allTSRstring (str): string of concatenated TSRs from SerializeTSR.
+                        Should be like [TSRstring 1 ' ' TSRstring2 ...]
+    mimicbodyname (str): name of associated mimicbody for this chain
+                         (NULL if none associated)
+    mimicbodyjoints (int [1xn]): 0-indexed indices of mimicbody's joints that
+                                 are mimiced (INCREASING AND CONSECUTIVE)
+
+    Output:
+    outstring (str): string to include in call to cbirrt planner
+    """
+    allTSRstring = ' '.join([SerializeTSR(tsr) for tsr in self.TSRs])
+    numTSRs = len(self.TSRs)
+    outstring = '%d %d %d' % (int(self.sample_start),
+                              int(self.sample_goal),
+                              int(self.constrain))
+    outstring += ' %d %s' % (numTSRs, allTSRstring)
+    outstring += ' ' + self.mimicbodyname
+    if len(self.mimicbodyjoints) > 0:
+        outstring += ' %d %s' % (len(self.mimicbodyjoints),
+                                 SerializeArray(self.mimicbodyjoints))
+    return outstring
