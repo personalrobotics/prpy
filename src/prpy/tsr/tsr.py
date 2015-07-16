@@ -368,7 +368,7 @@ class TSRChain(object):
 
         return T0_w
 
-    def sample_xyzrpy(self, xyzrpy=NANBW):
+    def sample_xyzrpy(self, xyzrpy=None):
         """
         Samples from Bw to generate an xyzrpy sample
         Can specify some values optionally as NaN.
