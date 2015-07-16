@@ -70,6 +70,9 @@ class TSR(object):
         """
         if len(xyzrpy) != 6:
             raise ValueError('vals must be of length 6')
+        if not self.is_valid(xyzrpy):
+            raise ValueError('Invalid xyzrpy')
+
         xyzypr = [xyzrpy[0], xyzrpy[1], xyzrpy[2],
                   xyzrpy[5], xyzrpy[4], xyzrpy[3]]
         Tw = kin.pose_to_H(kin.pose_from_xyzypr(xyzypr))
@@ -136,7 +139,7 @@ class TSR(object):
         @return bwopt Closest Bw value to trans
         """
         if self.contains(trans):
-            return 0.
+            return 0., self.to_xyzrpy(trans)
 
         import scipy.optimize
 
@@ -153,6 +156,22 @@ class TSR(object):
                                 bounds=bwbounds, approx_grad=True)
         return dist, bwopt
 
+    def sample_xyzrpy(self, xyzrpy=NANBW):
+        """
+        Samples from Bw to generate an xyzrpy sample
+        Can specify some values optionally as NaN.
+
+        @param xyzrpy   (optional) a 6-vector of Bw with float('nan') for
+                        dimensions to sample uniformly.
+        @return         an xyzrpy sample
+        """
+        if not self.is_valid(xyzrpy, ignoreNAN=True):
+            raise ValueError('specified xyzrpy must be within bounds')
+
+        return [self.Bw[i, 0] + (self.Bw[i, 1] - self.Bw[i, 0]) *
+                numpy.random.random_sample()
+                if numpy.isnan(x) else x for i, x in enumerate(xyzrpy)]
+
     def sample(self, xyzrpy=NANBW):
         """
         Samples from Bw to generate an end-effector transform.
@@ -162,14 +181,7 @@ class TSR(object):
                         dimensions to sample uniformly.
         @return         4x4 transform
         """
-        if not self.is_valid(xyzrpy, ignoreNAN=True):
-            raise ValueError('specified vals must be within bounds')
-
-        sample = [self.Bw[i, 0] + (self.Bw[i, 1] - self.Bw[i, 0]) *
-                  numpy.random.random_sample()
-                  if numpy.isnan(x) else x for i, x in enumerate(xyzrpy)]
-
-        return self.to_transform(sample)
+        return self.to_transform(self.sample_xyzrpy(xyzrpy))
 
     def to_dict(self):
         """ Convert this TSR to a python dict. """
@@ -320,25 +332,113 @@ class TSRChain(object):
         x_dict = yaml.safe_load(x, *args, **kw_args)
         return TSR.from_dict(x_dict)
 
-    def sample(self, vals=None):
+    def is_valid(self, xyzrpy, ignoreNAN=False):
         """
-        Samples from the Bw chain to generate an end-effector transform.
-        Can specify some Bw values optionally.
-
-        @param vals   (optional) a 6-vector of Bw with float('nan') for
-                      dimensions to sample uniformly.
-        @return T0_w  4x4 transform
+        Checks if a xyzrpy list is a valid sample from the TSR.
+        @param xyzrpy a list of xyzrpy values
+        @param ignoreNAN (optional, defaults to False) ignore NaN xyzrpy
+        @return True if valid and False if not
         """
 
-        if len(self.TSRs) == 0:
-            return None
-        if vals is None:
-            vals = [NANBW]*len(self.TSRs)
+        if len(xyzrpy) != len(self.TSRs):
+            raise('Sample must be of equal length to TSR chain!')
 
+        for idx in range(len(self.TSRs)):
+            if not self.TSRs[idx].is_valid(xyzrpy[idx], ignoreNAN):
+                return False
+
+        return True
+
+    def to_transform(self, xyzrpy):
+        """
+        Converts a xyzrpy list into an
+        end-effector transform.
+
+        @param  a list of xyzrpy values
+        @return trans 4x4 transform
+        """
+
+        if not self.is_valid(xyzrpy):
+            raise ValueError('Invalid xyzrpy')
         T0_w = self.TSRs[0].T0_w
         for idx in range(len(self.TSRs)):
             tsr_current = self.TSRs[idx]
             tsr_current.T0_w = T0_w
-            T0_w = tsr_current.sample(vals[idx])
+            T0_w = tsr_current.to_transform(xyzrpy[idx])
 
         return T0_w
+
+    def sample_xyzrpy(self, xyzrpy=NANBW):
+        """
+        Samples from Bw to generate an xyzrpy sample
+        Can specify some values optionally as NaN.
+
+        @param xyzrpy   (optional) a list of Bw with float('nan') for
+                        dimensions to sample uniformly.
+        @return sample  a list of sampled xyzrpy
+        """
+
+        if xyzrpy is None:
+            xyzrpy = [NANBW]*len(self.TSRs)
+
+        sample = []
+        for idx in range(len(self.TSRs)):
+            sample.append(self.TSRs[idx].sample_xyzrpy(xyzrpy[idx]))
+
+        return sample
+
+    def sample(self, xyzrpy=None):
+        """
+        Samples from the Bw chain to generate an end-effector transform.
+        Can specify some Bw values optionally.
+
+        @param xyzrpy   (optional) a list of xyzrpy with float('nan') for
+                        dimensions to sample uniformly.
+        @return T0_w    4x4 transform
+        """
+        return self.to_transform(self.sample_xyzrpy(xyzrpy))
+
+    def distance(self, trans):
+        """
+        Computes the Geodesic Distance from the TSR chain to a transform
+        @param trans 4x4 transform
+        @return dist Geodesic distance to TSR
+        @return bwopt Closest Bw value to trans output as a list of xyzrpy
+        """
+        import scipy.optimize
+
+        def objective(xyzrpy):
+            bw_stack = xyzrpy.reshape(len(self.TSRs), 6)
+            bwtrans = self.to_transform(bw_stack)
+            return prpy.util.GeodesicDistance(bwtrans, trans)
+
+        bwinit = []
+        bwbounds = []
+        for idx in range(len(self.TSRs)):
+            Bw = self.TSRs[idx].Bw
+            bwinit.extend((Bw[:, 0] + Bw[:, 1])/2)
+            bwbounds.extend([(Bw[i, 0], Bw[i, 1]) for i in range(6)])
+
+        bwopt, dist, info = scipy.optimize.fmin_l_bfgs_b(
+                                objective, bwinit, fprime=None,
+                                args=(),
+                                bounds=bwbounds, approx_grad=True)
+        return dist, bwopt.reshape(len(self.TSRs), 6)
+
+    def contains(self, trans):
+        """
+        Checks if the TSR chain contains the transform
+        @param  trans 4x4 transform
+        @return       True if inside and False if not
+        """
+        dist, _ = self.distance(trans)
+        return (abs(dist) < EPSILON)
+
+    def to_xyzrpy(self, trans):
+        """
+        Converts an end-effector transform to a list of xyzrpy values
+        @param  trans  4x4 transform
+        @return xyzrpy list of xyzrpy values
+        """
+        _, xyzrpy = self.distance(trans)
+        return xyzrpy
