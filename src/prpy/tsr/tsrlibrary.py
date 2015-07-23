@@ -88,7 +88,7 @@ class TSRLibrary(object):
         f = None
         try:
             f = self.all_factories[self.robot_name][kinbody_name][action_name]
-        except KeyError, ignored:
+        except KeyError:
             pass
 
         if f is None:
