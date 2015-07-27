@@ -85,20 +85,17 @@ class MobileBase(object):
         if abs(numpy.linalg.norm(direction) - 1.0) > 1e-3:
             raise ValueError('Direction must be a unit vector.')
 
-        if self.simulated:
-            with self.robot.GetEnv():
-                start_pose = self.robot.GetTransform()
-                offset_pose = numpy.eye(4)
-                offset_pose[0:3, 3] = meters * direction
-                goal_pose = numpy.dot(start_pose, offset_pose)
-
-            path = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
-            if execute:
-                return self.robot.ExecutePath(path, **kw_args)
-            else:
-                return path
+        with self.robot.GetEnv():
+            start_pose = self.robot.GetTransform()
+            offset_pose = numpy.eye(4)
+            offset_pose[0:3, 3] = meters * direction
+            goal_pose = numpy.dot(start_pose, offset_pose)
+            
+        path = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
+        if execute:
+            return self.robot.ExecutePath(path, **kw_args)
         else:
-            raise NotImplementedError('DriveForward is not implemented')
+            return path
 
     def Rotate(self, angle_rad, execute=True, **kw_args):
         """
@@ -106,20 +103,17 @@ class MobileBase(object):
         @param angle_rad the number of radians to rotate
         @param timeout duration to wait for execution
         """
-        if self.simulated:
-            with self.robot.GetEnv():
-                start_pose = self.robot.GetTransform()
-
+        with self.robot.GetEnv():
+            start_pose = self.robot.GetTransform()
+            
             relative_pose = openravepy.matrixFromAxisAngle([ 0., 0., angle_rad ])
             goal_pose = numpy.dot(start_pose, relative_pose)
 
-            path = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
-            if execute:
-                return self.robot.ExecutePath(path, **kw_args)
-            else:
-                return path
+        path = create_affine_trajectory(self.robot, [ start_pose, goal_pose ])
+        if execute:
+            return self.robot.ExecutePath(path, **kw_args)
         else:
-            raise NotImplementedError('Rotate is not implemented')
+            return path
 
     def DriveStraightUntilForce(self, direction, velocity=0.1, force_threshold=3.0,
                                 max_distance=None, timeout=None, left_arm=True, right_arm=True):
