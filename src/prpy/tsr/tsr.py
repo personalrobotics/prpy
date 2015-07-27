@@ -105,17 +105,15 @@ class TSR(object):
         """
         Bw_xyz = self.Bw[0:3, :]
 
-        xyzcheck = [(((x + EPSILON) >= Bw_xyz[i, 0]) and 
-                     ((x - EPSILON) <= Bw_xyz[i, 1]))
-                    or (Bw_xyz[i, 1] - Bw_xyz[i, 0] < EPSILON)
+        xyzcheck = [((x + EPSILON) >= Bw_xyz[i, 0]) and
+                    ((x - EPSILON) <= Bw_xyz[i, 1])
                     for i, x in enumerate(xyzrpy[0:3])]
 
         # Unwrap all rotations to [-pi, pi]
         Bw_rpy = (self.Bw[3:6, :] + pi) % (2*pi) - pi
         rpy = numpy.add(xyzrpy[3:6], pi) % (2*pi) - pi
-        rpycheck = [(((x + EPSILON) >= Bw_rpy[i, 0]) and 
-                     ((x - EPSILON) <= Bw_rpy[i, 1]))
-                    or (Bw_rpy[i, 1] - Bw_rpy[i, 0] < EPSILON)
+        rpycheck = [((x + EPSILON) >= Bw_rpy[i, 0]) and
+                    ((x - EPSILON) <= Bw_rpy[i, 1])
                     for i, x in enumerate(rpy)]
 
         check = numpy.hstack((xyzcheck, rpycheck))
