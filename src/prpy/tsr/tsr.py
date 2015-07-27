@@ -101,7 +101,7 @@ class TSR(object):
         Wraparound for rpy.
         @param xyzrpy 6x1 vector of Bw values
         @param ignoreNAN (optional, defaults to False) ignore NaN xyzrpy
-        @return True if valid and False if not
+        @return a 6x1 vector of True if bound is valid and False if not
         """
         Bw_xyz = self.Bw[0:3, :]
 
@@ -118,17 +118,17 @@ class TSR(object):
 
         check = numpy.hstack((xyzcheck, rpycheck))
 
-        # Strip out Nans if needed
+        # Ignore NaNs
         if ignoreNAN:
-            check = check[~numpy.isnan(xyzrpy)]
+            check[numpy.isnan(xyzrpy)] = True
 
-        return all(check)
+        return check
 
     def contains(self, trans):
         """
         Checks if the TSR contains the transform
         @param  trans 4x4 transform
-        @return       True if inside and False if not
+        @return a 6x1 vector of True if bound is valid and False if not
         """
         xyzrpy = self.to_xyzrpy(trans)
         return self.is_valid(xyzrpy)
@@ -140,7 +140,7 @@ class TSR(object):
         @return dist Geodesic distance to TSR
         @return bwopt Closest Bw value to trans
         """
-        if self.contains(trans):
+        if all(self.contains(trans)):
             return 0., self.to_xyzrpy(trans)
 
         import scipy.optimize
@@ -167,8 +167,9 @@ class TSR(object):
                         dimensions to sample uniformly.
         @return         an xyzrpy sample
         """
-        if not self.is_valid(xyzrpy, ignoreNAN=True):
-            raise ValueError('specified xyzrpy must be within bounds')
+        check = self.is_valid(xyzrpy, ignoreNAN=True)
+        if not all(check):
+            raise ValueError('xyzrpy must be within bounds', check)
 
         return [self.Bw[i, 0] + (self.Bw[i, 1] - self.Bw[i, 0]) *
                 numpy.random.random_sample()
@@ -339,17 +340,17 @@ class TSRChain(object):
         Checks if a xyzrpy list is a valid sample from the TSR.
         @param xyzrpy a list of xyzrpy values
         @param ignoreNAN (optional, defaults to False) ignore NaN xyzrpy
-        @return True if valid and False if not
+        @return a list of 6x1 vector of True if bound is valid and False if not
         """
 
         if len(xyzrpy) != len(self.TSRs):
             raise('Sample must be of equal length to TSR chain!')
 
+        check = []
         for idx in range(len(self.TSRs)):
-            if not self.TSRs[idx].is_valid(xyzrpy[idx], ignoreNAN):
-                return False
+            check.append(self.TSRs[idx].is_valid(xyzrpy[idx], ignoreNAN))
 
-        return True
+        return check
 
     def to_transform(self, xyzrpy):
         """
@@ -359,9 +360,10 @@ class TSRChain(object):
         @param  a list of xyzrpy values
         @return trans 4x4 transform
         """
-
-        if not self.is_valid(xyzrpy):
-            raise ValueError('Invalid xyzrpy')
+        check = self.is_valid(xyzrpy)
+        for idx in range(len(self.TSRs)):
+            if not all(check[idx]):
+                raise ValueError('Invalid xyzrpy', check)
         T0_w = self.TSRs[0].T0_w
         for idx in range(len(self.TSRs)):
             tsr_current = self.TSRs[idx]
