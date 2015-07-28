@@ -77,7 +77,7 @@ class TSR(object):
         xyzypr = [xyzrpy[0], xyzrpy[1], xyzrpy[2],
                   xyzrpy[5], xyzrpy[4], xyzrpy[3]]
         Tw = kin.pose_to_H(kin.pose_from_xyzypr(xyzypr))
-        trans = numpy.dot(numpy.dot(self.T0_w, Tw), self.Tw_e)
+        trans = reduce(numpy.dot, [self.T0_w, Tw, self.Tw_e])
         return trans
 
     def to_xyzrpy(self, trans):
@@ -86,8 +86,9 @@ class TSR(object):
         @param  trans  4x4 transform
         @return xyzrpy 6x1 vector of Bw values
         """
-        Tw = numpy.dot(numpy.dot(numpy.linalg.inv(self.T0_w), trans),
-                       numpy.linalg.inv(self.Tw_e))
+        Tw = reduce(numpy.dot, [numpy.linalg.inv(self.T0_w),
+                                trans,
+                                numpy.linalg.inv(self.Tw_e)])
         pose = kin.pose_from_H(Tw)
         ypr = kin.quat_to_ypr(pose[3:7])
         xyzrpy = [pose[0], pose[1], pose[2],
