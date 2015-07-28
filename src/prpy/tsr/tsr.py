@@ -71,7 +71,7 @@ class TSR(object):
         """
         if len(xyzrpy) != 6:
             raise ValueError('vals must be of length 6')
-        if not self.is_valid(xyzrpy):
+        if not all(self.is_valid(xyzrpy)):
             raise ValueError('Invalid xyzrpy')
 
         xyzypr = [xyzrpy[0], xyzrpy[1], xyzrpy[2],
