@@ -336,24 +336,24 @@ class TSRChain(object):
         x_dict = yaml.safe_load(x, *args, **kw_args)
         return TSR.from_dict(x_dict)
 
-    def is_valid(self, xyzrpy, ignoreNAN=False):
+    def is_valid(self, xyzrpy_list, ignoreNAN=False):
         """
         Checks if a xyzrpy list is a valid sample from the TSR.
-        @param xyzrpy a list of xyzrpy values
+        @param xyzrpy_list a list of xyzrpy values
         @param ignoreNAN (optional, defaults to False) ignore NaN xyzrpy
         @return a list of 6x1 vector of True if bound is valid and False if not
         """
 
-        if len(xyzrpy) != len(self.TSRs):
+        if len(xyzrpy_list) != len(self.TSRs):
             raise('Sample must be of equal length to TSR chain!')
 
         check = []
         for idx in range(len(self.TSRs)):
-            check.append(self.TSRs[idx].is_valid(xyzrpy[idx], ignoreNAN))
+            check.append(self.TSRs[idx].is_valid(xyzrpy_list[idx], ignoreNAN))
 
         return check
 
-    def to_transform(self, xyzrpy):
+    def to_transform(self, xyzrpy_list):
         """
         Converts a xyzrpy list into an
         end-effector transform.
@@ -361,47 +361,47 @@ class TSRChain(object):
         @param  a list of xyzrpy values
         @return trans 4x4 transform
         """
-        check = self.is_valid(xyzrpy)
+        check = self.is_valid(xyzrpy_list)
         for idx in range(len(self.TSRs)):
             if not all(check[idx]):
-                raise ValueError('Invalid xyzrpy', check)
-        T0_w = self.TSRs[0].T0_w
+                raise ValueError('Invalid xyzrpy_list', check)
+        T_sofar = self.TSRs[0].T0_w
         for idx in range(len(self.TSRs)):
             tsr_current = self.TSRs[idx]
-            tsr_current.T0_w = T0_w
-            T0_w = tsr_current.to_transform(xyzrpy[idx])
+            tsr_current.T0_w = T_sofar
+            T_sofar = tsr_current.to_transform(xyzrpy_list[idx])
 
-        return T0_w
+        return T_sofar
 
-    def sample_xyzrpy(self, xyzrpy=None):
+    def sample_xyzrpy(self, xyzrpy_list=None):
         """
-        Samples from Bw to generate an xyzrpy sample
+        Samples from Bw to generate a list of xyzrpy samples
         Can specify some values optionally as NaN.
 
-        @param xyzrpy   (optional) a list of Bw with float('nan') for
+        @param xyzrpy_list   (optional) a list of Bw with float('nan') for
                         dimensions to sample uniformly.
         @return sample  a list of sampled xyzrpy
         """
 
-        if xyzrpy is None:
-            xyzrpy = [NANBW]*len(self.TSRs)
+        if xyzrpy_list is None:
+            xyzrpy_list = [NANBW]*len(self.TSRs)
 
         sample = []
         for idx in range(len(self.TSRs)):
-            sample.append(self.TSRs[idx].sample_xyzrpy(xyzrpy[idx]))
+            sample.append(self.TSRs[idx].sample_xyzrpy(xyzrpy_list[idx]))
 
         return sample
 
-    def sample(self, xyzrpy=None):
+    def sample(self, xyzrpy_list=None):
         """
         Samples from the Bw chain to generate an end-effector transform.
         Can specify some Bw values optionally.
 
-        @param xyzrpy   (optional) a list of xyzrpy with float('nan') for
-                        dimensions to sample uniformly.
-        @return T0_w    4x4 transform
+        @param xyzrpy_list   (optional) a list of xyzrpy with float('nan') for
+                             dimensions to sample uniformly.
+        @return T0_w         4x4 transform
         """
-        return self.to_transform(self.sample_xyzrpy(xyzrpy))
+        return self.to_transform(self.sample_xyzrpy(xyzrpy_list))
 
     def distance(self, trans):
         """
@@ -412,10 +412,10 @@ class TSRChain(object):
         """
         import scipy.optimize
 
-        def objective(xyzrpy):
-            bw_stack = xyzrpy.reshape(len(self.TSRs), 6)
-            bwtrans = self.to_transform(bw_stack)
-            return prpy.util.GeodesicDistance(bwtrans, trans)
+        def objective(xyzrpy_list):
+            xyzrpy_stack = xyzrpy_list.reshape(len(self.TSRs), 6)
+            tsr_trans = self.to_transform(xyzrpy_stack)
+            return prpy.util.GeodesicDistance(tsr_trans, trans)
 
         bwinit = []
         bwbounds = []
@@ -443,7 +443,7 @@ class TSRChain(object):
         """
         Converts an end-effector transform to a list of xyzrpy values
         @param  trans  4x4 transform
-        @return xyzrpy list of xyzrpy values
+        @return xyzrpy_list list of xyzrpy values
         """
-        _, xyzrpy = self.distance(trans)
-        return xyzrpy
+        _, xyzrpy_list = self.distance(trans)
+        return xyzrpy_list
