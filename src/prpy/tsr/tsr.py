@@ -48,8 +48,15 @@ class TSR(object):
             Tw_e = numpy.eye(4)
         if Bw is None:
             Bw = numpy.zeros((6, 2))
-        elif any((Bw[:, 1]-Bw[:, 0]) > 2*pi + EPSILON):
-            raise(ValueError('Bw range must be within 2*PI'))
+        pibound = (abs(Bw[3:6, :]) < numpy.pi + EPSILON)
+        if pibound.any() is False:
+            raise(ValueError('Rotations must be [-pi, pi]', pibound))
+        # We will now deliberately exceed the bound to maintain both:
+        # 1. Bw[i,1] > Bw[i,0] which is necessary for LBFGS-B
+        # 2. signed rotations, necessary for expressiveness
+        for rot_idx in range(3, 6):
+            if Bw[rot_idx, 0] > Bw[rot_idx, 1] + EPSILON:
+                Bw[rot_idx, 1] += 2*pi
         self.T0_w = T0_w
         self.Tw_e = Tw_e
         self.Bw = Bw
@@ -110,12 +117,19 @@ class TSR(object):
                     ((x - EPSILON) <= Bw_xyz[i, 1])
                     for i, x in enumerate(xyzrpy[0:3])]
 
-        # Unwrap all rotations to [-pi, pi]
-        Bw_rpy = (self.Bw[3:6, :] + pi) % (2*pi) - pi
+        # Unwrap rpy to [-pi, pi]
         rpy = numpy.add(xyzrpy[3:6], pi) % (2*pi) - pi
-        rpycheck = [((x + EPSILON) >= Bw_rpy[i, 0]) and
-                    ((x - EPSILON) <= Bw_rpy[i, 1])
-                    for i, x in enumerate(rpy)]
+        Bw_rpy = self.Bw[3:6, :]
+        rpycheck = []
+        for i in range(0, 3):
+            if (Bw_rpy[i, 1] > pi + EPSILON):
+                # An outer interval
+                rpycheck[i] = ((rpy[i] + EPSILON) >= Bw_rpy[i, 0]) or\
+                              ((rpy[i] + EPSILON) <= Bw_rpy[i, 1] - 2*pi)
+            else:
+                # An inner interval
+                rpycheck[i] = ((rpy[i] + EPSILON) >= Bw_rpy[i, 0]) and\
+                              ((rpy[i] + EPSILON) <= Bw_rpy[i, 1])
 
         check = numpy.hstack((xyzcheck, rpycheck))
 
