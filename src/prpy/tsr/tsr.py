@@ -123,6 +123,10 @@ class TSR(object):
                     for i, x in enumerate(xyzrpy[0:3])]
 
         Bw_rpy = self.Bw[3:6, :]
+
+        # Unwrap rpy to [-pi, pi]		
+        rpy = numpy.add(xyzrpy[3:6], pi) % (2*pi) - pi
+        
         rpycheck = []
         for i in range(0, 3):
             if (Bw_rpy[i, 0] > Bw_rpy[i, 1] + EPSILON):
