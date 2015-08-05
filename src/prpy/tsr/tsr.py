@@ -49,8 +49,11 @@ class TSR(object):
             Bw = numpy.zeros((6, 2))
         pibound = (abs(Bw[3:6, :]) < pi + EPSILON)
         if pibound.any() is False:
-            raise(ValueError('Rotations must be [-pi, pi]', pibound))
-        
+            raise ValueError('Bw rotations must be [-pi, pi]', pibound)
+
+        if numpy.any(Bw[0:3, 0] > Bw[0:3, 1]):
+            raise ValueError('Bw translation bounds must be [min, max]', Bw)
+
         self.T0_w = T0_w
         self.Tw_e = Tw_e
         self.Bw = Bw
@@ -81,9 +84,9 @@ class TSR(object):
         @return trans 4x4 transform
         """
         if len(xyzrpy) != 6:
-            raise ValueError('vals must be of length 6')
+            raise ValueError('xyzrpy must be of length 6')
         if not all(self.is_valid(xyzrpy)):
-            raise ValueError('Invalid xyzrpy')
+            raise ValueError('Invalid xyzrpy', xyzrpy)
 
         xyzypr = [xyzrpy[0], xyzrpy[1], xyzrpy[2],
                   xyzrpy[5], xyzrpy[4], xyzrpy[3]]
@@ -133,11 +136,11 @@ class TSR(object):
             if (Bw_rpy[i, 0] > Bw_rpy[i, 1] + EPSILON):
                 # An outer interval
                 rpycheck[i] = (((rpy[i] + EPSILON) >= Bw_rpy[i, 0]) or
-                               ((rpy[i] + EPSILON) <= Bw_rpy[i, 1]))
+                               ((rpy[i] - EPSILON) <= Bw_rpy[i, 1]))
             else:
                 # An inner interval
                 rpycheck[i] = (((rpy[i] + EPSILON) >= Bw_rpy[i, 0]) and
-                               ((rpy[i] + EPSILON) <= Bw_rpy[i, 1]))
+                               ((rpy[i] - EPSILON) <= Bw_rpy[i, 1]))
 
         # Concatenate the XYZ and RPY components of the check.
         check = numpy.hstack((xyzcheck, rpycheck))
@@ -391,6 +394,7 @@ class TSRChain(object):
         for idx in range(len(self.TSRs)):
             if not all(check[idx]):
                 raise ValueError('Invalid xyzrpy_list', check)
+
         T_sofar = self.TSRs[0].T0_w
         for idx in range(len(self.TSRs)):
             tsr_current = self.TSRs[idx]
