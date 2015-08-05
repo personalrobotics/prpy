@@ -31,8 +31,7 @@ import numpy
 import numpy.random
 import kin
 import prpy.util
-from math import pi
-
+from numpy import pi
 
 NANBW = numpy.ones(6)*float('nan')
 EPSILON = 0.001
@@ -48,7 +47,7 @@ class TSR(object):
             Tw_e = numpy.eye(4)
         if Bw is None:
             Bw = numpy.zeros((6, 2))
-        pibound = (abs(Bw[3:6, :]) < numpy.pi + EPSILON)
+        pibound = (abs(Bw[3:6, :]) < pi + EPSILON)
         if pibound.any() is False:
             raise(ValueError('Rotations must be [-pi, pi]', pibound))
         
@@ -116,18 +115,20 @@ class TSR(object):
         @param ignoreNAN (optional, defaults to False) ignore NaN xyzrpy
         @return a 6x1 vector of True if bound is valid and False if not
         """
-        Bw_xyz = self.Bw[0:3, :]
+        # Extract XYZ and RPY components of input and TSR.
+        Bw_xyz, Bw_rpy = self.Bw[0:3, :], self.Bw[3:6, :]
+        xyz, rpy = xyzrpy[0:3], xyzrpy[3:6]
 
+        # Unwrap rpy to [-pi, pi].
+        rpy = (numpy.array(rpy) + pi) % (2*pi) - pi
+
+        # Check bounds condition on XYZ component.
         xyzcheck = [((x + EPSILON) >= Bw_xyz[i, 0]) and
                     ((x - EPSILON) <= Bw_xyz[i, 1])
-                    for i, x in enumerate(xyzrpy[0:3])]
-
-        Bw_rpy = self.Bw[3:6, :]
-
-        # Unwrap rpy to [-pi, pi]		
-        rpy = numpy.add(xyzrpy[3:6], pi) % (2*pi) - pi
+                    for i, x in enumerate(xyz)]
         
-        rpycheck = []
+        # Check bounds condition on RPY component.
+        rpycheck = [False] * 3
         for i in range(0, 3):
             if (Bw_rpy[i, 0] > Bw_rpy[i, 1] + EPSILON):
                 # An outer interval
@@ -138,11 +139,12 @@ class TSR(object):
                 rpycheck[i] = (((rpy[i] + EPSILON) >= Bw_rpy[i, 0]) and
                                ((rpy[i] + EPSILON) <= Bw_rpy[i, 1]))
 
+        # Concatenate the XYZ and RPY components of the check.
         check = numpy.hstack((xyzcheck, rpycheck))
 
-        # Ignore NaNs
+        # If ignoreNAN, components with NaN values are always OK.
         if ignoreNAN:
-            check[numpy.isnan(xyzrpy)] = True
+            check |= numpy.isnan(xyzrpy)
 
         return check
 
