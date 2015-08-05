@@ -51,11 +51,11 @@ class TSR(object):
         pibound = (abs(Bw[3:6, :]) < numpy.pi + EPSILON)
         if pibound.any() is False:
             raise(ValueError('Rotations must be [-pi, pi]', pibound))
-        
+
         self.T0_w = T0_w
         self.Tw_e = Tw_e
         self.Bw = Bw
-        
+
         # We will now create a continuous version of the bound to maintain:
         # 1. Bw[i,1] > Bw[i,0] which is necessary for LBFGS-B
         # 2. signed rotations, necessary for expressiveness
@@ -64,7 +64,7 @@ class TSR(object):
             if Bw_cont[rot_idx, 0] > Bw_cont[rot_idx, 1] + EPSILON:
                 Bw_cont[rot_idx, 1] += 2*pi
         self._Bw_cont = Bw_cont
-        
+
         if manip is None:
             self.manipindex = -1
         elif type(manip) == openravepy.openravepy_int.Robot:
@@ -124,9 +124,9 @@ class TSR(object):
 
         Bw_rpy = self.Bw[3:6, :]
 
-        # Unwrap rpy to [-pi, pi]		
+        # Unwrap rpy to [-pi, pi]
         rpy = numpy.add(xyzrpy[3:6], pi) % (2*pi) - pi
-        
+
         rpycheck = []
         for i in range(0, 3):
             if (Bw_rpy[i, 0] > Bw_rpy[i, 1] + EPSILON):
@@ -172,7 +172,8 @@ class TSR(object):
             return prpy.util.GeodesicDistance(bwtrans, trans)
 
         bwinit = (self._Bw_cont[:, 0] + self._Bw_cont[:, 1])/2
-        bwbounds = [(self._Bw_cont[i, 0], self._Bw_cont[i, 1]) for i in range(6)]
+        bwbounds = [(self._Bw_cont[i, 0], self._Bw_cont[i, 1])
+                    for i in range(6)]
 
         bwopt, dist, info = scipy.optimize.fmin_l_bfgs_b(
                                 objective, bwinit, fprime=None,
@@ -193,10 +194,11 @@ class TSR(object):
         if not all(check):
             raise ValueError('xyzrpy must be within bounds', check)
 
-        Bw_sample = [self._Bw_cont[i, 0] + (self._Bw_cont[i, 1] - self._Bw_cont[i, 0]) *
+        Bw_sample = [self._Bw_cont[i, 0] +
+                     (self._Bw_cont[i, 1] - self._Bw_cont[i, 0]) *
                      numpy.random.random_sample()
                      if numpy.isnan(x) else x for i, x in enumerate(xyzrpy)]
-        # Unwrap rpy to [-pi, pi]		
+        # Unwrap rpy to [-pi, pi]
         Bw_sample[3:6] = numpy.add(Bw_sample[3:6], pi) % (2*pi) - pi
         return Bw_sample
 
