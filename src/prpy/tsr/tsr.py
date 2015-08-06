@@ -76,18 +76,83 @@ class TSR(object):
         self.bodyandlink = bodyandlink
 
     @staticmethod
-    def trans_within_rpy_bounds(rot, Bw):
+    def xyz_within_bounds(xyz, Bw):
         """
-        Verifies whether a rotation matrix is within a given RPY bounds.
+        Checks whether an xyz value is within a given xyz bounds.
+        Main issue: dealing with roundoff issues for zero bounds
+        @param xyz a 3x1 xyz value
+        @param Bw bounds on xyz
+        @return check a 3x1 vector of True if within and False if outside
+        """
+        # Check bounds condition on XYZ component.
+        xyzcheck = [((x + EPSILON) >= Bw[i, 0]) and
+                    ((x - EPSILON) <= Bw[i, 1])
+                    for i, x in enumerate(xyz)]
+        return xyzcheck
+
+    @staticmethod
+    def rpy_within_bounds(rpy, Bw):
+        """
+        Checks whether an rpy value is within a given rpy bounds.
         Assumes all values in the bounds are [-pi, pi]
-        Two main challenges with RPY:
+        Two main issues: dealing with roundoff issues for zero bounds and
+        Wraparound for rpy.
+        @param rpy a 3x1 rpy value
+        @param Bw bounds on rpy
+        @return check a 3x1 vector of True if within and False if outside
+        """
+        # Unwrap rpy to [-pi, pi].
+        rpy = (numpy.array(rpy) + pi) % (2*pi) - pi
+
+        # Check bounds condition on RPY component.
+        rpycheck = [False] * 3
+        for i in range(0, 3):
+            if (Bw[i, 0] > Bw[i, 1] + EPSILON):
+                # An outer interval
+                rpycheck[i] = (((rpy[i] + EPSILON) >= Bw[i, 0]) or
+                               ((rpy[i] - EPSILON) <= Bw[i, 1]))
+            else:
+                # An inner interval
+                rpycheck[i] = (((rpy[i] + EPSILON) >= Bw[i, 0]) and
+                               ((rpy[i] - EPSILON) <= Bw[i, 1]))
+        return rpycheck
+
+    @staticmethod
+    def rot_within_rpy_bounds(rot, Bw):
+        """
+        Checks whether a rotation matrix is within a given rpy bounds.
+        Assumes all values in the bounds are [-pi, pi]
+        Two main challenges with rpy:
             (1) Usually, two rpy solutions for each rot.
             (2) 1D subspace of degenerate solutions at singularities.
         Based on: http://staff.city.ac.uk/~sbbh653/publications/euler.pdf
         @param rot 3x3 rotation matrix
-        @param Bw bounds on RPY
+        @param Bw bounds on rpy
         @return check a 3x1 vector of True if within and False if outside
         """
+        if not (abs(abs(rot[2, 0]) - 1) < EPSILON):
+            # Not a singularity. Two pitch solutions
+            psol = -numpy.arcsin(rot[2, 0])
+            p = [psol, (pi - psol)]
+            rpycheck_fail = []
+            rpycheck_succ = [True] * 3
+            for i in range(0, 1):
+                rpy = numpy.zeros(3)
+                rpy[0] = numpy.arctan2((rot[2, 1]/numpy.cos(p[i])),
+                                       (rot[2, 2]/numpy.cos(p[i])))
+                rpy[1] = p[i]
+                rpy[2] = numpy.arctan2((rot[1, 0]/numpy.cos(p[i])),
+                                       (rot[0, 0]/numpy.cos(p[i])))
+                rpycheck = TSR.rpy_within_bounds(rpy, Bw)
+                if all(rpycheck):
+                    return rpycheck_succ
+                else:
+                    rpycheck_fail.append(rpycheck)
+            return rpycheck_fail[0]
+            # did this to avoid the annoying list vs non-list return issue
+        else:
+            # TODO: deal with singularity
+            return [False] * 3
 
     def to_transform(self, xyzrpy):
         """
@@ -136,25 +201,11 @@ class TSR(object):
         Bw_xyz, Bw_rpy = self.Bw[0:3, :], self.Bw[3:6, :]
         xyz, rpy = xyzrpy[0:3], xyzrpy[3:6]
 
-        # Unwrap rpy to [-pi, pi].
-        rpy = (numpy.array(rpy) + pi) % (2*pi) - pi
-
         # Check bounds condition on XYZ component.
-        xyzcheck = [((x + EPSILON) >= Bw_xyz[i, 0]) and
-                    ((x - EPSILON) <= Bw_xyz[i, 1])
-                    for i, x in enumerate(xyz)]
+        xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz)
 
         # Check bounds condition on RPY component.
-        rpycheck = [False] * 3
-        for i in range(0, 3):
-            if (Bw_rpy[i, 0] > Bw_rpy[i, 1] + EPSILON):
-                # An outer interval
-                rpycheck[i] = (((rpy[i] + EPSILON) >= Bw_rpy[i, 0]) or
-                               ((rpy[i] - EPSILON) <= Bw_rpy[i, 1]))
-            else:
-                # An inner interval
-                rpycheck[i] = (((rpy[i] + EPSILON) >= Bw_rpy[i, 0]) and
-                               ((rpy[i] - EPSILON) <= Bw_rpy[i, 1]))
+        rpycheck = TSR.rpy_within_bounds(rpy, Bw_rpy)
 
         # Concatenate the XYZ and RPY components of the check.
         check = numpy.hstack((xyzcheck, rpycheck))
@@ -171,8 +222,15 @@ class TSR(object):
         @param  trans 4x4 transform
         @return a 6x1 vector of True if bound is valid and False if not
         """
-        xyzrpy = self.to_xyzrpy(trans)
-        return self.is_valid(xyzrpy)
+        # Extract XYZ and rot components of input and TSR.
+        Bw_xyz, Bw_rpy = self.Bw[0:3, :], self.Bw[3:6, :]
+        xyz, rot = trans[0:3, :], trans[0:3, 0:3]
+        # Check bounds condition on XYZ component.
+        xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz)
+        # Check bounds condition on rot component.
+        rotcheck = TSR.rot_within_rpy_bounds(rot, Bw_rpy)
+
+        return numpy.hstack((xyzcheck, rotcheck))
 
     def distance(self, trans):
         """
