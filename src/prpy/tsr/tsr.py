@@ -128,21 +128,10 @@ class TSR(object):
         # Check bounds condition on XYZ component.
         xyzcheck = [((x + EPSILON) >= Bw_xyz[i, 0]) and
                     ((x - EPSILON) <= Bw_xyz[i, 1])
-<<<<<<< HEAD
-                    for i, x in enumerate(xyzrpy[0:3])]
-
-        Bw_rpy = self.Bw[3:6, :]
-
-        # Unwrap rpy to [-pi, pi]
-        rpy = numpy.add(xyzrpy[3:6], pi) % (2*pi) - pi
-
-        rpycheck = []
-=======
                     for i, x in enumerate(xyz)]
         
         # Check bounds condition on RPY component.
         rpycheck = [False] * 3
->>>>>>> 2b9378eb4eb36292308088033110f1f91ca5b938
         for i in range(0, 3):
             if (Bw_rpy[i, 0] > Bw_rpy[i, 1] + EPSILON):
                 # An outer interval
