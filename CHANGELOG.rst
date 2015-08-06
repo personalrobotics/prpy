@@ -2,6 +2,36 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Add support for numpy <1.8 which don't support norm(axis=1)
+* Moved CBiRRT TSR serialization into cbirrt.py.
+* Added TSR conversion methods for JSON and YAML.
+* Added generic-object TSRs.
+* Added termcolor dependency.
+* Changed retimers to only Simplify untimed trajectories.
+* Refactored trajectory timing check into utility function.
+* Added check for deltatime without hardcoded any strings.
+* Added proper checking for trajectory timing and length.
+* Added a check within snap planner for one-waypoint trajectories.
+* Added forwarding of kwargs to TSRPlanner's delegate planner.
+* Changed default 'execute' behavior to False.
+* Added support for environment (de)serialization.
+* Added missing environment locks.
+* Added `defer` handling to the checks in ExecuteTrajectory.
+* Added several checks to the ExecuteTrajectory.
+* Jen's uncommited tweaks to the mobile base in simulation vs reality
+* Updating error handling to more correct syntax
+* Use all trajectory DOFs instead of active.
+* Changed loggers to use '__name__' instead of explicit paths.
+* Added a check within snap planner for one-waypoint trajectories.
+* Changed InstanceDeduplicator to use module-logger.
+* Changed defaults in the HauserParabolicSmoother.
+* Added HauserParabolicSmoother timelimit parameter.
+* Added more fine-grained planning exceptions.
+* Moved planning exceptions to a separate file.
+* Contributors: Aaron Johnson, Chris Dellin, Jennifer King, Michael Koval, Pras Velagapudi, Rachel Holladay
+
 1.1.0 (2015-06-01)
 ------------------
 * Adding tags for capturing trajectory timing data
