@@ -75,6 +75,20 @@ class TSR(object):
             self.manipindex = manip
         self.bodyandlink = bodyandlink
 
+    @staticmethod
+    def trans_within_rpy_bounds(rot, Bw):
+        """
+        Verifies whether a rotation matrix is within a given RPY bounds.
+        Assumes all values in the bounds are [-pi, pi]
+        Two main challenges with RPY:
+            (1) Usually, two rpy solutions for each rot.
+            (2) 1D subspace of degenerate solutions at singularities.
+        Based on: http://staff.city.ac.uk/~sbbh653/publications/euler.pdf
+        @param rot 3x3 rotation matrix
+        @param Bw bounds on RPY
+        @return check a 3x1 vector of True if within and False if outside
+        """
+
     def to_transform(self, xyzrpy):
         """
         Converts a [x y z roll pitch yaw] into an
@@ -129,7 +143,7 @@ class TSR(object):
         xyzcheck = [((x + EPSILON) >= Bw_xyz[i, 0]) and
                     ((x - EPSILON) <= Bw_xyz[i, 1])
                     for i, x in enumerate(xyz)]
-        
+
         # Check bounds condition on RPY component.
         rpycheck = [False] * 3
         for i in range(0, 3):
