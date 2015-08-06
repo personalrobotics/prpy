@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.2.0 (2015-08-06)
+------------------
 * Add support for numpy <1.8 which don't support norm(axis=1)
 * Moved CBiRRT TSR serialization into cbirrt.py.
 * Added TSR conversion methods for JSON and YAML.
