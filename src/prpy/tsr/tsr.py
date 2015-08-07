@@ -134,8 +134,6 @@ class TSR(object):
             # Not a singularity. Two pitch solutions
             psol = -numpy.arcsin(rot[2, 0])
             p = [psol, (pi - psol)]
-            rpycheck_fail = []
-            rpycheck_succ = [True] * 3
             for i in range(0, 1):
                 rpy = numpy.zeros(3)
                 rpy[0] = numpy.arctan2((rot[2, 1]/numpy.cos(p[i])),
@@ -145,14 +143,42 @@ class TSR(object):
                                        (rot[0, 0]/numpy.cos(p[i])))
                 rpycheck = TSR.rpy_within_bounds(rpy, Bw)
                 if all(rpycheck):
-                    return rpycheck_succ
-                else:
-                    rpycheck_fail.append(rpycheck)
-            return rpycheck_fail[0]
-            # did this to avoid the annoying list vs non-list return issue
+                    return rpycheck
+            return rpycheck
         else:
-            # TODO: deal with singularity
-            return [False] * 3
+            if abs(rot[2, 0] + 1) < EPSILON:
+                r_offset = numpy.arctan2(rot[0, 1], rot[0, 2])
+                # Valid rotation: [y + r_offset, pi/2, y]
+                # check the four r-y Bw corners
+                rpy_list = []
+                rpy_list.append([Bw[2, 0] + r_offset, pi/2, Bw[2, 0]])
+                rpy_list.append([Bw[2, 1] + r_offset, pi/2, Bw[2, 1]])
+                rpy_list.append([Bw[0, 0], pi/2, Bw[0, 0] - r_offset])
+                rpy_list.append([Bw[0, 1], pi/2, Bw[0, 1] - r_offset])
+                for rpy in rpy_list:
+                    rpycheck = TSR.rpy_within_bounds(rpy, Bw)
+                    # No point checking anything if pi/2 not in Bw
+                    if rpycheck[1] is False:
+                        return [False] * 3
+                    if all(rpycheck):
+                        return rpycheck
+            else:
+                r_offset = numpy.arctan2(-rot[0, 1], -rot[0, 2])
+                # Valid rotation: [-y + r_offset, -pi/2, y]
+                # check the four r-y Bw corners
+                rpy_list = []
+                rpy_list.append([-Bw[2, 0] + r_offset, -pi/2, Bw[2, 0]])
+                rpy_list.append([-Bw[2, 1] + r_offset, -pi/2, Bw[2, 1]])
+                rpy_list.append([Bw[0, 0], -pi/2, -Bw[0, 0] + r_offset])
+                rpy_list.append([Bw[0, 1], -pi/2, -Bw[0, 1] + r_offset])
+                for rpy in rpy_list:
+                    rpycheck = TSR.rpy_within_bounds(rpy, Bw)
+                    # No point checking anything if -pi/2 not in Bw
+                    if rpycheck[1] is False:
+                        return [False] * 3
+                    if all(rpycheck):
+                        return rpycheck
+        return rpycheck
 
     def to_transform(self, xyzrpy):
         """
