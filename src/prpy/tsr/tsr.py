@@ -29,7 +29,6 @@
 import openravepy
 import numpy
 import numpy.random
-import kin
 import prpy.util
 from numpy import pi
 
@@ -71,6 +70,84 @@ class TSR(object):
         else:
             self.manipindex = manip
         self.bodyandlink = bodyandlink
+
+    @staticmethod
+    def rot_to_rpy(rot):
+        """
+        Converts a rotation matrix to one valid rpy
+        @param rot 3x3 rotation matrix
+        @return rpy 3x1 rpy
+        """
+        rpy = numpy.zeros(3)
+        if not (abs(abs(rot[2, 0]) - 1) < EPSILON):
+            p = -numpy.arcsin(rot[2, 0])
+            rpy[0] = numpy.arctan2((rot[2, 1]/numpy.cos(p)),
+                                   (rot[2, 2]/numpy.cos(p)))
+            rpy[1] = p
+            rpy[2] = numpy.arctan2((rot[1, 0]/numpy.cos(p)),
+                                   (rot[0, 0]/numpy.cos(p)))
+        else:
+            if abs(rot[2, 0] + 1) < EPSILON:
+                r_offset = numpy.arctan2(rot[0, 1], rot[0, 2])
+                rpy[0] = r_offset
+                rpy[1] = pi/2
+                rpy[2] = 0.
+            else:
+                r_offset = numpy.arctan2(-rot[0, 1], -rot[0, 2])
+                rpy[0] = r_offset
+                rpy[1] = -pi/2
+                rpy[2] = 0.
+        return rpy
+
+    @staticmethod
+    def trans_to_xyzrpy(trans):
+        """
+        Converts a transformation matrix to one valid xyzrpy
+        @param trans 4x4 transformation matrix
+        @return xyzrpy 6x1 xyzrpy
+        """
+        xyz, rot = trans[0:3, 3], trans[0:3, 0:3]
+        rpy = TSR.rot_to_rpy(rot)
+        return numpy.hstack((xyz, rpy))
+
+    @staticmethod
+    def rpy_to_rot(rpy):
+        """
+        Converts an rpy to a rotation matrix
+        @param rpy 3x1 rpy
+        @return rot 3x3 rotation matrix
+        """
+        rot = numpy.zeros((3, 3))
+        r, p, y = rpy[0], rpy[1], rpy[2]
+        rot[0][0] = numpy.cos(p)*numpy.cos(y)
+        rot[1][0] = numpy.cos(p)*numpy.sin(y)
+        rot[2][0] = -numpy.sin(p)
+        rot[0][1] = (numpy.sin(r)*numpy.sin(p)*numpy.cos(y) -
+                     numpy.cos(r)*numpy.sin(y))
+        rot[1][1] = (numpy.sin(r)*numpy.sin(p)*numpy.sin(y) +
+                     numpy.cos(r)*numpy.cos(y))
+        rot[2][1] = numpy.sin(r)*numpy.cos(p)
+        rot[0][2] = (numpy.cos(r)*numpy.sin(p)*numpy.cos(y) +
+                     numpy.sin(r)*numpy.sin(y))
+        rot[1][2] = (numpy.cos(r)*numpy.sin(p)*numpy.sin(y) -
+                     numpy.sin(r)*numpy.cos(y))
+        rot[2][2] = numpy.cos(r)*numpy.cos(p)
+        return rot
+
+    @staticmethod
+    def xyzrpy_to_trans(xyzrpy):
+        """
+        Converts an xyzrpy to a transformation matrix
+        @param xyzrpy 6x1 xyzrpy vector
+        @return trans 4x4 transformation matrix
+        """
+        trans = numpy.zeros((4, 4))
+        trans[3][3] = 1.0
+        xyz, rpy = xyzrpy[0:3], xyzrpy[3:6]
+        trans[0:3, :] = xyz
+        rot = TSR.rpy_to_rot(rpy)
+        trans[0:3, 0:3] = rot
+        return trans
 
     @staticmethod
     def xyz_within_bounds(xyz, Bw):
@@ -126,6 +203,7 @@ class TSR(object):
         @param rot 3x3 rotation matrix
         @param Bw bounds on rpy
         @return check a 3x1 vector of True if within and False if outside
+        @return rpy the rpy consistent with the bound or None if nothing is
         """
         if not (abs(abs(rot[2, 0]) - 1) < EPSILON):
             # Not a singularity. Two pitch solutions
@@ -139,8 +217,8 @@ class TSR(object):
                                        (rot[0, 0]/numpy.cos(p)))
                 rpycheck = TSR.rpy_within_bounds(rpy, Bw)
                 if all(rpycheck):
-                    return rpycheck
-            return rpycheck
+                    return rpycheck, rpy
+            return rpycheck, None
         else:
             if abs(rot[2, 0] + 1) < EPSILON:
                 r_offset = numpy.arctan2(rot[0, 1], rot[0, 2])
@@ -154,8 +232,10 @@ class TSR(object):
                 for rpy in rpy_list:
                     rpycheck = TSR.rpy_within_bounds(rpy, Bw)
                     # No point checking anything if pi/2 not in Bw
-                    if (rpycheck[1] is False) or all(rpycheck):
-                        return rpycheck
+                    if (rpycheck[1] is False):
+                        return rpycheck, None
+                    if all(rpycheck):
+                        return rpycheck, rpy
             else:
                 r_offset = numpy.arctan2(-rot[0, 1], -rot[0, 2])
                 # Valid rotation: [-y + r_offset, -pi/2, y]
@@ -168,9 +248,11 @@ class TSR(object):
                 for rpy in rpy_list:
                     rpycheck = TSR.rpy_within_bounds(rpy, Bw)
                     # No point checking anything if -pi/2 not in Bw
-                    if (rpycheck[1] is False) or all(rpycheck):
-                        return rpycheck
-        return rpycheck
+                    if (rpycheck[1] is False):
+                        return rpycheck, None
+                    if all(rpycheck):
+                        return rpycheck, rpy
+        return rpycheck, None
 
     def to_transform(self, xyzrpy):
         """
@@ -184,10 +266,7 @@ class TSR(object):
             raise ValueError('xyzrpy must be of length 6')
         if not all(self.is_valid(xyzrpy)):
             raise ValueError('Invalid xyzrpy', xyzrpy)
-
-        xyzypr = [xyzrpy[0], xyzrpy[1], xyzrpy[2],
-                  xyzrpy[5], xyzrpy[4], xyzrpy[3]]
-        Tw = kin.pose_to_H(kin.pose_from_xyzypr(xyzypr))
+        Tw = TSR.xyzrpy_to_trans(xyzrpy)
         trans = reduce(numpy.dot, [self.T0_w, Tw, self.Tw_e])
         return trans
 
@@ -200,11 +279,11 @@ class TSR(object):
         Tw = reduce(numpy.dot, [numpy.linalg.inv(self.T0_w),
                                 trans,
                                 numpy.linalg.inv(self.Tw_e)])
-        pose = kin.pose_from_H(Tw)
-        ypr = kin.quat_to_ypr(pose[3:7])
-        xyzrpy = [pose[0], pose[1], pose[2],
-                  ypr[2], ypr[1], ypr[0]]
-        return xyzrpy
+        xyz, rot = Tw[0:3, 3], Tw[0:3, 0:3]
+        rpycheck, rpy = TSR.rot_within_rpy_bounds(rot, self.Bw)
+        if not all(rpycheck):
+            rpy = TSR.rot_to_rpy(rot)
+        return numpy.hstack((xyz, rpy))
 
     def is_valid(self, xyzrpy, ignoreNAN=False):
         """
@@ -246,7 +325,7 @@ class TSR(object):
         # Check bounds condition on XYZ component.
         xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz)
         # Check bounds condition on rot component.
-        rotcheck = TSR.rot_within_rpy_bounds(rot, Bw_rpy)
+        rotcheck, rpy = TSR.rot_within_rpy_bounds(rot, Bw_rpy)
 
         return numpy.hstack((xyzcheck, rotcheck))
 
