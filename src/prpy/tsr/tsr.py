@@ -133,14 +133,13 @@ class TSR(object):
         if not (abs(abs(rot[2, 0]) - 1) < EPSILON):
             # Not a singularity. Two pitch solutions
             psol = -numpy.arcsin(rot[2, 0])
-            p = [psol, (pi - psol)]
-            for i in range(0, 1):
+            for p in [psol, (pi - psol)]:
                 rpy = numpy.zeros(3)
-                rpy[0] = numpy.arctan2((rot[2, 1]/numpy.cos(p[i])),
-                                       (rot[2, 2]/numpy.cos(p[i])))
-                rpy[1] = p[i]
-                rpy[2] = numpy.arctan2((rot[1, 0]/numpy.cos(p[i])),
-                                       (rot[0, 0]/numpy.cos(p[i])))
+                rpy[0] = numpy.arctan2((rot[2, 1]/numpy.cos(p)),
+                                       (rot[2, 2]/numpy.cos(p)))
+                rpy[1] = p
+                rpy[2] = numpy.arctan2((rot[1, 0]/numpy.cos(p)),
+                                       (rot[0, 0]/numpy.cos(p)))
                 rpycheck = TSR.rpy_within_bounds(rpy, Bw)
                 if all(rpycheck):
                     return rpycheck
