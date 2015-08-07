@@ -144,7 +144,7 @@ class TSR(object):
         trans = numpy.zeros((4, 4))
         trans[3][3] = 1.0
         xyz, rpy = xyzrpy[0:3], xyzrpy[3:6]
-        trans[0:3, :] = xyz
+        trans[0:3, 3] = xyz
         rot = TSR.rpy_to_rot(rpy)
         trans[0:3, 0:3] = rot
         return trans
