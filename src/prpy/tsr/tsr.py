@@ -157,9 +157,7 @@ class TSR(object):
                 for rpy in rpy_list:
                     rpycheck = TSR.rpy_within_bounds(rpy, Bw)
                     # No point checking anything if pi/2 not in Bw
-                    if rpycheck[1] is False:
-                        return [False] * 3
-                    if all(rpycheck):
+                    if (rpycheck[1] is False) or all(rpycheck):
                         return rpycheck
             else:
                 r_offset = numpy.arctan2(-rot[0, 1], -rot[0, 2])
@@ -173,9 +171,7 @@ class TSR(object):
                 for rpy in rpy_list:
                     rpycheck = TSR.rpy_within_bounds(rpy, Bw)
                     # No point checking anything if -pi/2 not in Bw
-                    if rpycheck[1] is False:
-                        return [False] * 3
-                    if all(rpycheck):
+                    if (rpycheck[1] is False) or all(rpycheck):
                         return rpycheck
         return rpycheck
 
