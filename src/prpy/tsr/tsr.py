@@ -292,12 +292,13 @@ class TSR(object):
         if not all(check):
             raise ValueError('xyzrpy must be within bounds', check)
 
-        Bw_sample = [self._Bw_cont[i, 0] +
-                     (self._Bw_cont[i, 1] - self._Bw_cont[i, 0]) *
-                     numpy.random.random_sample()
-                     if numpy.isnan(x) else x for i, x in enumerate(xyzrpy)]
+        Bw_sample = numpy.array([self._Bw_cont[i, 0] +
+                                (self._Bw_cont[i, 1] - self._Bw_cont[i, 0]) *
+                                numpy.random.random_sample()
+                                if numpy.isnan(x) else x
+                                for i, x in enumerate(xyzrpy)])
         # Unwrap rpy to [-pi, pi]
-        Bw_sample[3:6] = numpy.add(Bw_sample[3:6], pi) % (2*pi) - pi
+        Bw_sample[3:6] = (Bw_sample[3:6] + pi) % (2*pi) - pi
         return Bw_sample
 
     def sample(self, xyzrpy=NANBW):
