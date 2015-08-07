@@ -47,10 +47,6 @@ class TSR(object):
             Tw_e = numpy.eye(4)
         if Bw is None:
             Bw = numpy.zeros((6, 2))
-        pibound = (abs(Bw[3:6, :]) < pi + EPSILON)
-        if pibound.any() is False:
-            raise ValueError('Bw rotations must be [-pi, pi]', pibound)
-
         if numpy.any(Bw[0:3, 0] > Bw[0:3, 1]):
             raise ValueError('Bw translation bounds must be [min, max]', Bw)
 
@@ -62,6 +58,7 @@ class TSR(object):
         # 1. Bw[i,1] > Bw[i,0] which is necessary for LBFGS-B
         # 2. signed rotations, necessary for expressiveness
         Bw_cont = numpy.copy(Bw)
+        Bw_cont[3:6, :] = (Bw_cont[3:6, :] + pi) % (2*pi) - pi
         for rot_idx in range(3, 6):
             if Bw_cont[rot_idx, 0] > Bw_cont[rot_idx, 1] + EPSILON:
                 Bw_cont[rot_idx, 1] += 2*pi
