@@ -119,12 +119,14 @@ class Planner(object):
 
 class BasePlanner(Planner):
     def __init__(self):
+        super(BasePlanner, self).__init__()
         self.env = openravepy.Environment()
 
 class MetaPlanner(Planner):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self):
+        super(MetaPlanner, self).__init__()
         self._planners = list()
 
     def has_planning_method(self, method_name):
@@ -216,6 +218,7 @@ class MetaPlanner(Planner):
 
 class Sequence(MetaPlanner):
     def __init__(self, *planners):
+        super(Sequence, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -259,6 +262,7 @@ class Sequence(MetaPlanner):
 
 class Ranked(MetaPlanner):
     def __init__(self, *planners):
+        super(Ranked, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -328,6 +332,7 @@ class Ranked(MetaPlanner):
 
 class FirstSupported(MetaPlanner):
     def __init__(self, *planners):
+        super(FirstSupported, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -352,6 +357,7 @@ class FirstSupported(MetaPlanner):
 
 class MethodMask(MetaPlanner):
     def __init__(self, planner, methods):
+        super(MethodMask, self).__init__()
         self._methods = set(methods)
         self._planner = planner
         self._planners = [planner]

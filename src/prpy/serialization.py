@@ -190,8 +190,8 @@ def serialize_transform(t):
     from openravepy import quatFromRotationMatrix
 
     return {
-        'position': list(t[0:3, 3]),
-        'orientation': list(quatFromRotationMatrix(t[0:3, 0:3])),
+        'position': list(map(float,t[0:3, 3])),
+        'orientation': list(map(float,quatFromRotationMatrix(t[0:3, 0:3]))),
     }
 
 # Deserialization.
