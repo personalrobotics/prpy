@@ -76,7 +76,7 @@ class TSR(object):
         """
         Converts a rotation matrix to one valid rpy
         @param rot 3x3 rotation matrix
-        @return rpy 3x1 rpy
+        @return rpy (3,) rpy
         """
         rpy = numpy.zeros(3)
         if not (abs(abs(rot[2, 0]) - 1) < EPSILON):
@@ -114,7 +114,7 @@ class TSR(object):
     def rpy_to_rot(rpy):
         """
         Converts an rpy to a rotation matrix
-        @param rpy 3x1 rpy
+        @param rpy (3,) rpy
         @return rot 3x3 rotation matrix
         """
         rot = numpy.zeros((3, 3))
@@ -154,9 +154,9 @@ class TSR(object):
         """
         Checks whether an xyz value is within a given xyz bounds.
         Main issue: dealing with roundoff issues for zero bounds
-        @param xyz a 3x1 xyz value
+        @param xyz a (3,) xyz value
         @param Bw bounds on xyz
-        @return check a 3x1 vector of True if within and False if outside
+        @return check a (3,) vector of True if within and False if outside
         """
         # Check bounds condition on XYZ component.
         xyzcheck = [((x + EPSILON) >= Bw[i, 0]) and
@@ -171,9 +171,9 @@ class TSR(object):
         Assumes all values in the bounds are [-pi, pi]
         Two main issues: dealing with roundoff issues for zero bounds and
         Wraparound for rpy.
-        @param rpy a 3x1 rpy value
+        @param rpy a (3,) rpy value
         @param Bw bounds on rpy
-        @return check a 3x1 vector of True if within and False if outside
+        @return check a (3,) vector of True if within and False if outside
         """
         # Unwrap rpy to [-pi, pi].
         rpy = (numpy.array(rpy) + pi) % (2*pi) - pi
@@ -202,7 +202,7 @@ class TSR(object):
         Based on: http://staff.city.ac.uk/~sbbh653/publications/euler.pdf
         @param rot 3x3 rotation matrix
         @param Bw bounds on rpy
-        @return check a 3x1 vector of True if within and False if outside
+        @return check a (3,) vector of True if within and False if outside
         @return rpy the rpy consistent with the bound or None if nothing is
         """
         if not (abs(abs(rot[2, 0]) - 1) < EPSILON):
