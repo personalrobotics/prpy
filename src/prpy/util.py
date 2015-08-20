@@ -749,3 +749,86 @@ def IsTimedTrajectory(trajectory):
     """
     cspec = trajectory.GetConfigurationSpecification()
     return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
+
+
+def jointposvelacc_from_traj(robot, traj, time):
+    """
+    Helper function to extract the joint position, velocity and acceleration
+    from an OpenRAVE trajectory.
+    @param robot The OpenRAVE robot
+    @param traj An OpenRAVE trajectory
+    @param time List of times in seconds
+    @return pva_list List of list of position, velocity and acceleration
+                     at specified times. Inserts 'None' for unavailable fields
+    """
+
+    duration = traj.GetDuration()
+
+    if any(time > duration):
+        raise ValueError('Input time {0:} exceeds duration {1:.2f}'
+                         .format(time, duration))
+
+    cspec = traj.GetConfigurationSpecification()
+    num_dofs = robot.GetDOF()
+    dof_indices = range(num_dofs)
+
+    pva_list = []
+    for t in time:
+        pva = []
+        trajdata = traj.Sample(t)
+        pva.append(cspec.ExtractJointValues(trajdata, robot, dof_indices, 0))
+        pva.append(cspec.ExtractJointValues(trajdata, robot, dof_indices, 1))
+        pva.append(cspec.ExtractJointValues(trajdata, robot, dof_indices, 2))
+        pva_list.append(pva)
+
+    return pva_list
+
+
+def compute_acceleration_twist(link, world_pos, qd, qdd):
+    """
+    Computes the acceleration twist of a point on the robot's body
+    @param link the OpenRAVE link the bodypoint is on
+    @param world_pos (3,) position in the world frame of the bodypoint
+    @param qd joint velocity
+    @param qdd joint acceleration
+    @return (6,) vector of bodypoint acceleration twist.
+    """
+
+    link_index = link.GetIndex()
+    manip = link.manipulator
+    robot = manip.GetRobot()
+
+    Jpos = robot.CalculateJacobian(link_index, world_pos)
+    Hpos = robot.ComputeHessianTranslation(link_index, world_pos)
+    apos = numpy.dot(Jpos, qdd) + reduce(numpy.dot, [qd, Hpos, qd])
+
+    Jang = robot.CalculateAngularVelocityJacobian(link_index)
+    Hang = robot.ComputeHessianAxisAngle(link_index)
+    aang = numpy.dot(Jang, qdd) + reduce(numpy.dot, [qd, Hang, qd])
+
+    return numpy.hstack((apos, aang))
+
+
+def compute_acceleration_twist_from_traj(link, world_pos, traj, time):
+    """
+    Computes the acceleration twist of a point on the robot's body
+    @param link the OpenRAVE link the bodypoint is on
+    @param world_pos (3,) position in the world frame of the bodypoint
+    @param traj An OpenRAVE trajectory
+    @param time List of times in seconds
+    @return acctwist_list List of (6,) vectors of bodypoint acceleration twist
+            Inserts 'None' if vel or acc are unavailable from traj
+    """
+    robot = link.manipulator.manip.GetRobot()
+    pva_list = jointposvelacc_from_traj(robot, traj, time)
+
+    acctwist_list = []
+    for pva in pva_list:
+        qd = pva[1]
+        qdd = pva[2]
+        if qd is None or qdd is None:
+            acctwist = None
+        acctwist = compute_acceleration_twist(link, world_pos, qd, qdd)
+        acctwist_list.append(acctwist)
+
+    return acctwist_list
