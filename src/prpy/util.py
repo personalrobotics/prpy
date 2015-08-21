@@ -751,7 +751,7 @@ def IsTimedTrajectory(trajectory):
     return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
 
 
-def jointposvelacc_from_traj(robot, traj, time):
+def JointStatesFromTraj(robot, traj, time):
     """
     Helper function to extract the joint position, velocity and acceleration
     from an OpenRAVE trajectory.
@@ -784,7 +784,20 @@ def jointposvelacc_from_traj(robot, traj, time):
     return pva_list
 
 
-def compute_acceleration_twist(link, world_pos, qd, qdd):
+def JointStateFromTraj(robot, traj, time):
+    """
+    Helper function to extract the joint position, velocity and acceleration
+    from an OpenRAVE trajectory.
+    @param robot The OpenRAVE robot
+    @param traj An OpenRAVE trajectory
+    @param time time in seconds
+    @return pva Position, velocity and acceleration
+                at specified time. Inserts 'None' for unavailable fields
+    """
+    return JointStatesFromTraj(robot, traj, (time,))[0]
+
+
+def ComputeAccelerationTwist(link, world_pos, qd, qdd):
     """
     Computes the acceleration twist of a point on the robot's body
     @param link the OpenRAVE link the bodypoint is on
@@ -809,7 +822,7 @@ def compute_acceleration_twist(link, world_pos, qd, qdd):
     return numpy.hstack((apos, aang))
 
 
-def compute_acceleration_twist_from_traj(link, world_pos, traj, time):
+def ComputeAccelerationTwistsFromTraj(link, world_pos, traj, time):
     """
     Computes the acceleration twist of a point on the robot's body
     @param link the OpenRAVE link the bodypoint is on
@@ -820,7 +833,7 @@ def compute_acceleration_twist_from_traj(link, world_pos, traj, time):
             Inserts 'None' if vel or acc are unavailable from traj
     """
     robot = link.manipulator.manip.GetRobot()
-    pva_list = jointposvelacc_from_traj(robot, traj, time)
+    pva_list = JointStateFromTraj(robot, traj, time)
 
     acctwist_list = []
     for pva in pva_list:
@@ -828,7 +841,20 @@ def compute_acceleration_twist_from_traj(link, world_pos, traj, time):
         qdd = pva[2]
         if qd is None or qdd is None:
             acctwist = None
-        acctwist = compute_acceleration_twist(link, world_pos, qd, qdd)
+        acctwist = ComputeAccelerationTwist(link, world_pos, qd, qdd)
         acctwist_list.append(acctwist)
 
     return acctwist_list
+
+
+def ComputeAccelerationTwistFromTraj(link, world_pos, traj, time):
+    """
+    Computes the acceleration twist of a point on the robot's body
+    @param link the OpenRAVE link the bodypoint is on
+    @param world_pos (3,) position in the world frame of the bodypoint
+    @param traj An OpenRAVE trajectory
+    @param time Time in seconds
+    @return acctwist (6,) vector of bodypoint acceleration twist
+            Inserts 'None' if vel or acc are unavailable from traj
+    """
+    return ComputeAccelerationTwistsFromTraj(link, world_pos, traj, (time,))[0]
