@@ -826,11 +826,11 @@ def ComputeAccelerationTwists(link, local_pos, jointstates):
         with env:
             with robot:
                 robot.SetDOFValues(q)
+                world_pos = numpy.dot(link.GetTransform(), local_pos)
                 Jpos = robot.CalculateJacobian(link_index, world_pos)
                 Hpos = robot.ComputeHessianTranslation(link_index, world_pos)
                 Jang = robot.CalculateAngularVelocityJacobian(link_index)
                 Hang = robot.ComputeHessianAxisAngle(link_index)
-                world_pos = numpy.dot(link.GetTransform(), local_pos)
         
         apos = numpy.dot(Jpos, qdd) + reduce(numpy.dot, [qd, Hpos, qd])
         aang = numpy.dot(Jang, qdd) + reduce(numpy.dot, [qd, Hang, qd])
