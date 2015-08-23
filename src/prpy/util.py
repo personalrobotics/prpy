@@ -797,6 +797,35 @@ def JointStateFromTraj(robot, traj, time):
     return JointStatesFromTraj(robot, traj, (time,))[0]
 
 
+def BodyPointStatesFromJointStates(bodypoints, jointstates):
+    """
+    Computes the pos, vel, acc of body points given the 
+    pos, vel, acc of jointstates
+    @param bodypoints List of bodypoints where each bodypoint 
+                      is a list comprising of: 
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
+    @param jointstates List of list of joint position,
+                       velocity and acceleration.
+                       Unavailable fields are input as 'None'
+    @return bpstate_list List of list of bodypoint pos, vel and acc
+                         Inserts 'None' for unavailable fields
+    """
+
+    # Assume everything belongs to the same robot and env
+    robot = bodypoints[0][0].manipulator.GetRobot()
+    env = robot.GetEnv()
+
+    bpstate_list = []
+    for pva in jointstates:
+        q = pva[0]
+        qd = pva[1]
+        qdd = pva[2]
+
+
+
+
+
 def ComputeAccelerationTwists(link, local_pos, jointstates):
     """
     Computes the acceleration twist of a point on the robot's body
