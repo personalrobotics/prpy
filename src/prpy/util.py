@@ -797,7 +797,7 @@ def JointStateFromTraj(robot, traj, time):
     return JointStatesFromTraj(robot, traj, (time,))[0]
 
 
-def BodyPointStatesFromJointStates(bodypoints, jointstates):
+def BodyPointsStatesFromJointStates(bodypoints, jointstates):
     """
     Computes the pos, vel, acc of body points given the
     pos, vel, acc of jointstates
@@ -857,86 +857,60 @@ def BodyPointStatesFromJointStates(bodypoints, jointstates):
                     else:
                         bp_state.append(None)  # acc
                 bpstate_list.append(bp_state)
+    return bpstate_list
 
 
-def ComputeAccelerationTwists(link, local_pos, jointstates):
+def BodyPointsStatesFromJointState(bodypoints, jointstate):
     """
-    Computes the acceleration twist of a point on the robot's body
-    @param link the OpenRAVE link the bodypoint is on
-    @param local_pos (3,) position of the body point in the link frame
-    @param jointstates List of list of joint position,
-                       velocity and acceleration
-    @return List of (6,) vector of bodypoint acceleration twist.
-            Inserts 'None' if pos vel or acc are None
+    Computes the pos, vel, acc of body points given the
+    pos, vel, acc of jointstates
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
+    @param jointstate List of joint position,
+                      velocity and acceleration.
+                      Unavailable fields are input as 'None'
+    @return bpstate_list List of list of bodypoint pos, vel and acc
+                         Inserts 'None' for unavailable fields
+                         Of size |bodypoints| x 3
     """
+    return BodyPointsStatesFromJointStates(bodypoints, (jointstate,))[0]
 
-    link_index = link.GetIndex()
-    manip = link.manipulator
-    robot = manip.GetRobot()
-    env = robot.GetEnv()
 
-    acctwist_list = []
-
-    for pva in jointstates:
-        q = pva[0]
-        qd = pva[1]
-        qdd = pva[2]
-        if q is None or qd is None or qdd is None:
-            acctwist_list.append(None)
-            continue
-
-        with env:
-            with robot:
-                robot.SetDOFValues(q)
-                world_pos = numpy.dot(link.GetTransform(), local_pos)
-                Jpos = robot.CalculateJacobian(link_index, world_pos)
-                Hpos = robot.ComputeHessianTranslation(link_index, world_pos)
-                Jang = robot.CalculateAngularVelocityJacobian(link_index)
-                Hang = robot.ComputeHessianAxisAngle(link_index)
-
-        apos = numpy.dot(Jpos, qdd) + reduce(numpy.dot, [qd, Hpos, qd])
-        aang = numpy.dot(Jang, qdd) + reduce(numpy.dot, [qd, Hang, qd])
-        acctwist = numpy.hstack((apos, aang))
-        acctwist_list.append(acctwist)
-
-    return acctwist_list
-
-def ComputeAccelerationTwist(link, local_pos, jointstate):
+def BodyPointsStatesFromTraj(bodypoints, traj, times):
     """
-    Computes the acceleration twist of a point on the robot's body
-    @param link the OpenRAVE link the bodypoint is on
-    @param local_pos (3,) position of the body point in the link frame
-    @param jointstate List of joint position, velocity and acceleration
-    @return (6,) vector of bodypoint acceleration twist.
-            Returns 'None' if pos vel or acc are None
-    """
-    return ComputeAccelerationTwists(link, local_pos, (jointstate,))[0]
-
-
-def ComputeAccelerationTwistsFromTraj(link, local_pos, traj, times):
-    """
-    Computes the acceleration twist of a point on the robot's body
-    @param link the OpenRAVE link the bodypoint is on
-    @param local_pos (3,) position of the body point in the link frame
+    Computes the pos, vel, acc of body points from a joint space trajectory
+    at specified times
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
     @param traj An OpenRAVE trajectory
     @param time List of times in seconds
-    @return acctwist_list List of (6,) vectors of bodypoint acceleration twist
-            Inserts 'None' if pos or vel or acc are unavailable from traj
+    @return bpstate_list List of list of bodypoint pos, vel and acc
+                         Inserts 'None' for unavailable fields
+                         Of size |times| x |bodypoints| x 3
     """
-    robot = link.manipulator.manip.GetRobot()
+    # Assume everything belongs to the same robot
+    robot = bodypoints[0][0].manipulator.GetRobot()
     jointstates = JointStatesFromTraj(robot, traj, times)
 
-    return ComputeAccelerationTwists(link, local_pos, jointstates)
+    return BodyPointsStatesFromJointStates(bodypoints, jointstates)
 
 
-def ComputeAccelerationTwistFromTraj(link, world_pos, traj, time):
+def BodyPointsStateFromTraj(bodypoints, traj, time):
     """
-    Computes the acceleration twist of a point on the robot's body
-    @param link the OpenRAVE link the bodypoint is on
-    @param local_pos (3,) position of the body point in the link frame
+    Computes the pos, vel, acc of body points from a joint space trajectory
+    at a specified time
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
     @param traj An OpenRAVE trajectory
     @param time Time in seconds
-    @return acctwist (6,) vector of bodypoint acceleration twist
-            Inserts 'None' if pos or vel or acc are unavailable from traj
+    @return bpstate_list List of list of bodypoint pos, vel and acc
+                         Inserts 'None' for unavailable fields
+                         Of size |times| x |bodypoints| x 3
     """
-    return ComputeAccelerationTwistsFromTraj(link, world_pos, traj, (time,))[0]
+    return BodyPointsStatesFromTraj(bodypoints, traj, (time,))[0]
