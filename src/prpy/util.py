@@ -751,19 +751,26 @@ def IsTimedTrajectory(trajectory):
     return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
 
 
-def JointStatesFromTraj(robot, traj, times):
+def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     """
     Helper function to extract the joint position, velocity and acceleration
     from an OpenRAVE trajectory.
     @param robot The OpenRAVE robot
     @param traj An OpenRAVE trajectory
     @param times List of times in seconds
+    @param derivatives list of desired derivatives (only supports 0, 1, 2),
+                       defaults to [0, 1, 2]
     @return pva_list List of list of position, velocity and acceleration
-                     at specified times. Inserts 'None' for unavailable fields
+                     at specified times.
+                     Inserts 'None' for unavailable or undesired fields
                      The i-th element is the i-th derivative of position
                      Of size |times| x 3
 
     """
+    for d in derivatives:
+        if not (d == 0 or d == 1 or d == 2):
+            raise ValueError('Derivative input {0:} is not 0, 1, or 2'
+                             .format(derivatives))
 
     duration = traj.GetDuration()
 
@@ -777,11 +784,11 @@ def JointStatesFromTraj(robot, traj, times):
 
     pva_list = []
     for t in times:
-        pva = []
+        pva = [None] * 3
         trajdata = traj.Sample(t)
-        pva.append(cspec.ExtractJointValues(trajdata, robot, dof_indices, 0))
-        pva.append(cspec.ExtractJointValues(trajdata, robot, dof_indices, 1))
-        pva.append(cspec.ExtractJointValues(trajdata, robot, dof_indices, 2))
+        for d in derivatives:
+            pva[d] = cspec.ExtractJointValues(trajdata, robot,
+                                              dof_indices, d)
         pva_list.append(pva)
 
     return pva_list
