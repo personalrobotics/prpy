@@ -799,10 +799,10 @@ def JointStateFromTraj(robot, traj, time):
 
 def BodyPointStatesFromJointStates(bodypoints, jointstates):
     """
-    Computes the pos, vel, acc of body points given the 
+    Computes the pos, vel, acc of body points given the
     pos, vel, acc of jointstates
-    @param bodypoints List of bodypoints where each bodypoint 
-                      is a list comprising of: 
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
                       (1) the OpenRAVE link the bodypoint is on
                       (2) position of the body point in the link frame
     @param jointstates List of list of joint position,
@@ -810,6 +810,7 @@ def BodyPointStatesFromJointStates(bodypoints, jointstates):
                        Unavailable fields are input as 'None'
     @return bpstate_list List of list of bodypoint pos, vel and acc
                          Inserts 'None' for unavailable fields
+                         Of size |jointstates| x |bodypoints| x 3
     """
 
     # Assume everything belongs to the same robot and env
@@ -817,13 +818,45 @@ def BodyPointStatesFromJointStates(bodypoints, jointstates):
     env = robot.GetEnv()
 
     bpstate_list = []
-    for pva in jointstates:
-        q = pva[0]
-        qd = pva[1]
-        qdd = pva[2]
 
-
-
+    with env:
+        with robot:
+            for js in jointstates:
+                q, qd, qdd = js
+                if q is not None:
+                    robot.SetDOFValues(q)
+                else:
+                    bpstate_list.append([[[None] * 3] * len(bodypoints)])
+                    continue
+                for bp in bodypoints:
+                    bp_state = []
+                    link, local_pos = bp
+                    link_index = link.GetIndex()
+                    world_pos = numpy.dot(link.GetTransform(), local_pos)
+                    bp_state.append(world_pos)
+                    if qd is not None:
+                        Jpos = robot.CalculateJacobian(link_index, world_pos)
+                        Jang = robot.CalculateAngularVelocityJacobian(
+                                    link_index)
+                        vpos = numpy.dot(Jpos, qd)
+                        vang = numpy.dot(Jang, qd)
+                        bp_state.append(numpy.hstack((vpos, vang)))
+                    else:
+                        bp_state.append(None)  # vel
+                        bp_state.append(None)  # acc
+                        continue
+                    if qdd is not None:
+                        Hpos = robot.ComputeHessianTranslation(
+                                    link_index, world_pos)
+                        Hang = robot.ComputeHessianAxisAngle(link_index)
+                        apos = (numpy.dot(Jpos, qdd) +
+                                reduce(numpy.dot, [qd, Hpos, qd]))
+                        aang = (numpy.dot(Jang, qdd) +
+                                reduce(numpy.dot, [qd, Hang, qd]))
+                        bp_state.append(numpy.hstack((apos, aang)))
+                    else:
+                        bp_state.append(None)  # acc
+                bpstate_list.append(bp_state)
 
 
 def ComputeAccelerationTwists(link, local_pos, jointstates):
@@ -860,7 +893,7 @@ def ComputeAccelerationTwists(link, local_pos, jointstates):
                 Hpos = robot.ComputeHessianTranslation(link_index, world_pos)
                 Jang = robot.CalculateAngularVelocityJacobian(link_index)
                 Hang = robot.ComputeHessianAxisAngle(link_index)
-        
+
         apos = numpy.dot(Jpos, qdd) + reduce(numpy.dot, [qd, Hpos, qd])
         aang = numpy.dot(Jang, qdd) + reduce(numpy.dot, [qd, Hang, qd])
         acctwist = numpy.hstack((apos, aang))
