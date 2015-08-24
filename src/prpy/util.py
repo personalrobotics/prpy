@@ -760,6 +760,9 @@ def JointStatesFromTraj(robot, traj, times):
     @param times List of times in seconds
     @return pva_list List of list of position, velocity and acceleration
                      at specified times. Inserts 'None' for unavailable fields
+                     The i-th element is the i-th derivative of position
+                     Of size |times| x 3
+
     """
 
     duration = traj.GetDuration()
