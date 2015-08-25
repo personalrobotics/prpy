@@ -758,20 +758,13 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     @param robot The OpenRAVE robot
     @param traj An OpenRAVE trajectory
     @param times List of times in seconds
-    @param derivatives list of desired derivatives (only supports 0, 1, 2),
-                       defaults to [0, 1, 2]
-    @return pva_list List of list of position, velocity and acceleration
-                     at specified times.
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return pva_list List of list of derivatives at specified times.
                      Inserts 'None' for unavailable or undesired fields
                      The i-th element is the i-th derivative of position
-                     Of size |times| x 3
+                     Of size |times| x |derivatives|
 
     """
-    for d in derivatives:
-        if not (d == 0 or d == 1 or d == 2):
-            raise ValueError('Derivative input {0:} is not 0, 1, or 2'
-                             .format(derivatives))
-
     duration = traj.GetDuration()
 
     if any(times > duration):
@@ -784,44 +777,59 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
 
     pva_list = []
     for t in times:
-        pva = [None] * 3
+        pva = [None] * len(derivatives)
         trajdata = traj.Sample(t)
-        for d in derivatives:
-            pva[d] = cspec.ExtractJointValues(trajdata, robot,
-                                              dof_indices, d)
+        for i in range(len(derivatives)):
+            if i in derivatives:
+                pva[i] = cspec.ExtractJointValues(trajdata, robot,
+                                                  dof_indices, i)
         pva_list.append(pva)
 
     return pva_list
 
 
-def JointStateFromTraj(robot, traj, time):
+def JointStateFromTraj(robot, traj, time, derivatives=[0, 1, 2]):
     """
     Helper function to extract the joint position, velocity and acceleration
     from an OpenRAVE trajectory.
     @param robot The OpenRAVE robot
     @param traj An OpenRAVE trajectory
     @param time time in seconds
-    @return pva Position, velocity and acceleration
-                at specified time. Inserts 'None' for unavailable fields
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return pva_list List of list of derivatives at specified times.
+                     Inserts 'None' for unavailable or undesired fields
+                     The i-th element is the i-th derivative of position
+                     Of size |times| x |derivatives|
     """
-    return JointStatesFromTraj(robot, traj, (time,))[0]
+    return JointStatesFromTraj(robot, traj, (time,), derivatives)[0]
 
 
-def BodyPointsStatesFromJointStates(bodypoints, jointstates):
+def BodyPointsStatesFromJointStates(bodypoints,
+                                    jointstates,
+                                    derivatives=[0, 1, 2]):
     """
-    Computes the pos, vel, acc of body points given the
-    pos, vel, acc of jointstates
+    Computes the derivatives body points given jointstates.
+    Currently only supports derivatives up to 2.
     @param bodypoints List of bodypoints where each bodypoint
                       is a list comprising of:
                       (1) the OpenRAVE link the bodypoint is on
                       (2) position of the body point in the link frame
-    @param jointstates List of list of joint position,
-                       velocity and acceleration.
+    @param jointstates List of list of joint derivatives.
                        Unavailable fields are input as 'None'
-    @return bpstate_list List of list of bodypoint pos, vel and acc
-                         Inserts 'None' for unavailable fields
-                         Of size |jointstates| x |bodypoints| x 3
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the i-th derivative of position
+                           Of size |jointstates| x |bodypoints| x |derivatives|
     """
+
+    # Convert derivatives to numpy array
+    derivatives = numpy.array(derivatives)
+    maxd = max(derivatives)
+    numd = len(derivatives)
+
+    if any(derivatives > 2):
+        raise ValueError("Can only support derivatives up to 2.")
 
     # Assume everything belongs to the same robot and env
     robot = bodypoints[0][0].manipulator.GetRobot()
@@ -832,28 +840,28 @@ def BodyPointsStatesFromJointStates(bodypoints, jointstates):
     with env:
         with robot:
             for js in jointstates:
-                q, qd, qdd = js
+                # Make all unavailable and undesired derivatives None
+                q, qd, qdd = [js[x] if x < len(js) and x <= maxd
+                              else None for x in range(3)]
                 if q is not None:
                     robot.SetDOFValues(q)
                 else:
-                    bpstate_list.append([[[None] * 3] * len(bodypoints)])
+                    bpstate_list.append([[[None] * numd] * len(bodypoints)])
                     continue
                 for bp in bodypoints:
-                    bp_state = []
+                    bp_state = [None] * numd
                     link, local_pos = bp
                     link_index = link.GetIndex()
                     world_pos = numpy.dot(link.GetTransform(), local_pos)
-                    bp_state.append(world_pos)
+                    bp_state[0] = world_pos
                     if qd is not None:
                         Jpos = robot.CalculateJacobian(link_index, world_pos)
                         Jang = robot.CalculateAngularVelocityJacobian(
                                     link_index)
                         vpos = numpy.dot(Jpos, qd)
                         vang = numpy.dot(Jang, qd)
-                        bp_state.append(numpy.hstack((vpos, vang)))
+                        bp_state[1] = numpy.hstack((vpos, vang))
                     else:
-                        bp_state.append(None)  # vel
-                        bp_state.append(None)  # acc
                         continue
                     if qdd is not None:
                         Hpos = robot.ComputeHessianTranslation(
@@ -863,14 +871,13 @@ def BodyPointsStatesFromJointStates(bodypoints, jointstates):
                                 reduce(numpy.dot, [qd, Hpos, qd]))
                         aang = (numpy.dot(Jang, qdd) +
                                 reduce(numpy.dot, [qd, Hang, qd]))
-                        bp_state.append(numpy.hstack((apos, aang)))
-                    else:
-                        bp_state.append(None)  # acc
+                        bp_state[2] = numpy.hstack((apos, aang))
                 bpstate_list.append(bp_state)
     return bpstate_list
 
 
-def BodyPointsStatesFromJointState(bodypoints, jointstate):
+def BodyPointsStatesFromJointState(bodypoints, jointstate,
+                                   derivatives=[0, 1, 2]):
     """
     Computes the pos, vel, acc of body points given the
     pos, vel, acc of jointstates
@@ -881,14 +888,17 @@ def BodyPointsStatesFromJointState(bodypoints, jointstate):
     @param jointstate List of joint position,
                       velocity and acceleration.
                       Unavailable fields are input as 'None'
-    @return bpstate_list List of list of bodypoint pos, vel and acc
-                         Inserts 'None' for unavailable fields
-                         Of size |bodypoints| x 3
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the i-th derivative of position
+                           Of size |jointstates| x |bodypoints| x |derivatives|
     """
-    return BodyPointsStatesFromJointStates(bodypoints, (jointstate,))[0]
+    return BodyPointsStatesFromJointStates(bodypoints, (jointstate,),
+                                           derivatives)[0]
 
 
-def BodyPointsStatesFromTraj(bodypoints, traj, times):
+def BodyPointsStatesFromTraj(bodypoints, traj, times, derivatives=[0, 1, 2]):
     """
     Computes the pos, vel, acc of body points from a joint space trajectory
     at specified times
@@ -898,18 +908,22 @@ def BodyPointsStatesFromTraj(bodypoints, traj, times):
                       (2) position of the body point in the link frame
     @param traj An OpenRAVE trajectory
     @param time List of times in seconds
-    @return bpstate_list List of list of bodypoint pos, vel and acc
-                         Inserts 'None' for unavailable fields
-                         Of size |times| x |bodypoints| x 3
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the i-th derivative of position
+                           Of size |jointstates| x |bodypoints| x |derivatives|
     """
     # Assume everything belongs to the same robot
     robot = bodypoints[0][0].manipulator.GetRobot()
-    jointstates = JointStatesFromTraj(robot, traj, times)
+    jointstates = JointStatesFromTraj(robot, traj, times,
+                                      range(max(derivatives)))
 
-    return BodyPointsStatesFromJointStates(bodypoints, jointstates)
+    return BodyPointsStatesFromJointStates(bodypoints, jointstates,
+                                           derivatives)
 
 
-def BodyPointsStateFromTraj(bodypoints, traj, time):
+def BodyPointsStateFromTraj(bodypoints, traj, time, derivatives=[0, 1, 2]):
     """
     Computes the pos, vel, acc of body points from a joint space trajectory
     at a specified time
@@ -918,9 +932,10 @@ def BodyPointsStateFromTraj(bodypoints, traj, time):
                       (1) the OpenRAVE link the bodypoint is on
                       (2) position of the body point in the link frame
     @param traj An OpenRAVE trajectory
-    @param time Time in seconds
-    @return bpstate_list List of list of bodypoint pos, vel and acc
-                         Inserts 'None' for unavailable fields
-                         Of size |times| x |bodypoints| x 3
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the i-th derivative of position
+                           Of size |jointstates| x |bodypoints| x |derivatives|
     """
-    return BodyPointsStatesFromTraj(bodypoints, traj, (time,))[0]
+    return BodyPointsStatesFromTraj(bodypoints, traj, (time,), derivatives)[0]
