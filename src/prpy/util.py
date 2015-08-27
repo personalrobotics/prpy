@@ -767,6 +767,7 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     """
     duration = traj.GetDuration()
 
+    times = numpy.array(times)
     if any(times > duration):
         raise ValueError('Input times {0:} exceed duration {1:.2f}'
                          .format(times, duration))
@@ -852,7 +853,10 @@ def BodyPointsStatesFromJointStates(bodypoints,
                     bp_state = [None] * numd
                     link, local_pos = bp
                     link_index = link.GetIndex()
-                    world_pos = numpy.dot(link.GetTransform(), local_pos)
+                    link_transform = link.GetTransform()
+                    world_pos = (numpy.dot(link_transform[0:3, 0:3],
+                                           local_pos) +
+                                 link_transform[0:3, 3])
                     bp_state[0] = world_pos
                     if qd is not None:
                         Jpos = robot.CalculateJacobian(link_index, world_pos)
@@ -868,9 +872,9 @@ def BodyPointsStatesFromJointStates(bodypoints,
                                     link_index, world_pos)
                         Hang = robot.ComputeHessianAxisAngle(link_index)
                         apos = (numpy.dot(Jpos, qdd) +
-                                reduce(numpy.dot, [qd, Hpos, qd]))
+                                numpy.dot(qd, numpy.dot(Hpos, qd)))
                         aang = (numpy.dot(Jang, qdd) +
-                                reduce(numpy.dot, [qd, Hang, qd]))
+                                numpy.dot(qd, numpy.dot(Hang, qd)))
                         bp_state[2] = numpy.hstack((apos, aang))
                 bpstate_list.append(bp_state)
     return bpstate_list
