@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from base import PerceptionModule
+from base import PerceptionModule, PerceptionMethod
 from apriltags import ApriltagsModule
 from simulated import SimulatedPerceptionModule
 from rock_module import RockModule
