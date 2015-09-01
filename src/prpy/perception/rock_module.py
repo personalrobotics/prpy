@@ -29,7 +29,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 import logging
 from base import PerceptionModule, PerceptionMethod
-from rock import RockDetector
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +63,7 @@ class RockModule(PerceptionModule):
         if destination_frame is None:
             destination_frame = self.destination_frame
 
+        from rock import RockDetector
         rock_detector = RockDetector(
             env,
             kinbody_path,
