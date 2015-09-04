@@ -37,6 +37,22 @@ class BlockDetector(PerceptionModule):
                      segment_box=True,
                      box_min = [-0.5, 0.1, 0.5],
                      box_max = [0.5, 0.5, 1.5]):
+        """
+        @param service_name: name of the ROS service for tabletop_perception_tools
+        @param cloud_topic: name of the ROS topic for the colored PointCloud2
+        @param segment_planes: discard the largest num_plane planes
+        @param num_planes: number of planes to discard, if segment_planes is True
+        @param plane_distance: minimum distance from largest plane for points to be accepted
+        @param min_depth: minimum depth from the camera
+        @param max_depth: minimum depth from the camera
+        @param cluster_tolerance: maximum distance between any two points in a cluster
+        @param min_cluster_size: minimum number of points in a cluster
+        @param max_cluster_size: maximum number of points in a cluster
+        @param segment_box: flag to discard points outside of (box_min, box_max)
+        @param box_min: minimum coordinsates of search area in camera frame
+        @param box_max: maximum coordinsates of search area in camera frame
+        """
+
 	    print "waiting for service..."
 	    rospy.wait_for_service(service_name);
 	    print "Calling service..."
