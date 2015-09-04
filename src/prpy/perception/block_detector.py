@@ -53,24 +53,24 @@ class BlockDetector(PerceptionModule):
         @param box_max: maximum coordinsates of search area in camera frame
         """
 
-	    print "waiting for service..."
-	    rospy.wait_for_service(service_name);
-	    print "Calling service..."
-	    try:
-	        box_min_pt = geometry_msgs.msg.Point();
-	        box_min_pt.x = box_min[0];
-	        box_min_pt.y = box_min[1];
-	        box_min_pt.z = box_min[2];
-	        box_max_pt = geometry_msgs.msg.Point();
-	        box_max_pt.x = box_max[0];
-	        box_max_pt.y = box_max[1];
-	        box_max_pt.z = box_max[2];
-	        
-	        service = rospy.ServiceProxy(service_name, FindBlocks);
-	        response = service(cloud_topic, segment_planes, num_planes, plane_distance, segment_depth, min_depth, max_depth, cluster_tolerance, min_cluster_size, max_cluster_size, segment_box, box_min_pt, box_max_pt);
-	        return response.blocks;
-	    except rospy.ServiceException, e:
-	        print "Service call failed: %s"%e
+        print "waiting for service..."
+        rospy.wait_for_service(service_name);
+        print "Calling service..."
+        try:
+            box_min_pt = geometry_msgs.msg.Point();
+            box_min_pt.x = box_min[0];
+            box_min_pt.y = box_min[1];
+            box_min_pt.z = box_min[2];
+            box_max_pt = geometry_msgs.msg.Point();
+            box_max_pt.x = box_max[0];
+            box_max_pt.y = box_max[1];
+            box_max_pt.z = box_max[2];
+
+            service = rospy.ServiceProxy(service_name, FindBlocks);
+            response = service(cloud_topic, segment_planes, num_planes, plane_distance, segment_depth, min_depth, max_depth, cluster_tolerance, min_cluster_size, max_cluster_size, segment_box, box_min_pt, box_max_pt);
+            return response.blocks;
+        except rospy.ServiceException, e:
+            print "Service call failed: %s"%e
 
 
     @PerceptionMethod
@@ -141,8 +141,8 @@ class BlockDetector(PerceptionModule):
                 block = env.ReadKinBodyXMLFile(block_path)
 
                 for link in block.GetLinks():
-                	for geometry in link.GetGeometries():
-                		geometry.SetDiffuseColor(numpy.array([b.avg_color.r,b.avg_color.g,b.avg_color.b,b.avg_color.a]))
+                    for geometry in link.GetGeometries():
+                        geometry.SetDiffuseColor(numpy.array([b.avg_color.r,b.avg_color.g,b.avg_color.b,b.avg_color.a]))
 
                 block_pose = numpy.array(quaternion_matrix([
                         b.pose.orientation.x,
