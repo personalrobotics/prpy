@@ -35,8 +35,8 @@ class BlockDetector(PerceptionModule):
                      min_cluster_size=50, 
                      max_cluster_size=300,
                      segment_box=True,
-                     box_min = [-0.5, 0.1, 0.5],
-                     box_max = [0.5, 0.5, 1.5]):
+                     box_min = [-0.3, -0.05, 0.6],
+                     box_max = [0.3, 0.5, 1.5]):
         """
         @param service_name: name of the ROS service for tabletop_perception_tools
         @param cloud_topic: name of the ROS topic for the colored PointCloud2
@@ -71,6 +71,7 @@ class BlockDetector(PerceptionModule):
             return response.blocks;
         except rospy.ServiceException, e:
             print "Service call failed: %s"%e
+            return []
 
 
     @PerceptionMethod
@@ -181,6 +182,6 @@ class BlockDetector(PerceptionModule):
                 rand_name = int(numpy.random.randint(1,10000))
                 block.SetName('block'+`rand_name`)
                 env.Add(block)
-            blocks.append(block)
+                blocks.append(block)
 
         return blocks
