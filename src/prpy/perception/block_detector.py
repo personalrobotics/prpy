@@ -85,32 +85,32 @@ class BlockDetector(PerceptionModule):
         data_dir = prpy.util.FindCatkinResource('pr_ordata', 'data')
 
         # Place the table in the environment
-        table_path = os.path.join(data_dir, 'furniture', 'table.kinbody.xml')
-        table = env.ReadKinBodyXMLFile(table_path)
-        env.Add(table)
+        #table_path = os.path.join(data_dir, 'furniture', 'table.kinbody.xml')
+        #table = env.ReadKinBodyXMLFile(table_path)
+        #env.Add(table)
         
-        table_in_robot = numpy.array([[0., 0., 1., 1.025],
-                                      [1., 0., 0., 0.],
-                                      [0., 1., 0., 0.],
-                                      [0., 0., 0., 1.]])
-        table_in_world = numpy.dot(robot.GetTransform(), table_in_robot)
-        table.SetTransform(table_in_world)
-        table_aabb = table.ComputeAABB()
-        table_height = table_aabb.pos()[2] + table_aabb.extents()[2] 
+        #table_in_robot = numpy.array([[0., 0., 1., 1.025],
+        #                              [1., 0., 0., 0.],
+        #                              [0., 1., 0., 0.],
+        #                              [0., 0., 0., 1.]])
+        #table_in_world = numpy.dot(robot.GetTransform(), table_in_robot)
+        #table.SetTransform(table_in_world)
+        #table_aabb = table.ComputeAABB()
+        #table_height = table_aabb.pos()[2] + table_aabb.extents()[2] 
 
         # TODO: Add a bin to the edge of the table for placing the blocks into
-        tray_path = os.path.join(data_dir, 'objects', 'wicker_tray.kinbody.xml')
-        tray = env.ReadKinBodyXMLFile(tray_path)
-        tray_aabb = tray.ComputeAABB()
-        env.Add(tray)
+        #tray_path = os.path.join(data_dir, 'objects', 'wicker_tray.kinbody.xml')
+        #tray = env.ReadKinBodyXMLFile(tray_path)
+        #tray_aabb = tray.ComputeAABB()
+        #env.Add(tray)
 
-        xpose = table
-        tray_in_table = numpy.array([[1., 0., 0., -0.7607], # right edge - -.99575 + .235
-                                     [0., 0., 1., table_height + 0.01],
-                                     [0.,-1., 0., 0.],
-                                     [0., 0., 0., 1.]])
-        tray_in_world = numpy.dot(table.GetTransform(), tray_in_table)
-        tray.SetTransform(tray_in_world)
+        #xpose = table
+        #tray_in_table = numpy.array([[1., 0., 0., -0.7607], # right edge - -.99575 + .235
+        #                             [0., 0., 1., table_height + 0.01],
+        #                             [0.,-1., 0., 0.],
+        #                             [0., 0., 0., 1.]])
+        #tray_in_world = numpy.dot(table.GetTransform(), tray_in_table)
+        #tray.SetTransform(tray_in_world)
 
     @PerceptionMethod
     def DetectBlocks(self, robot, table, blocks=[], **kw_args):
@@ -127,12 +127,12 @@ class BlockDetector(PerceptionModule):
             block_path = os.path.join(data_dir, 'objects', 'block.kinbody.xml')
                     
             # Place blocks in a pattern on the table
-            table_aabb = table.ComputeAABB()
-            table_height = table_aabb.pos()[2] + table_aabb.extents()[2]
-            table_corner = numpy.eye(4)
-            table_corner[:3,3] = [table_aabb.pos()[0] - table_aabb.extents()[0],
-                                  table_aabb.pos()[1] - table_aabb.extents()[1],
-                                  table_height]
+            #table_aabb = table.ComputeAABB()
+            #table_height = table_aabb.pos()[2] + table_aabb.extents()[2]
+            #table_corner = numpy.eye(4)
+            #table_corner[:3,3] = [table_aabb.pos()[0] - table_aabb.extents()[0],
+            #                      table_aabb.pos()[1] - table_aabb.extents()[1],
+            #                      table_height]
             
             detected_blocks = self.find_blocks(cloud_topic=self.point_cloud_topic)
 
@@ -171,13 +171,7 @@ class BlockDetector(PerceptionModule):
                 frame_offset[2,3] = frame_trans[2]
 
                 block_in_world = numpy.array(numpy.dot(frame_offset,block_pose))
-
-                '''
-                block_pose = numpy.eye(4)
-                block_pose[:2,3] = b['pose']
-                block_in_world = numpy.dot(table_corner, block_pose)
-                block_in_world[2,3] = table_height + 0.01
-                '''
+              
                 block.SetTransform(block_in_world)
                 rand_name = int(numpy.random.randint(1,10000))
                 block.SetName('block'+`rand_name`)
