@@ -340,7 +340,13 @@ class Robot(openravepy.Robot):
                             cloned_robot, shortcut_path, defer=False,
                             **smoothing_options)
 
-                return CopyTrajectory(traj, env=self.GetEnv())
+                # Copy the trajectory into the output environment.
+                output_traj = CopyTrajectory(traj, env=self.GetEnv()) 
+
+                # Copy meta-data from the path to the output trajectory.
+                output_traj.SetDescription(path.GetDescription())
+
+                return output_traj
 
         if defer is True:
             from trollius.executor import get_default_executor
