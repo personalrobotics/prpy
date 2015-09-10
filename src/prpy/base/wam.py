@@ -285,15 +285,17 @@ class WAM(Manipulator):
                 traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
                                                            execute=False, **kw_args)
 
-	collided_with_obj = False
+                collided_with_obj = False
         try:
             if not manipulator.simulated:
-                self.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
+                # TODO: Why does post-process path strip these flags?
+                traj = manipulator.GetRobot().PostProcessPath(traj)
+                manipulator.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
                     force_direction=force_direction, force_magnitude=max_force,
                     torque=max_torque)
 
                 manipulator.hand.TareForceTorqueSensor()
-                manipulator.GetRobot().ExecutePath(traj)
+                manipulator.GetRobot().ExecuteTrajectory(traj)
 
                 for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
                     ignore_col_with.Enable(oldstate)
