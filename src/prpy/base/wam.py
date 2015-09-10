@@ -55,7 +55,7 @@ class WAM(Manipulator):
         if sim:
             from prpy.simulation import ServoSimulator
             self.servo_simulator = ServoSimulator(
-                    self, rate=20, watchdog_timeout=0.1)
+                self, rate=20, watchdog_timeout=0.1)
 
     def CloneBindings(self, parent):
         Manipulator.CloneBindings(self, parent)
@@ -288,14 +288,12 @@ class WAM(Manipulator):
                 collided_with_obj = False
         try:
             if not manipulator.simulated:
-                # TODO: Why does post-process path strip these flags?
-                traj = manipulator.GetRobot().PostProcessPath(traj)
                 manipulator.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
                     force_direction=force_direction, force_magnitude=max_force,
                     torque=max_torque)
 
                 manipulator.hand.TareForceTorqueSensor()
-                manipulator.GetRobot().ExecuteTrajectory(traj)
+                manipulator.GetRobot().ExecutePath(traj)
 
                 for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
                     ignore_col_with.Enable(oldstate)
