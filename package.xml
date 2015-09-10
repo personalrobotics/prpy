@@ -1,12 +1,21 @@
 <?xml version="1.0"?>
 <package>
   <name>prpy</name>
-  <version>1.1.0</version>
+  <version>1.2.0</version>
   <description>
     Python utilities used by the Personal Robotics Laboratory.
   </description>
-  <url type="repository">https://svn.personalrobotics.ri.cmu.edu/pr-ros-pkg/trunk/prpy</url>
+  <url type="website">https://github.com/personalrobotics/prpy</url>
+  <url type="bugtracker">https://github.com/personalrobotics/prpy/issues</url>
+  <url type="repository">https://github.com/personalrobotics/prpy.git</url>
   <maintainer email="mkoval@cs.cmu.edu">Michael Koval</maintainer>
+  <author email="mkoval@cs.cmu.edu">Michael Koval</author>
+  <author email="pkv@cs.cmu.edu">Pras Velagapudi</author>
+  <author email="jeking@cs.cmu.edu">Jennifer King</author>
+  <author email="siddh@cs.cmu.edu">Siddhartha Srinivasa</author>
+  <author email="cdellin@cs.cmu.edu">Chris Dellin</author>
+  <author email="sjavdani@cmu.edu">Shervin Javdani</author>
+  <author email="snikolai@andrew.cmu.edu">Stefanos Nikolaidis</author>
   <license>BSD</license>
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>python</build_depend>
@@ -16,8 +25,12 @@
   <run_depend>python-numpy</run_depend>
   <run_depend>manipulation2</run_depend>
   <run_depend>openrave</run_depend>
+  <run_depend>openrave_catkin</run_depend>
   <run_depend>python-scipy</run_depend>
   <run_depend>python-termcolor</run_depend>
+  <run_depend>python-trollius</run_depend>
+  <run_depend>python-rospkg</run_depend>
+  <run_depend>python-yaml</run_depend>
+  <run_depend>python-lxml</run_depend>
   <test_depend>python-nose</test_depend>
-  <test_depend>unittest</test_depend>
 </package>

@@ -112,8 +112,8 @@ class Robot(openravepy.Robot):
 
             delegate_method = self.actions.get_action(name)
             @functools.wraps(delegate_method)
-            def wrapper_method(obj, *args, **kw_args):
-                return delegate_method(self, obj, *args, **kw_args)
+            def wrapper_method(*args, **kw_args):
+                return delegate_method(self, *args, **kw_args)
             return wrapper_method
         elif (hasattr(self, 'detector') and self.detector is not None
               and self.detector.has_perception_method(name)):
@@ -350,7 +350,13 @@ class Robot(openravepy.Robot):
                             cloned_robot, shortcut_path, defer=False,
                             **smoothing_options)
 
-                return CopyTrajectory(traj, env=self.GetEnv())
+                # Copy the trajectory into the output environment.
+                output_traj = CopyTrajectory(traj, env=self.GetEnv()) 
+
+                # Copy meta-data from the path to the output trajectory.
+                output_traj.SetDescription(path.GetDescription())
+
+                return output_traj
 
         if defer is True:
             from trollius.executor import get_default_executor

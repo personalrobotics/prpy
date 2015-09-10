@@ -55,7 +55,7 @@ class WAM(Manipulator):
         if sim:
             from prpy.simulation import ServoSimulator
             self.servo_simulator = ServoSimulator(
-                    self, rate=20, watchdog_timeout=0.1)
+                self, rate=20, watchdog_timeout=0.1)
 
     def CloneBindings(self, parent):
         Manipulator.CloneBindings(self, parent)
@@ -89,6 +89,30 @@ class WAM(Manipulator):
 
         if not manipulator.simulated:
             manipulator.controller.SendCommand('SetStiffness {0:f}'.format(stiffness))
+
+    def SetTrajectoryExecutionOptions(self, traj, stop_on_stall=False,
+            stop_on_ft=False, force_magnitude=None, force_direction=None,
+            torque=None):
+        """Set OWD's trajectory execution options on trajectory.
+        @param stop_on_stall aborts the trajectory if the arm stalls
+        @param stop_on_ft aborts the trajectory if the force/torque
+                          sensor reports a force or torque that exceeds
+                          threshold specified by the force_magnitude,
+                          force_direction, and torque options
+        @param force_magnitude force threshold value, in Newtons
+        @param force_direction unit vector in the force/torque coordinate
+                               frame, which is int he same orientation as the
+                               hand frame.
+        @param torque vector of the three torques
+        """
+        util.SetTrajectoryTags(traj, {
+            'owd_options': {
+                'stop_on_stall': bool(stop_on_stall),
+                'stop_on_ft': bool(stop_on_ft),
+                'force_magnitude': float(force_magnitude),
+                'force_direction': list(force_direction),
+                'torque': list(torque),
+        }}, append=True)
 
     def Servo(manipulator, velocities):
         """Servo with a vector of instantaneous joint velocities.
@@ -261,19 +285,20 @@ class WAM(Manipulator):
                 traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
                                                            execute=False, **kw_args)
 
-	collided_with_obj = False
+                collided_with_obj = False
         try:
             if not manipulator.simulated:
+                manipulator.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
+                    force_direction=force_direction, force_magnitude=max_force,
+                    torque=max_torque)
+
                 manipulator.hand.TareForceTorqueSensor()
-                #manipulator.GetRobot().ExecuteTrajectory(traj, execute=True, retime=True, blend=False) 
-                manipulator.GetRobot().ExecuteTrajectory(traj, execute=True, retime=True, blend=True, stop_on_ft=True, 
-								force_direction=force_direction, force_magnitude=max_force, torque=max_torque)
+                manipulator.GetRobot().ExecutePath(traj)
+
                 for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
                     ignore_col_with.Enable(oldstate)
             else:
-                traj = manipulator.GetRobot().BlendTrajectory(traj)
-                traj = manipulator.GetRobot().RetimeTrajectory(traj, stop_on_ft=True, force_direction=force_direction,
-                                                               force_magnitude=max_force, torque=max_torque)
+
                 traj_duration = traj.GetDuration()
                 delta_t = 0.01
 
@@ -313,8 +338,6 @@ class WAM(Manipulator):
                             new_traj.Insert(int(waypoint_ind), waypoint, path_config_spec)
                             waypoint_ind += 1
 
-                    #new_traj = manipulator.GetRobot().BlendTrajectory(new_traj)
-                    #new_traj = manipulator.GetRobot().RetimeTrajectory(new_traj)
                 manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=True, blend=True)
 
             return collided_with_obj
