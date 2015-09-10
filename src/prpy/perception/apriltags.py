@@ -51,6 +51,26 @@ class ApriltagsModule(PerceptionModule):
     def __str__(self):
         return 'Apriltags'
 
+    def DetectObjects(self, robot, object_names, **kw_args):
+        """
+        This hack detects only the objects in object_names. Updates existing
+        objects, but only adds objects in the object_names list.
+        """
+        added_kinbodies, updated_kinbodies = self.DetectObjects(robot, **kw_args);
+        detected = [];
+        for body in added_kinbodies:
+            if not (body.GetName() in object_names):
+                body.GetEnvironment().RemoveKinbody(body);
+            else:
+                detected.append(body);
+        return detected;
+                
+    def DetectObject(self, robot, object_name, **kw_args):
+        """
+        Detects a single named object.
+        """
+        return (self.DetectObjects(robot, object_names=[object_name], **kw_args))[0][0];
+        
     @PerceptionMethod
     def DetectObjects(self, robot, **kw_args):
         """
@@ -96,7 +116,7 @@ class ApriltagsModule(PerceptionModule):
                                           destination_frame)
 
             logger.warn('Waiting to detect objects...')
-            detector.Update()
+            return detector.Update()
         except Exception, e:
             logger.error('Detecton failed update: %s' % str(e))
             raise 
