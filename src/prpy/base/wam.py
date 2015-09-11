@@ -254,7 +254,6 @@ class WAM(Manipulator):
         @param max_distance maximum distance in meters
         @param max_force maximum force in Newtons
         @param max_torque maximum torque in Newton-Meters
-        @param execute optionally execute the trajectory
         @param ignore_collisions collisions with these objects are ignored in simulation
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
@@ -299,6 +298,8 @@ class WAM(Manipulator):
                     ignore_col_with.Enable(oldstate)
             else:
 
+                traj = manipulator.GetRobot().PostProcessPath(traj)
+
                 traj_duration = traj.GetDuration()
                 delta_t = 0.01
 
@@ -306,7 +307,8 @@ class WAM(Manipulator):
                 traj_angle_group = traj_config_spec.GetGroupFromName('joint_values')
                 path_config_spec = openravepy.ConfigurationSpecification()
 #                path_config_spec.AddDeltaTimeGroup()
-                path_config_spec.AddGroup(traj_angle_group.name, traj_angle_group.dof, '')
+                path_config_spec.AddGroup(traj_angle_group.name, traj_angle_group.dof, 'linear')
+                #path_config_spec.AddGroup(traj_angle_group)
 #                path_config_spec.AddDerivativeGroups(1, False);
 #                path_config_spec.AddDerivativeGroups(2, False);
 #                path_config_spec.AddGroup('owd_blend_radius', 1, 'next')
@@ -323,6 +325,7 @@ class WAM(Manipulator):
                     waypoint_ind = 0
                     for t in numpy.arange(0, traj_duration, delta_t):
                         traj_sample = traj.Sample(t)
+                        print traj_sample
 
                         waypoint = traj_config_spec.ExtractJointValues(traj_sample, manipulator.GetRobot(), manipulator.GetArmIndices())
                         manipulator.SetDOFValues(waypoint)
@@ -338,7 +341,8 @@ class WAM(Manipulator):
                             new_traj.Insert(int(waypoint_ind), waypoint, path_config_spec)
                             waypoint_ind += 1
 
-                manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=True, blend=True)
+                #manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=True, blend=True)
+                manipulator.GetRobot().ExecutePath(new_traj)
 
             return collided_with_obj
         # Trajectory is aborted by OWD because we felt a force.
