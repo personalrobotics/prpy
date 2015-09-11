@@ -254,7 +254,7 @@ class WAM(Manipulator):
         @param max_distance maximum distance in meters
         @param max_force maximum force in Newtons
         @param max_torque maximum torque in Newton-Meters
-        @param ignore_collisions collisions with these objects are ignored in simulation
+        @param ignore_collisions collisions with these objects are ignored when planning the path, e.g. the object you think you will touch
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
