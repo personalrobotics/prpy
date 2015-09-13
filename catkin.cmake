@@ -5,6 +5,5 @@ catkin_package()
 catkin_python_setup()
 
 if (CATKIN_ENABLE_TESTING)
-    #catkin_add_nosetests(tests/test_PlanningPipeline.py)
-    #catkin_add_nosetests(tests/test_DistanceFieldManager.py)
+    catkin_add_nosetests(tests/test_Planning.py)
 endif()

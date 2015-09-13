@@ -11,13 +11,19 @@ from prpy.planning.retimer import ParabolicRetimer
 from prpy.planning.mac_smoother import MacSmoother
 from numpy.testing import assert_allclose
 
+
+openravepy.RaveInitialize(True)
+openravepy.misc.InitOpenRAVELogging()
+openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Fatal)
+
+
 VerifyTrajectory = openravepy.planningutils.VerifyTrajectory
+
 
 # Generic test setup
 #
 # This class is the base class of all planner tests. It is responsible for
 # setting up the environment, but does directly not implement any tests.
-
 
 class BasePlannerTest(object):
     """Generic environment setup.
@@ -447,18 +453,5 @@ class ParabolicRetimerTests(BasePlannerTest,
         RetimeTrajectoryTest.setUp(self)
 
 
-class MacSmootherTests(BasePlannerTest,
-                       SmoothTrajectoryTest,
-                       unittest.TestCase):
-    planner_factory = MacSmoother
-
-    def setUp(self):
-        BasePlannerTest.setUp(self)
-        SmoothTrajectoryTest.setUp(self)
-
 if __name__ == '__main__':
-    openravepy.RaveInitialize(True)
-    openravepy.misc.InitOpenRAVELogging()
-    openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Warn)
-
     unittest.main()
