@@ -36,7 +36,7 @@ import time
 from ..util import SetTrajectoryTags
 from base import BasePlanner, PlanningError, PlanningMethod, Tags
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
 
 
 class GreedyIKPlanner(BasePlanner):

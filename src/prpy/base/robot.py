@@ -29,8 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import functools, logging, openravepy, numpy
-import prpy.util
-from .. import bind, named_config, planning, util
+from .. import bind, named_config, exceptions, util
 from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence, Tags
@@ -39,7 +38,8 @@ from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, P
 from ..planning.mac_smoother import MacSmoother
 from ..util import SetTrajectoryTags
 
-logger = logging.getLogger('robot')
+logger = logging.getLogger(__name__)
+
 
 class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
@@ -110,8 +110,8 @@ class Robot(openravepy.Robot):
 
             delegate_method = self.actions.get_action(name)
             @functools.wraps(delegate_method)
-            def wrapper_method(obj, *args, **kw_args):
-                return delegate_method(self, obj, *args, **kw_args)
+            def wrapper_method(*args, **kw_args):
+                return delegate_method(self, *args, **kw_args)
             return wrapper_method
 
         raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
@@ -280,7 +280,7 @@ class Robot(openravepy.Robot):
                 # Extract active DOFs from teh trajectory and set them as active.
                 dof_indices, _ = cspec.ExtractUsedIndices(self)
 
-                if prpy.util.HasAffineDOFs(cspec):
+                if util.HasAffineDOFs(cspec):
                     affine_dofs = (DOFAffine.X | DOFAffine.Y | DOFAffine.RotationAxis)
                     
                     # Bug in OpenRAVE ExtractUsedIndices function makes 
@@ -340,7 +340,13 @@ class Robot(openravepy.Robot):
                             cloned_robot, shortcut_path, defer=False,
                             **smoothing_options)
 
-                return CopyTrajectory(traj, env=self.GetEnv())
+                # Copy the trajectory into the output environment.
+                output_traj = CopyTrajectory(traj, env=self.GetEnv()) 
+
+                # Copy meta-data from the path to the output trajectory.
+                output_traj.SetDescription(path.GetDescription())
+
+                return output_traj
 
         if defer is True:
             from trollius.executor import get_default_executor
@@ -421,7 +427,7 @@ class Robot(openravepy.Robot):
         will be raised). If timeout is a float (including timeout = 0), this
         function will return None once the timeout has ellapsed, even if the
         trajectory is still being executed.
-        
+
         NOTE: We suggest that you either use timeout=None or defer=True. If
         trajectory execution times out, there is no way to tell whether
         execution was successful or not. Other values of timeout are only
@@ -437,18 +443,47 @@ class Robot(openravepy.Robot):
         @param period poll rate, in seconds, for checking trajectory status
         @return trajectory executed on the robot
         """
+        # Don't execute trajectories that don't have at least one waypoint.
+        if traj.GetNumWaypoints() <= 0:
+            raise ValueError('Trajectory must contain at least one waypoint.')
 
-        # TODO: Verify that the trajectory is timed.
+        # Check that the current configuration of the robot matches the
+        # initial configuration specified by the trajectory.
+        if not util.IsAtTrajectoryStart(self, traj):
+            raise exceptions.TrajectoryAborted(
+                'Trajectory started from different configuration than robot.')
+
+        # If there was only one waypoint, at this point we are done!
+        if traj.GetNumWaypoints() == 1:
+            if defer is True:
+                import trollius
+                future = trollius.Future()
+                future.set_result(traj)
+                return future
+            else:
+                return traj
+
+        # Verify that the trajectory is timed by checking whether the first
+        # waypoint has a valid deltatime value.
+        if not util.IsTimedTrajectory(traj):
+            raise ValueError('Trajectory cannot be executed, it is not timed.')
+
+        # Verify that the trajectory has non-zero duration.
+        if traj.GetDuration() <= 0.0:
+            import warnings
+            warnings.warn('Executing zero-length trajectory. Please update the'
+                          ' function that produced this trajectory to return a'
+                          ' single-waypoint trajectory.', FutureWarning)
+
         # TODO: Check if this trajectory contains the base.
-
         needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
 
         active_manipulators = self.GetTrajectoryManipulators(traj)
         active_controllers = [
-            active_manipulator.controller \
-            for active_manipulator in active_manipulators \
+            active_manipulator.controller
+            for active_manipulator in active_manipulators
             if hasattr(active_manipulator, 'controller')
         ]
 
@@ -484,8 +519,8 @@ class Robot(openravepy.Robot):
             util.WaitForControllers(active_controllers, timeout=timeout)
             return traj
         else:
-            raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
-
+            raise ValueError('Received unexpected value "{:s}" for defer.'
+                             .format(str(defer)))
 
     def ViolatesVelocityLimits(self, traj):
         """
@@ -570,7 +605,7 @@ class Robot(openravepy.Robot):
                 postprocess_trajectory(traj)
 
                 # Optionally execute the trajectory.
-                if kw_args.get('execute', True):
+                if kw_args.get('execute', False):
                     # We know defer = True if we're in this function, so we
                     # don't have to set it explicitly.
                     traj = yield trollius.From(
@@ -584,7 +619,7 @@ class Robot(openravepy.Robot):
             postprocess_trajectory(result)
 
             # Optionally execute the trajectory.
-            if kw_args.get('execute', True):
+            if kw_args.get('execute', False):
                 result = self.ExecutePath(result, **kw_args)
 
             return result

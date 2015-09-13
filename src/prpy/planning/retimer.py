@@ -28,12 +28,16 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, numpy, openravepy, os, tempfile
-from ..util import CopyTrajectory, SimplifyTrajectory, HasAffineDOFs
-from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
-from openravepy import PlannerStatus 
+import logging
+import openravepy
+from ..util import (CreatePlannerParametersString, CopyTrajectory,
+                    SimplifyTrajectory, HasAffineDOFs, IsTimedTrajectory)
+from base import (BasePlanner, PlanningError, PlanningMethod,
+                  UnsupportedPlanningError)
+from openravepy import PlannerStatus, Planner
 
-logger = logging.getLogger('retimer')
+logger = logging.getLogger(__name__)
+
 
 class OpenRAVERetimer(BasePlanner):
     def __init__(self, algorithm, default_options=None):
@@ -55,11 +59,8 @@ class OpenRAVERetimer(BasePlanner):
 
     @PlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
-        from ..util import (CreatePlannerParametersString, CopyTrajectory,
-                            SimplifyTrajectory, HasAffineDOFs)
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
         from copy import deepcopy
-        from openravepy import Planner
 
         # Validate the input path.
         cspec = path.GetConfigurationSpecification()
@@ -90,11 +91,12 @@ class OpenRAVERetimer(BasePlanner):
         # Copy the input trajectory into the planning environment. This is
         # necessary for two reasons: (1) the input trajectory may be in another
         # environment and/or (2) the retimer modifies the trajectory in-place.
-        input_path = CopyTrajectory(path, env=self.env)
+        output_traj = CopyTrajectory(path, env=self.env)
 
         # Remove co-linear waypoints. Some of the default OpenRAVE retimers do
         # not perform this check internally (e.g. ParabolicTrajectoryRetimer).
-        output_traj = SimplifyTrajectory(input_path, robot)
+        if not IsTimedTrajectory(output_traj):
+            output_traj = SimplifyTrajectory(output_traj, robot)
 
         # Only collision check the active DOFs.
         dof_indices, _ = cspec.ExtractUsedIndices(robot)
@@ -103,13 +105,12 @@ class OpenRAVERetimer(BasePlanner):
         # Compute the timing. This happens in-place.
         self.planner.InitPlan(None, params_str)
 
-
         with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
             status = self.planner.PlanPath(output_traj, releasegil=True)
 
-        if status not in [ PlannerStatus.HasSolution,
-                           PlannerStatus.InterruptedWithSolution ]:
+        if status not in [PlannerStatus.HasSolution,
+                          PlannerStatus.InterruptedWithSolution]:
             raise PlanningError(
                 'Retimer returned with status {:s}.'.format(str(status)))
 
@@ -141,7 +142,7 @@ class ParabolicSmoother(OpenRAVERetimer):
 
 class HauserParabolicSmoother(OpenRAVERetimer):
     def __init__(self, do_blend=True, do_shortcut=True, blend_radius=0.5,
-                 blend_iterations=4, **kwargs):
+                 blend_iterations=0, timelimit=3., **kwargs):
         super(HauserParabolicSmoother, self).__init__(
                 'HauserParabolicSmoother', **kwargs)
 
@@ -150,6 +151,7 @@ class HauserParabolicSmoother(OpenRAVERetimer):
             'do_shortcut': int(do_shortcut),
             'blend_radius': float(blend_radius),
             'blend_iterations': int(blend_iterations),
+            'time_limit': float(timelimit),
         })
 
 
@@ -180,8 +182,6 @@ class OpenRAVEAffineRetimer(BasePlanner):
             if not found:
                 raise UnsupportedPlanningError('OpenRAVEAffineRetimer only supports untimed paths with affine DOFs. Found group: %s' % group.name)
 
-
-
         # Copy the input trajectory into the planning environment. This is
         # necessary for two reasons: (1) the input trajectory may be in another
         # environment and/or (2) the retimer modifies the trajectory in-place.
@@ -195,8 +195,8 @@ class OpenRAVEAffineRetimer(BasePlanner):
         status = RetimeTrajectory(output_traj, max_velocities, max_accelerations,
                                   False)
 
-        if status not in [ PlannerStatus.HasSolution,
-                           PlannerStatus.InterruptedWithSolution ]:
+        if status not in [PlannerStatus.HasSolution,
+                          PlannerStatus.InterruptedWithSolution]:
             raise PlanningError('Retimer returned with status {0:s}.'.format(
                                 str(status)))
 

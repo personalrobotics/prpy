@@ -37,7 +37,7 @@ from base import BasePlanner, PlanningError, PlanningMethod, Tags
 from enum import Enum
 import math
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
 
 
 class Status(Enum):
