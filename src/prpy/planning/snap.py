@@ -127,6 +127,8 @@ class SnapPlanner(BasePlanner):
         start_waypoint = numpy.zeros(cspec.GetDOF())
         cspec.InsertJointValues(start_waypoint, start, robot,
                                 active_indices, False)
+
+        traj.Init(cspec)
         traj.Insert(0, start_waypoint.ravel())
 
         # Make the trajectory end at the goal configuration, as long as it
