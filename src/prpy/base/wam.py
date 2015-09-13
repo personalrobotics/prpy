@@ -28,6 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import logging
 import numpy
 import openravepy
 import warnings
@@ -35,6 +36,8 @@ from manipulator import Manipulator
 from prpy.clone import Clone
 from .. import util
 from .. import exceptions
+
+logger = logging.getLogger('wam')
 
 class WAM(Manipulator):
     def __init__(self, sim, owd_namespace,
@@ -219,13 +222,14 @@ class WAM(Manipulator):
         if not manipulator.simulated:
             manipulator.controller.SendCommand('ClearStatus')
 
-    def MoveUntilTouch(manipulator, direction, distance, max_distance=float('+inf'),
+    def MoveUntilTouch(manipulator, direction, distance, max_distance=None,
                        max_force=5.0, max_torque=None, ignore_collisions=None, **kw_args):
         """Execute a straight move-until-touch action.
         This action stops when a sufficient force is is felt or the manipulator
         moves the maximum distance. The motion is considered successful if the
         end-effector moves at least distance. In simulation, a move-until-touch
         action proceeds until the end-effector collids with the environment.
+
         @param direction unit vector for the direction of motion in the world frame
         @param distance minimum distance in meters
         @param max_distance maximum distance in meters
@@ -235,6 +239,14 @@ class WAM(Manipulator):
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
+
+        if max_distance is None:
+            max_distance = 1.
+            warnings.warn(
+                'MoveUntilTouch now requires the "max_distance" argument.'
+                ' This will be an error in the future.',
+                DeprecationWarning)
+
         # TODO: Is ignore_collisions a list of names or KinBody pointers?
         if max_torque is None:
             max_torque = numpy.array([100.0, 100.0, 100.0 ])

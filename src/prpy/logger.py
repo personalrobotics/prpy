@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import collections, logging, sys
+import collections, logging, sys, warnings
 
 class ColoredFormatter(logging.Formatter):
     def __init__(self, default):
@@ -79,6 +79,9 @@ def initialize_logging():
     for spammy_logger_name in spammy_logger_names:
         spammy_logger = logging.getLogger(spammy_logger_name)
         spammy_logger.setLevel(logging.WARNING)
+
+    # Enable deprecation warnings, which are off by default in Python 2.7.
+    warnings.simplefilter('default')
 
     return base_logger
 
