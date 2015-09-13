@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from methods import (
     PlanToConfigurationTest,
     PlanToConfigurationStraightLineTest,

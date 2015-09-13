@@ -5,5 +5,5 @@ catkin_package()
 catkin_python_setup()
 
 if (CATKIN_ENABLE_TESTING)
-    catkin_add_nosetests(tests/test_Planning.py)
+    catkin_add_nosetests(tests)
 endif()
