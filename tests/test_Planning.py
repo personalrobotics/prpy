@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import openravepy
 import unittest
 import numpy
@@ -12,12 +13,31 @@ from prpy.planning.mac_smoother import MacSmoother
 from numpy.testing import assert_allclose
 
 
-openravepy.RaveInitialize(True)
-openravepy.misc.InitOpenRAVELogging()
-openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Fatal)
+# Fix PYTHONPATH to support relative imports in nosetest.
+import os.path, sys
+sys.path = [os.path.abspath(os.path.dirname(__file__))] + sys.path
+
+
+# Add the models included with OpenRAVE to the OPENRAVE_DATA path. These may
+# not be available if the user manually set the OPENRAVE_DATA environmental
+# variable, e.g. through openrave_catkin.
+import subprocess
+try:
+    share_path = subprocess.check_output(['openrave-config', '--share-dir']).strip()
+    os.environ['OPENRAVE_DATA'] = os.path.join(share_path, 'data')
+except subprocess.CalledProcessError as e:
+    print('error: Failed using "openrave-config" to find the default'
+          ' OPENRAVE_DATA path. Loading assets may fail.',
+          file=sys.stderr)
+
 
 
 VerifyTrajectory = openravepy.planningutils.VerifyTrajectory
+
+
+openravepy.RaveInitialize(True)
+openravepy.misc.InitOpenRAVELogging()
+openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Fatal)
 
 
 # Generic test setup
