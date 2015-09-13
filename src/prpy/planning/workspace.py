@@ -226,7 +226,7 @@ class GreedyIKPlanner(BasePlanner):
                 # Otherwise we'll gracefully terminate.
                 else:
                     logger.warning('Terminated early at time %f < %f: %s',
-                                   t, traj.GetDuration(), e.message)
+                                   t, traj.GetDuration(), str(e))
 
         # Return as much of the trajectory as we have solved.
         SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: True}, append=True)
