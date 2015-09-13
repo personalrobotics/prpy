@@ -132,7 +132,13 @@ class BasePlannerTest(object):
                              linear_tol=1e-3, angular_tol=1e-3):
         rel_pose = numpy.dot(numpy.linalg.inv(actual_pose), expected_pose)
         distance = numpy.linalg.norm(rel_pose[0:3, 3])
-        angle = numpy.arccos((numpy.trace(rel_pose[0:3, 0:3]) - 1.) / 2.)
+
+        # This value should be in the range [ -1, 1 ], but it may be slightly
+        # outside due to numerical imprecision. This can cause arccos to
+        # return NaN, so we explicitly project it first.
+        angle_cos = (numpy.trace(rel_pose[0:3, 0:3]) - 1.) / 2.
+        angle_cos = min(max(angle_cos, -1.), 1.)
+        angle = numpy.arccos(angle_cos)
 
         self.assertLessEqual(distance, linear_tol)
         self.assertLessEqual(angle, angular_tol)
