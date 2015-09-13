@@ -125,23 +125,9 @@ class BasePlanner(Planner):
 class MetaPlanner(Planner):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self):
-        super(MetaPlanner, self).__init__()
-        self._planners = list()
-
-    def has_planning_method(self, method_name):
-        for planner in self._planners:
-            if planner.has_planning_method(method_name):
-                return True
-
-        return False
-
+    @abc.abstractmethod
     def get_planning_method_names(self):
-        method_names = set()
-        for planner in self._planners:
-            method_names.update(planner.get_planning_method_names())
-
-        return list(method_names)
+        pass
 
     @abc.abstractmethod
     def get_planners(self, method_name):
@@ -224,6 +210,13 @@ class Sequence(MetaPlanner):
     def __str__(self):
         return 'Sequence({:s})'.format(', '.join(map(str, self._planners)))
 
+    def get_planning_method_names(self):
+        method_names = set()
+        for planner in self._planners:
+            method_names.update(planner.get_planning_method_names())
+
+        return list(method_names)
+
     def get_planners(self, method_name):
         return [planner for planner in self._planners
                 if planner.has_planning_method(method_name)]
@@ -267,6 +260,13 @@ class Ranked(MetaPlanner):
 
     def __str__(self):
         return 'Ranked({0:s})'.format(', '.join(map(str, self._planners)))
+
+    def get_planning_method_names(self):
+        method_names = set()
+        for planner in self._planners:
+            method_names.update(planner.get_planning_method_names())
+
+        return list(method_names)
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
@@ -337,6 +337,13 @@ class FirstSupported(MetaPlanner):
 
     def __str__(self):
         return 'Fallback({:s})'.format(', '.join(map(str, self._planners)))
+
+    def get_planning_method_names(self):
+        method_names = set()
+        for planner in self._planners:
+            method_names.update(planner.get_planning_method_names())
+
+        return list(method_names)
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
