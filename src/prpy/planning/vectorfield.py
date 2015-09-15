@@ -40,6 +40,11 @@ import math
 logger = logging.getLogger(__name__)
 
 
+class TerminationError(PlanningError):
+    def __init__(self):
+        super(TerminateError, self).__init__('Terminated by callback.')
+
+
 class Status(Enum):
     '''
     TERMINATE - stop, exit gracefully, and return current trajectory
@@ -79,11 +84,10 @@ class VectorFieldPlanner(BasePlanner):
                                             goal_pose)
             dqout, tout = util.ComputeJointVelocityFromTwist(
                                 robot, twist)
+
             # Go as fast as possible
             vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-            dqout = min(abs(vlimits/dqout))*dqout
-
-            return dqout
+            return min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1. for i in xrange(vlimits.shape[0])) * dqout
 
         def CloseEnough():
             pose_error = util.GeodesicDistance(
@@ -151,8 +155,8 @@ class VectorFieldPlanner(BasePlanner):
 
             # Go as fast as possible
             vlimits= robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-            dqout = min(abs(vlimits/dqout))*dqout
-            return dqout
+            return min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1. for i in xrange(vlimits.shape[0])) * dqout
+
 
         def TerminateMove():
             '''
@@ -187,6 +191,7 @@ class VectorFieldPlanner(BasePlanner):
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
+                          integration_timelimit=10.,
                           timelimit=5.0, dt_multiplier=1.01, **kw_args):
         """
         Follow a joint space vectorfield to termination.
@@ -205,80 +210,135 @@ class VectorFieldPlanner(BasePlanner):
         from .exceptions import (
             CollisionPlanningError,
             SelfCollisionPlanningError,
-            TimeoutPlanningError
+            TimeoutPlanningError,
+            JointLimitError
         )
+        from openravepy import RaveCreateTrajectory
+        from prpy.util import ComputeJointVelocityFromTwist
+        import time
+        import scipy.integrate
 
-        start_time = time.time()
+
+        # This is a workaround to emulate 'nonlocal' in Python 2.
+        nonlocals = {
+            'waypoints': [],
+            'cached_index': None,
+            'last_t': 0.,
+            'error': None,
+        }
+
+        env = robot.GetEnv()
+        active_indices = robot.GetActiveDOFIndices()
+        q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+        qdot_limit = robot.GetDOFVelocityLimits(active_indices)
+
+        cspec = robot.GetActiveConfigurationSpecification('quadratic')
+        cspec.AddDerivativeGroups(1, adddeltatime=True)
+        cspec.ResetGroupOffsets()
+
+        def fn_wrapper(t, q):
+            time.sleep(0.01)
+
+            robot.SetActiveDOFValues(q)
+            qdot = fn_vectorfield()
+
+            # Enforce velocity limits.
+            lower_velocity_violations = (qdot < -qdot_limit)
+            if lower_velocity_violations.any():
+                index = lower_velocity_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=qdot[index],
+                    dof_limit=-qdot_limit[index],
+                    description='velocity')
+
+            upper_velocity_violations = (qdot > qdot_limit)
+            if upper_velocity_violations.any():
+                index = upper_velocity_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=qdot[index],
+                    dof_limit=qdot_limit[index],
+                    description='velocity')
+
+            return qdot
+
+        def fn_callback(t, q):
+            print t, q
+
+            # Enforce position limits.
+            lower_position_violations = (q < q_limit_min)
+            if lower_position_violations.any():
+                index = lower_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_min[index],
+                    description='position')
+
+            upper_position_violations = (q > q_limit_max)
+            if upper_position_violations.any():
+                index = upper_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_min[index],
+                    description='position')
+
+            # Check collision.
+            report = openravepy.CollisionReport()
+            if env.CheckCollision(robot, report=report):
+                raise CollisionPlanningError.FromReport(report)
+            elif robot.CheckSelfCollision(report=report):
+                raise CollisionPlanningError.FromReport(report)
+
+            # Add the waypoint to the trajectory.
+            waypoint = numpy.zeros(cspec.GetDOF())
+            cspec.InsertDeltaTime(waypoint, t - nonlocals['last_t'])
+            cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
+            nonlocals['waypoints'].append(waypoint)
+            nonlocals['last_t'] = t
+
+            # Check the termination condition.
+            status = fn_terminate()
+
+            # TODO: Debug.
+            status = Status.CACHE_AND_CONTINUE
+
+            if status == Status.CONTINUE:
+                pass # Do nothing.
+            elif status == Status.CACHE_AND_CONTINUE:
+                nonlocals['cached_index'] = len(nonlocals['waypoints'])
+            elif status == Status.TERMINATE:
+                raise TerminationError()
+
+            return 0 # Keep going.
+
+        integrator = scipy.integrate.ode(f=fn_wrapper)
+        integrator.set_integrator(name='dopri5')
+        integrator.set_solout(fn_callback)
+        integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
 
         try:
-            with robot:
-                manip = robot.GetActiveManipulator()
-                robot.SetActiveDOFs(manip.GetArmIndices())
-                # Populate joint positions and joint velocities
-                cspec = manip.GetArmConfigurationSpecification('quadratic')
-                cspec.AddDerivativeGroups(1, False)
-                cspec.AddDeltaTimeGroup()
-                cspec.ResetGroupOffsets()
-                qtraj = openravepy.RaveCreateTrajectory(self.env,
-                                                        'GenericTrajectory')
-                qtraj.Init(cspec)
-                cached_traj = None
-
-                vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-                dt_step = min(robot.GetActiveDOFResolutions() /
-                              vlimits)
-                dt_step *= dt_multiplier
-                status = fn_terminate()
-                report = openravepy.CollisionReport()
-
-                while status != Status.TERMINATE:
-                    # Check for a timeout.
-                    current_time = time.time()
-                    if (timelimit is not None and
-                            current_time - start_time > timelimit):
-                        raise TimeoutPlanningError(timelimit)
-
-                    dqout = fn_vectorfield()
-                    numsteps = int(math.floor(max(
-                        abs(dqout*dt_step/robot.GetActiveDOFResolutions())
-                        )))
-                    if numsteps == 0:
-                        raise PlanningError('Step size too small,'
-                                            ' unable to progress')
-                    dt = dt_step/numsteps
-
-                    for step in xrange(numsteps):
-                        # Check for collisions.
-                        if self.env.CheckCollision(robot, report):
-                            raise CollisionPlanningError.FromReport(report)
-                        if robot.CheckSelfCollision(report):
-                            raise SelfCollisionPlanningError.FromReport(report)
-
-                        status = fn_terminate()
-                        if status == Status.CACHE_AND_CONTINUE:
-                            cached_traj = util.CopyTrajectory(qtraj)
-                        if status == Status.TERMINATE:
-                            break
-
-                        # Add to trajectory
-                        waypoint = []
-                        q_curr = robot.GetActiveDOFValues()
-                        waypoint.append(q_curr)       # joint position
-                        waypoint.append(dqout)        # joint velocity
-                        waypoint.append([dt])    # delta time
-                        waypoint = numpy.concatenate(waypoint)
-                        qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
-                        qnew = q_curr + dt*dqout
-                        robot.SetActiveDOFValues(qnew)
-
+            integrator.integrate(t=integration_timelimit)
         except PlanningError as e:
-            if cached_traj is not None:
-                logger.warning('Terminated early: %s', e.message)
-                return cached_traj
-            else:
+            nonlocals['cached_index'] = 0
+
+            # No solution is cached, so return failure
+            if nonlocals['cached_index'] is None:
                 raise
+            else:
+                logger.warning('Terminated early: %s', str(e))
 
-        # TODO: Flag this trajectory as timed.
-        util.SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: 'true'}, append=True)
+        # Create the output trajectory.
+        waypoints = numpy.array(nonlocals['waypoints'])
+        cached_index = nonlocals['cached_index']
 
-        return qtraj
+        if cached_index == 0:
+            raise PlanningError('Output trajectory is empty.')
+
+        path = RaveCreateTrajectory(env, '')
+        path.Init(cspec)
+        path.Insert(0, waypoints[0:cached_index].ravel())
+        return path
+
