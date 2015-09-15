@@ -28,12 +28,16 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import logging
 import numpy
 import openravepy
+import warnings
 from manipulator import Manipulator
 from prpy.clone import Clone
 from .. import util
 from .. import exceptions
+
+logger = logging.getLogger('wam')
 
 class WAM(Manipulator):
     def __init__(self, sim, owd_namespace,
@@ -161,7 +165,7 @@ class WAM(Manipulator):
         else:
             return False
 
-    def GetVelocityLimits(self, openrave=True, owd=True):
+    def GetVelocityLimits(self, openrave=None, owd=None):
         """Get the OpenRAVE and OWD joint velocity limits.
         This function checks both the OpenRAVE and OWD joint velocity limits.
         If they do not match, a warning is printed and the minimum value is
@@ -170,37 +174,13 @@ class WAM(Manipulator):
         @param owd flag to set the OWD velocity limits
         @return list of velocity limits, in radians per second
         """
-        # Update the OpenRAVE limits.
-        if openrave:
-            or_velocity_limits = Manipulator.GetVelocityLimits(self)
-            if self.simulated or not owd:
-                return or_velocity_limits
+        if openrave is not None or owd is not None:
+            warnings.warn(
+                'The "openrave" and "owd" flags are deprecated in'
+                ' GetVelocityLimits and will be removed in a future version.',
+                DeprecationWarning)
 
-        # Update the OWD limits.
-        if owd and not self.simulated:
-            args  = [ 'GetSpeed' ]
-            args_str = ' '.join(args)
-            owd_speed_limits_all = self.controller.SendCommand(args_str)
-            #if we get nothing back, e.g. if the arm isn't running, return openrave lims
-            if owd_speed_limits_all is None:
-                return or_velocity_limits
-
-            owd_speed_limits = map(float, owd_speed_limits_all.split(','));
-            #first 7 numbers are velocity limits
-            owd_velocity_limits = numpy.array(owd_speed_limits[0:len(self.GetIndices())])
-
-            diff_arr = numpy.subtract(or_velocity_limits, owd_velocity_limits)
-            max_diff = max(abs(diff_arr))
-
-            if max_diff > 0.01:
-                # TODO: Change this to use the logging framework.
-                print('GetVelocityLimits Error: openrave and owd limits very different')
-                print('\tOpenrave limits:\t' + str(or_velocity_limits))
-                print('\tOWD limits:\t\t' + str(owd_velocity_limits))
-
-            return numpy.minimum(or_velocity_limits, owd_velocity_limits)
-
-        return or_velocity_limits
+        return Manipulator.GetVelocityLimits(self)
         
     def SetVelocityLimits(self, velocity_limits, min_accel_time,
                           openrave=True, owd=True):
@@ -242,33 +222,30 @@ class WAM(Manipulator):
         if not manipulator.simulated:
             manipulator.controller.SendCommand('ClearStatus')
 
-    def MoveUntilTouch(manipulator, direction, distance, max_distance=float('+inf'),
-                       max_force=5.0, max_torque=None, ignore_collisions=None, 
-                       velocity_limits=None,
-                       **kw_args):
+    def MoveUntilTouch(manipulator, direction, distance, max_distance=None,
+                       max_force=5.0, max_torque=None, ignore_collisions=None, **kw_args):
         """Execute a straight move-until-touch action.
         This action stops when a sufficient force is is felt or the manipulator
         moves the maximum distance. The motion is considered successful if the
         end-effector moves at least distance. In simulation, a move-until-touch
         action proceeds until the end-effector collids with the environment.
+
         @param direction unit vector for the direction of motion in the world frame
         @param distance minimum distance in meters
         @param max_distance maximum distance in meters
         @param max_force maximum force in Newtons
         @param max_torque maximum torque in Newton-Meters
-        @param execute optionally execute the trajectory
-        @param ignore_collisions collisions with these objects are ignored in simulation
+        @param ignore_collisions collisions with these objects are ignored when planning the path, e.g. the object you think you will touch
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
-        
-        # Slow the velocity limits
-        if velocity_limits is None:
-            velocity_limits = 0.25 * numpy.array([ 0.75,  0.75,  2.  ,  2.  ,  2.5 ,  2.5 ,  2.5 ])
-        current_limits = manipulator.GetRobot().GetDOFVelocityLimits()
-        new_limits = current_limits.copy()
-        new_limits[manipulator.GetArmIndices()] = velocity_limits
-        manipulator.GetRobot().SetDOFVelocityLimits(new_limits)
+
+        if max_distance is None:
+            max_distance = 1.
+            warnings.warn(
+                'MoveUntilTouch now requires the "max_distance" argument.'
+                ' This will be an error in the future.',
+                DeprecationWarning)
 
         # TODO: Is ignore_collisions a list of names or KinBody pointers?
         if max_torque is None:
@@ -282,27 +259,26 @@ class WAM(Manipulator):
             ignore_col_obj_oldstate.append(ignore_col_with.IsEnabled())
             ignore_col_with.Enable(False)
 
+        with manipulator.GetRobot().GetEnv():
+            manipulator.GetRobot().GetController().SimulationStep(0)
+
+            # Compute the expected force direction in the hand frame.
+            direction = numpy.array(direction)
+            hand_pose = manipulator.GetEndEffectorTransform()
+            force_direction = numpy.dot(hand_pose[0:3, 0:3].T, -direction)
+
+            with manipulator.GetRobot():
+                old_active_manipulator = manipulator.GetRobot().GetActiveManipulator()
+                manipulator.SetActive()
+                traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
+                                                           execute=False, **kw_args)
+
+                collided_with_obj = False
         try:
-            with manipulator.GetRobot().GetEnv():
-                manipulator.GetRobot().GetController().SimulationStep(0)
-
-                # Compute the expected force direction in the hand frame.
-                direction = numpy.array(direction)
-                hand_pose = manipulator.GetEndEffectorTransform()
-                force_direction = numpy.dot(hand_pose[0:3, 0:3].T, -direction)
-
-                with manipulator.GetRobot():
-                    old_active_manipulator = manipulator.GetRobot().GetActiveManipulator()
-                    manipulator.SetActive()
-                    traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
-                                                               execute=False, **kw_args)
-
-                    collided_with_obj = False
-
             if not manipulator.simulated:
                 manipulator.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
-                                                          force_direction=force_direction, force_magnitude=max_force,
-                                                          torque=max_torque)
+                    force_direction=force_direction, force_magnitude=max_force,
+                    torque=max_torque)
 
                 manipulator.hand.TareForceTorqueSensor()
                 manipulator.GetRobot().ExecutePath(traj)
@@ -311,22 +287,15 @@ class WAM(Manipulator):
                     ignore_col_with.Enable(oldstate)
             else:
 
+                traj = manipulator.GetRobot().PostProcessPath(traj)
+
                 traj_duration = traj.GetDuration()
                 delta_t = 0.01
 
                 traj_config_spec = traj.GetConfigurationSpecification()
-                traj_angle_group = traj_config_spec.GetGroupFromName('joint_values')
-                path_config_spec = openravepy.ConfigurationSpecification()
-                #                path_config_spec.AddDeltaTimeGroup()
-                path_config_spec.AddGroup(traj_angle_group.name, traj_angle_group.dof, '')
-                #                path_config_spec.AddDerivativeGroups(1, False);
-                #                path_config_spec.AddDerivativeGroups(2, False);
-                #                path_config_spec.AddGroup('owd_blend_radius', 1, 'next')
-                path_config_spec.ResetGroupOffsets()
-                
                 new_traj = openravepy.RaveCreateTrajectory(manipulator.GetRobot().GetEnv(), '')
-                new_traj.Init(path_config_spec)
-                
+                new_traj.Init(traj_config_spec)
+
                 for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
                     ignore_col_with.Enable(oldstate)
                 
@@ -338,7 +307,8 @@ class WAM(Manipulator):
 
                         waypoint = traj_config_spec.ExtractJointValues(traj_sample, manipulator.GetRobot(), manipulator.GetArmIndices())
                         manipulator.SetDOFValues(waypoint)
-                        #if manipulator.GetRobot().GetEnv().CheckCollision(manipulator.GetRobot()):
+
+                        # Check collision with each body on the robot
                         for body in manipulator.GetRobot().GetEnv().GetBodies():
                             if manipulator.GetRobot().GetEnv().CheckCollision(manipulator.GetRobot(), body):
                                 collided_with_obj = True
@@ -346,15 +316,19 @@ class WAM(Manipulator):
                         if collided_with_obj:
                             break
                         else:
-                            #waypoint = numpy.append(waypoint,t)
-                            new_traj.Insert(int(waypoint_ind), waypoint, path_config_spec)
+                            #set timing on new sampled waypoint
+                            if waypoint_ind == 0:
+                                traj_config_spec.InsertDeltaTime(traj_sample, 0.)
+                            else:
+                                traj_config_spec.InsertDeltaTime(traj_sample, delta_t)
+                            
+                            new_traj.Insert(int(waypoint_ind), traj_sample)
                             waypoint_ind += 1
 
-                manipulator.GetRobot().ExecuteTrajectory(new_traj, execute = True, retime=True, blend=True)
+
+                manipulator.GetRobot().ExecuteTrajectory(new_traj)
 
             return collided_with_obj
         # Trajectory is aborted by OWD because we felt a force.
         except exceptions.TrajectoryAborted:
             return True
-        finally:
-            manipulator.GetRobot().SetDOFVelocityLimits(current_limits)
