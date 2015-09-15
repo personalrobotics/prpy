@@ -612,7 +612,7 @@ def ComputeJointVelocityFromTwist(robot, twist,
     q_curr = robot.GetActiveDOFValues()
     q_min, q_max = robot.GetActiveDOFLimits()
     dq_bounds = [(0, max) if q_curr[i] <= q_min[i] + joint_limit_tolerance else
-                 (min, 0) if q_curr[i] >= q_max[i] + joint_limit_tolerance else
+                 (min, 0) if q_curr[i] >= q_max[i] - joint_limit_tolerance else
                  (min, max) for i, (min, max) in enumerate(bounds)]
 
     if dq_init is None:

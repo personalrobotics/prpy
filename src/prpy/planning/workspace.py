@@ -105,6 +105,8 @@ class GreedyIKPlanner(BasePlanner):
             raise ValueError('Direction must be non-zero')
         elif max_distance is not None and max_distance < distance:
             raise ValueError('Max distance is less than minimum distance.')
+        elif max_distance is not None and not numpy.isfinite(max_distance):
+            raise ValueError('Max distance must be finite.')
 
         # Normalize the direction vector.
         direction = numpy.array(direction, dtype='float')
@@ -224,7 +226,7 @@ class GreedyIKPlanner(BasePlanner):
                 # Otherwise we'll gracefully terminate.
                 else:
                     logger.warning('Terminated early at time %f < %f: %s',
-                                   t, traj.GetDuration(), e.message)
+                                   t, traj.GetDuration(), str(e))
 
         # Return as much of the trajectory as we have solved.
         SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: True}, append=True)
