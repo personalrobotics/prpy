@@ -239,7 +239,19 @@ class WAM(Manipulator):
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
+        from contextlib import nested
+        from openravepy import CollisionReport, KinBody, Robot, RaveCreateTrajectory
+        from ..planning.exceptions import CollisionPlanningError
 
+        delta_t = 0.01
+
+        robot = manipulator.GetRobot()
+        env = robot.GetEnv()
+        dof_indices = manipulator.GetArmIndices()
+
+        direction = numpy.array(direction, dtype='float')
+
+        # Default argument values.
         if max_distance is None:
             max_distance = 1.
             warnings.warn(
@@ -247,88 +259,92 @@ class WAM(Manipulator):
                 ' This will be an error in the future.',
                 DeprecationWarning)
 
-        # TODO: Is ignore_collisions a list of names or KinBody pointers?
         if max_torque is None:
-            max_torque = numpy.array([100.0, 100.0, 100.0 ])
-        
-        ignore_col_obj_oldstate = []
+            max_torque = numpy.array([100.0, 100.0, 100.0])
+
         if ignore_collisions is None:
             ignore_collisions = []
 
-        for ignore_col_with in ignore_collisions:
-            ignore_col_obj_oldstate.append(ignore_col_with.IsEnabled())
-            ignore_col_with.Enable(False)
-
-        with manipulator.GetRobot().GetEnv():
-            manipulator.GetRobot().GetController().SimulationStep(0)
-
+        with env:
             # Compute the expected force direction in the hand frame.
-            direction = numpy.array(direction)
             hand_pose = manipulator.GetEndEffectorTransform()
             force_direction = numpy.dot(hand_pose[0:3, 0:3].T, -direction)
 
-            with manipulator.GetRobot():
-                old_active_manipulator = manipulator.GetRobot().GetActiveManipulator()
+            # Disable the KinBodies listed in ignore_collisions. We backup the
+            # "enabled" state of all KinBodies so we can restore them later.
+            body_savers = [
+                body.CreateKinBodyStateSaver() for body in ignore_collisions]
+            robot_saver = robot.CreateRobotStateSaver(
+                  Robot.SaveParameters.ActiveDOF
+                | Robot.SaveParameters.ActiveManipulator
+                | Robot.SaveParameters.LinkTransformation)
+
+            with robot_saver, nested(*body_savers) as f:
                 manipulator.SetActive()
-                traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
-                                                           execute=False, **kw_args)
+                robot_cspec = robot.GetActiveConfigurationSpecification()
 
-                collided_with_obj = False
-        try:
-            if not manipulator.simulated:
-                manipulator.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
-                    force_direction=force_direction, force_magnitude=max_force,
-                    torque=max_torque)
+                for body in ignore_collisions:
+                    body.Enable(False)
 
-                manipulator.hand.TareForceTorqueSensor()
-                manipulator.GetRobot().ExecutePath(traj)
+                path = robot.PlanToEndEffectorOffset(direction=direction,
+                    distance=distance, max_distance=max_distance, **kw_args)
 
-                for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
-                    ignore_col_with.Enable(oldstate)
-            else:
+        # Execute on the real robot by tagging the trajectory with options that
+        # tell the controller to stop on force/torque input.
+        if not manipulator.simulated:
+            manipulator.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
+                force_direction=force_direction, force_magnitude=max_force,
+                torque=max_torque)
 
-                traj = manipulator.GetRobot().PostProcessPath(traj)
+            manipulator.hand.TareForceTorqueSensor()
 
-                traj_duration = traj.GetDuration()
-                delta_t = 0.01
+            try:
+                robot.ExecutePath(path)
+                return False
+            except exceptions.TrajectoryAborted:
+                return True
+        # Forward-simulate the motion until it hits an object.
+        else:
+            traj = robot.PostProcessPath(path)
+            is_collision = False
 
-                traj_config_spec = traj.GetConfigurationSpecification()
-                new_traj = openravepy.RaveCreateTrajectory(manipulator.GetRobot().GetEnv(), '')
-                new_traj.Init(traj_config_spec)
+            traj_cspec = traj.GetConfigurationSpecification()
+            new_traj = RaveCreateTrajectory(env, '')
+            new_traj.Init(traj_cspec)
 
-                for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
-                    ignore_col_with.Enable(oldstate)
-                
-                with manipulator.GetRobot():
-                    manipulator.SetActive()
-                    waypoint_ind = 0
-                    for t in numpy.arange(0, traj_duration, delta_t):
-                        traj_sample = traj.Sample(t)
+            robot_saver = robot.CreateRobotStateSaver(
+                Robot.SaveParameters.LinkTransformation)
+            
+            with env, robot_saver:
+                for t in numpy.arange(0, traj.GetDuration(), delta_t):
+                    waypoint = traj.Sample(t)
 
-                        waypoint = traj_config_spec.ExtractJointValues(traj_sample, manipulator.GetRobot(), manipulator.GetArmIndices())
-                        manipulator.SetDOFValues(waypoint)
+                    dof_values = robot_cspec.ExtractJointValues(
+                        waypoint, robot, dof_indices, 0)
+                    manipulator.SetDOFValues(dof_values)
 
-                        # Check collision with each body on the robot
-                        for body in manipulator.GetRobot().GetEnv().GetBodies():
-                            if manipulator.GetRobot().GetEnv().CheckCollision(manipulator.GetRobot(), body):
-                                collided_with_obj = True
-                                break
-                        if collided_with_obj:
-                            break
-                        else:
-                            #set timing on new sampled waypoint
-                            if waypoint_ind == 0:
-                                traj_config_spec.InsertDeltaTime(traj_sample, 0.)
-                            else:
-                                traj_config_spec.InsertDeltaTime(traj_sample, delta_t)
-                            
-                            new_traj.Insert(int(waypoint_ind), traj_sample)
-                            waypoint_ind += 1
+                    # Terminate if we detect collision with the environment.
+                    report = CollisionReport()
+                    if env.CheckCollision(robot, report=report):
+                        logger.info('Terminated from collision: %s',
+                            str(CollisionPlanningError.FromReport(report)))
+                        is_collision = True
+                        break
+                    elif robot.CheckSelfCollision(report=report):
+                        logger.info('Terminated from self-collision: %s',
+                            str(CollisionPlanningError.FromReport(report)))
+                        is_collision = True
+                        break
 
+                    # Build the output trajectory that stops in contact.
+                    if new_traj.GetNumWaypoints() == 0:
+                        traj_cspec.InsertDeltaTime(waypoint, 0.)
+                    else:
+                        traj_cspec.InsertDeltaTime(waypoint, delta_t)
+                    
+                    new_traj.Insert(new_traj.GetNumWaypoints(), waypoint)
 
-                manipulator.GetRobot().ExecuteTrajectory(new_traj)
+            if new_traj.GetNumWaypoints() > 0:
+                robot.ExecuteTrajectory(new_traj)
 
-            return collided_with_obj
-        # Trajectory is aborted by OWD because we felt a force.
-        except exceptions.TrajectoryAborted:
-            return True
+            return is_collision
