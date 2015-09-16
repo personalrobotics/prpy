@@ -140,10 +140,6 @@ class VectorFieldPlanner(BasePlanner):
         direction = numpy.array(direction, dtype='float')
         direction /= numpy.linalg.norm(direction)
 
-        # Default to moving an exact distance.
-        if max_distance is None:
-            max_distance = distance
-
         manip = robot.GetActiveManipulator()
         Tstart = manip.GetEndEffectorTransform()
 
@@ -153,11 +149,7 @@ class VectorFieldPlanner(BasePlanner):
             twist[0:3] = direction
             dqout, tout = util.ComputeJointVelocityFromTwist(
                     robot, twist)
-
-            # Go as fast as possible
-            vlimits= robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-            return min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1. for i in xrange(vlimits.shape[0])) * dqout
-
+            return dqout
 
         def TerminateMove():
             '''
@@ -179,13 +171,15 @@ class VectorFieldPlanner(BasePlanner):
                 raise ConstraintViolationPlanningError(
                     'Deviated from straight line constraint.')
 
-            if distance_moved >= max_distance:
+            if max_distance is None:
+                if distance_moved > distance:
+                    return Status.CACHE_AND_TERMINATE
+                else:
+                    return Status.CONTINUE
+            elif distance_moved > max_distance:
                 return Status.TERMINATE
-
-            if distance_moved >= distance:
+            elif distance_moved >= distance:
                 return Status.CACHE_AND_CONTINUE
-
-            return Status.CONTINUE
 
         return self.FollowVectorField(robot, vf_straightline, TerminateMove,
                                       timelimit, **kw_args)
@@ -219,6 +213,8 @@ class VectorFieldPlanner(BasePlanner):
         import time
         import scipy.integrate
 
+        CLA = openravepy.KinBody.CheckLimitsAction
+
         # This is a workaround to emulate 'nonlocal' in Python 2.
         nonlocals = {
             'exception': None,
@@ -240,7 +236,7 @@ class VectorFieldPlanner(BasePlanner):
         path.Init(cspec)
 
         def fn_wrapper(t, q):
-            robot.SetActiveDOFValues(q)
+            robot.SetActiveDOFValues(q, CLA.Nothing)
             return fn_vectorfield()
 
         def fn_callback(t, q):
@@ -285,10 +281,8 @@ class VectorFieldPlanner(BasePlanner):
 
                     report = CollisionReport()
                     if env.CheckCollision(robot, report=report):
-                        print 'collision'
                         raise CollisionPlanningError.FromReport(report)
                     elif robot.CheckSelfCollision(report=report):
-                        print 'self collision'
                         raise SelfCollisionPlanningError.FromReport(report)
 
                 # TODO: Remove the last waypoint if there was an error.
@@ -298,12 +292,11 @@ class VectorFieldPlanner(BasePlanner):
                 # Check the termination condition.
                 waypoint_index = path.GetNumWaypoints() - 1
                 status = fn_terminate()
-                print 'status =', status
+                print status
 
                 if status in [Status.CACHE_AND_CONTINUE,
                               Status.CACHE_AND_TERMINATE]:
                     nonlocals['cached_index'] = waypoint_index
-                    print 'caching at i =', waypoint_index, 't =', t
 
                 if status in [Status.CACHE_AND_TERMINATE, Status.TERMINATE]:
                     raise TerminationError() # Caught below.
