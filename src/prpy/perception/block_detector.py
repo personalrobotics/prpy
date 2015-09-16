@@ -4,9 +4,11 @@ from tabletop_perception_tools.srv import *
 import rospy
 import tf
 import geometry_msgs.msg
-from tf.transformations import quaternion_matrix
+from tf.transformations import quaternion_matrix,euler_from_matrix,euler_matrix
 
 from base import PerceptionModule, PerceptionMethod
+
+table_z_offset = -0.04
 
 class BlockDetector(PerceptionModule):
 
@@ -136,6 +138,9 @@ class BlockDetector(PerceptionModule):
             
             detected_blocks = self.find_blocks(cloud_topic=self.point_cloud_topic)
 
+            table_in_world = table.GetTransform();
+            table_aabb = table.ComputeAABB()
+            z = table_aabb.pos()[2] + table_aabb.extents()[2] + table_z_offset
 
             for b in detected_blocks:
 
@@ -172,6 +177,22 @@ class BlockDetector(PerceptionModule):
 
                 block_in_world = numpy.array(numpy.dot(frame_offset,block_pose))
               
+                
+                #Snap block to table
+                
+                block_in_world[2,3] = z
+
+                #To snap blocks to upright on table
+                
+                block_matrix = block_in_world[0:3,0:3]
+                ax, ay, az = euler_from_matrix(block_matrix)
+                ax = 0
+                ay = 0
+                block_in_world_corrected = euler_matrix(ax,ay,az)
+                block_in_world[0:3,0:3] = block_in_world_corrected[0:3,0:3]
+                
+
+                #Set block name - should we change?
                 block.SetTransform(block_in_world)
                 rand_name = int(numpy.random.randint(1,10000))
                 block.SetName('block'+`rand_name`)
