@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 class TerminationError(PlanningError):
     def __init__(self):
-        super(TerminateError, self).__init__('Terminated by callback.')
+        super(TerminationError, self).__init__('Terminated by callback.')
 
 
 class Status(Enum):
@@ -214,7 +214,7 @@ class VectorFieldPlanner(BasePlanner):
             JointLimitError
         )
         from openravepy import RaveCreateTrajectory
-        from prpy.util import ComputeJointVelocityFromTwist
+        from ..util import ComputeJointVelocityFromTwist
         import time
         import scipy.integrate
 
@@ -222,9 +222,9 @@ class VectorFieldPlanner(BasePlanner):
         # This is a workaround to emulate 'nonlocal' in Python 2.
         nonlocals = {
             'waypoints': [],
+            'exception': None,
             'cached_index': None,
             'last_t': 0.,
-            'error': None,
         }
 
         env = robot.GetEnv()
@@ -232,113 +232,96 @@ class VectorFieldPlanner(BasePlanner):
         q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
         qdot_limit = robot.GetDOFVelocityLimits(active_indices)
 
-        cspec = robot.GetActiveConfigurationSpecification('quadratic')
-        cspec.AddDerivativeGroups(1, adddeltatime=True)
+        cspec = robot.GetActiveConfigurationSpecification('linear')
+        cspec.AddDeltaTimeGroup()
         cspec.ResetGroupOffsets()
 
         def fn_wrapper(t, q):
-            time.sleep(0.01)
-
             robot.SetActiveDOFValues(q)
-            qdot = fn_vectorfield()
-
-            # Enforce velocity limits.
-            lower_velocity_violations = (qdot < -qdot_limit)
-            if lower_velocity_violations.any():
-                index = lower_velocity_violations.nonzero()[0][0]
-                raise JointLimitError(robot,
-                    dof_index=active_indices[index],
-                    dof_value=qdot[index],
-                    dof_limit=-qdot_limit[index],
-                    description='velocity')
-
-            upper_velocity_violations = (qdot > qdot_limit)
-            if upper_velocity_violations.any():
-                index = upper_velocity_violations.nonzero()[0][0]
-                raise JointLimitError(robot,
-                    dof_index=active_indices[index],
-                    dof_value=qdot[index],
-                    dof_limit=qdot_limit[index],
-                    description='velocity')
-
-            return qdot
+            return fn_vectorfield()
 
         def fn_callback(t, q):
-            print t, q
+            try:
+                # Check the position lower limit.
+                lower_position_violations = (q < q_limit_min)
+                if lower_position_violations.any():
+                    index = lower_position_violations.nonzero()[0][0]
+                    raise JointLimitError(robot,
+                        dof_index=active_indices[index],
+                        dof_value=q[index],
+                        dof_limit=q_limit_min[index],
+                        description='position')
 
-            # Enforce position limits.
-            lower_position_violations = (q < q_limit_min)
-            if lower_position_violations.any():
-                index = lower_position_violations.nonzero()[0][0]
-                raise JointLimitError(robot,
-                    dof_index=active_indices[index],
-                    dof_value=q[index],
-                    dof_limit=q_limit_min[index],
-                    description='position')
+                # Check the position upper limit.
+                upper_position_violations = (q > q_limit_max)
+                if upper_position_violations.any():
+                    index = upper_position_violations.nonzero()[0][0]
+                    raise JointLimitError(robot,
+                        dof_index=active_indices[index],
+                        dof_value=q[index],
+                        dof_limit=q_limit_min[index],
+                        description='position')
 
-            upper_position_violations = (q > q_limit_max)
-            if upper_position_violations.any():
-                index = upper_position_violations.nonzero()[0][0]
-                raise JointLimitError(robot,
-                    dof_index=active_indices[index],
-                    dof_value=q[index],
-                    dof_limit=q_limit_min[index],
-                    description='position')
+                # TODO: Check collision.
 
-            # Check collision.
-            report = openravepy.CollisionReport()
-            if env.CheckCollision(robot, report=report):
-                raise CollisionPlanningError.FromReport(report)
-            elif robot.CheckSelfCollision(report=report):
-                raise CollisionPlanningError.FromReport(report)
+                # Add the waypoint to the trajectory.
+                waypoint = numpy.zeros(cspec.GetDOF())
+                cspec.InsertDeltaTime(waypoint, t - nonlocals['last_t'])
+                cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
+                nonlocals['waypoints'].append(waypoint)
+                nonlocals['last_t'] = t
 
-            # Add the waypoint to the trajectory.
-            waypoint = numpy.zeros(cspec.GetDOF())
-            cspec.InsertDeltaTime(waypoint, t - nonlocals['last_t'])
-            cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
-            nonlocals['waypoints'].append(waypoint)
-            nonlocals['last_t'] = t
+                # Check the termination condition.
+                status = fn_terminate()
+                if status == Status.CONTINUE:
+                    pass # Do nothing.
+                elif status == Status.CACHE_AND_CONTINUE:
+                    nonlocals['cached_index'] = len(nonlocals['waypoints'])
+                    return 0 # Keep going.
+                elif status == Status.TERMINATE:
+                    nonlocals['cached_index'] = len(nonlocals['waypoints'])
+                    raise TerminationError()
 
-            # Check the termination condition.
-            status = fn_terminate()
+                return 0 # Keep going.
+            except PlanningError as e:
+                nonlocals['exception'] = e
+                return -1 # Stop.
 
-            # TODO: Debug.
-            status = Status.CACHE_AND_CONTINUE
+        """
+        # Check collision.
+        report = openravepy.CollisionReport()
+        if env.CheckCollision(robot, report=report):
+            raise CollisionPlanningError.FromReport(report)
+        elif robot.CheckSelfCollision(report=report):
+            raise CollisionPlanningError.FromReport(report)
+        """
 
-            if status == Status.CONTINUE:
-                pass # Do nothing.
-            elif status == Status.CACHE_AND_CONTINUE:
-                nonlocals['cached_index'] = len(nonlocals['waypoints'])
-            elif status == Status.TERMINATE:
-                raise TerminationError()
-
-            return 0 # Keep going.
-
+        # Integrate the vector field to get a configuration space path.
         integrator = scipy.integrate.ode(f=fn_wrapper)
         integrator.set_integrator(name='dopri5')
         integrator.set_solout(fn_callback)
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
+        integrator.integrate(t=integration_timelimit)
 
-        try:
-            integrator.integrate(t=integration_timelimit)
-        except PlanningError as e:
-            nonlocals['cached_index'] = 0
-
-            # No solution is cached, so return failure
-            if nonlocals['cached_index'] is None:
-                raise
-            else:
-                logger.warning('Terminated early: %s', str(e))
-
-        # Create the output trajectory.
         waypoints = numpy.array(nonlocals['waypoints'])
+        exception = nonlocals['exception']
         cached_index = nonlocals['cached_index']
 
+        # Check if the integration terminated early due to an error.
+        if exception is not None:
+            if cached_index is not None:
+                # Print a warning and use the cached solution.
+                logger.warning('Terminated early: %s', str(exception))
+            else:
+                raise exception
+
+        # Create the output trajectory.
         if cached_index == 0:
-            raise PlanningError('Output trajectory is empty.')
+            raise PlanningError('Trajectory is empty.')
 
         path = RaveCreateTrajectory(env, '')
         path.Init(cspec)
         path.Insert(0, waypoints[0:cached_index].ravel())
+
         return path
 
