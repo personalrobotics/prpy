@@ -251,12 +251,14 @@ class WAM(Manipulator):
         if max_torque is None:
             max_torque = numpy.array([100.0, 100.0, 100.0 ])
         
-        ignore_col_obj_oldstate = []
+        ignore_col_body_savers = []
         if ignore_collisions is None:
             ignore_collisions = []
 
         for ignore_col_with in ignore_collisions:
-            ignore_col_obj_oldstate.append(ignore_col_with.IsEnabled())
+            from openravepy  import KinBodyStateSaver, KinBody
+            ssaver = KinBodyStateSaver(ignore_col_with, options=KinBody.SaveParameters.LinkEnable)
+            ignore_col_body_savers.append(ssaver)
             ignore_col_with.Enable(False)
 
         with manipulator.GetRobot().GetEnv():
@@ -283,8 +285,8 @@ class WAM(Manipulator):
                 manipulator.hand.TareForceTorqueSensor()
                 manipulator.GetRobot().ExecutePath(traj)
 
-                for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
-                    ignore_col_with.Enable(oldstate)
+                for (ignore_col_with, ssaver) in zip(ignore_collisions, ignore_col_body_savers):
+                    ssaver.Restore()
             else:
 
                 traj = manipulator.GetRobot().PostProcessPath(traj)
@@ -296,8 +298,8 @@ class WAM(Manipulator):
                 new_traj = openravepy.RaveCreateTrajectory(manipulator.GetRobot().GetEnv(), '')
                 new_traj.Init(traj_config_spec)
 
-                for (ignore_col_with, oldstate) in zip(ignore_collisions, ignore_col_obj_oldstate):
-                    ignore_col_with.Enable(oldstate)
+                for (ignore_col_with, ssaver) in zip(ignore_collisions, ignore_col_body_savers):
+                    ssaver.Restore()
                 
                 with manipulator.GetRobot():
                     manipulator.SetActive()
@@ -325,8 +327,8 @@ class WAM(Manipulator):
                             new_traj.Insert(int(waypoint_ind), traj_sample)
                             waypoint_ind += 1
 
-
-                manipulator.GetRobot().ExecuteTrajectory(new_traj)
+                if new_traj.GetNumWaypoints() > 0:
+                    manipulator.GetRobot().ExecuteTrajectory(new_traj)
 
             return collided_with_obj
         # Trajectory is aborted by OWD because we felt a force.
