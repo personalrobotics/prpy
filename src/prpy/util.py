@@ -768,34 +768,34 @@ def GetCollisionCheckPts(robot, traj, epsilon=1e-6):
             ' path, then consider using util.ComputeUnitTiming to compute its'
             ' arclength parameterization.')
 
-    # Vector field bisection method. Start at the begining of the trajectory
-    # and initialize the stepsize to the end of the traejctory.
-    duration = traj.GetDuration() - epsilon
-    dt = duration
-    t = 0.
-
     cspec = traj.GetConfigurationSpecification()
     dof_indices, _ = cspec.ExtractUsedIndices(robot)
     q_resolutions = robot.GetDOFResolutions()[dof_indices]
+    duration = traj.GetDuration()
+
+    # Bisection method. Start at the begining of the trajectory and initialize
+    # the stepsize to the end of the trajectory.
+    t_prev = 0.
     q_prev = cspec.ExtractJointValues(traj.GetWaypoint(0), robot, dof_indices)
+    dt = duration
 
     # Always collision check the first point.
-    yield 0., q_prev
+    yield t_prev, q_prev
 
-    while t < duration:
-        waypoint = traj.Sample(t + dt)
-        q_curr = cspec.ExtractJointValues(waypoint, robot, dof_indices)
-        q_diff = numpy.abs(q_curr - q_prev)
+    while t_prev < duration - epsilon:
+        t_curr = t_prev + dt
+        q_curr = cspec.ExtractJointValues(
+            traj.Sample(t_curr), robot, dof_indices)
 
         # Step violated dof resolution. Halve the step size and continue.
-        if (q_diff > q_resolutions).any():
+        if (numpy.abs(q_curr - q_prev) > q_resolutions).any():
             dt = dt / 2.
         # Yield this configuration. Double the step size and continue.
         else:
-            yield (t + dt), q_curr
+            yield t_curr, q_curr
 
-            q_curr = q_prev
-            t = min(t + dt, duration)
+            q_prev = q_curr
+            t_prev = min(t_curr, duration)
             dt = 2. * dt
 
 
