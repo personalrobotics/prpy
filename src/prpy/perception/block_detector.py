@@ -8,7 +8,7 @@ from tf.transformations import quaternion_matrix,euler_from_matrix,euler_matrix
 
 from base import PerceptionModule, PerceptionMethod
 
-table_z_offset = -0.04
+table_z_offset = -0.02
 
 class BlockDetector(PerceptionModule):
 
@@ -140,7 +140,7 @@ class BlockDetector(PerceptionModule):
 
             table_in_world = table.GetTransform();
             table_aabb = table.ComputeAABB()
-            z = table_aabb.pos()[2] + table_aabb.extents()[2] + table_z_offset
+            z = table_aabb.pos()[2] + table_aabb.extents()[2] + table_z_offset #OFFSET SET AT TOP
 
             for b in detected_blocks:
 
