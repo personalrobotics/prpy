@@ -84,7 +84,7 @@ class VectorFieldPlanner(BasePlanner):
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             goal_pose)
             dqout, tout = util.ComputeJointVelocityFromTwist(
-                                robot, twist)
+                robot, twist, joint_velocity_limits=numpy.PINF)
 
             # Go as fast as possible
             vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
@@ -147,8 +147,10 @@ class VectorFieldPlanner(BasePlanner):
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             Tstart)
             twist[0:3] = direction
-            dqout, tout = util.ComputeJointVelocityFromTwist(
-                    robot, twist)
+
+            dqout, _ = util.ComputeJointVelocityFromTwist(
+                robot, twist, joint_velocity_limits=numpy.PINF)
+
             return dqout
 
         def TerminateMove():
@@ -174,12 +176,12 @@ class VectorFieldPlanner(BasePlanner):
             if max_distance is None:
                 if distance_moved > distance:
                     return Status.CACHE_AND_TERMINATE
-                else:
-                    return Status.CONTINUE
             elif distance_moved > max_distance:
                 return Status.TERMINATE
             elif distance_moved >= distance:
                 return Status.CACHE_AND_CONTINUE
+
+            return Status.CONTINUE
 
         return self.FollowVectorField(robot, vf_straightline, TerminateMove,
                                       timelimit, **kw_args)
@@ -292,7 +294,7 @@ class VectorFieldPlanner(BasePlanner):
                 # Check the termination condition.
                 waypoint_index = path.GetNumWaypoints() - 1
                 status = fn_terminate()
-                print status
+                #print 'status =', status
 
                 if status in [Status.CACHE_AND_CONTINUE,
                               Status.CACHE_AND_TERMINATE]:

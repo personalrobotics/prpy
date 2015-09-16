@@ -537,10 +537,9 @@ def quadraticObjective(dq, J, dx, *args):
     return objective, gradient
 
 
-def ComputeJointVelocityFromTwist(robot, twist,
-                                  objective=quadraticObjective,
-                                  joint_limit_tolerance=3e-2,
-                                  dq_init=None):
+def ComputeJointVelocityFromTwist(
+        robot, twist, objective=quadraticObjective, dq_init=None,
+        joint_limit_tolerance=3e-2, joint_velocity_limits=None):
     '''
     Computes the optimal joint velocity given a twist by formulating
     the problem as a quadratic optimization with box constraints and
@@ -552,6 +551,8 @@ def ComputeJointVelocityFromTwist(robot, twist,
             defaults to quadraticObjective
     @params dq_init optional initial guess for optimal joint velocity
             defaults to robot.GetActiveDOFVelocities()
+    @params joint_velocity_limits override the robot's joint velocity limit;
+            defaults to robot.GetActiveDOFMaxVel()
     @params joint_limit_tolerance if less then this distance to joint
             limit, velocity is bounded in that direction to 0
     @return dq_opt optimal joint velocity
@@ -561,6 +562,20 @@ def ComputeJointVelocityFromTwist(robot, twist,
     manip = robot.GetActiveManipulator()
     robot.SetActiveDOFs(manip.GetArmIndices())
 
+    if joint_velocity_limits is None:
+        joint_velocity_limits = robot.GetActiveDOFMaxVel()
+    elif isinstance(joint_velocity_limits, float):
+        joint_velocity_limits = numpy.array(
+            [numpy.PINF] * robot.GetActiveDOF())
+
+    if len(joint_velocity_limits) != robot.GetActiveDOF():
+        raise ValueError(
+            'Joint velocity limits has incorrect length:'
+            ' Expected {:d}, got {:d}.'.format(
+                robot.GetActiveDOF(), len(joint_velocity_limits)))
+    elif (joint_velocity_limits <= 0.).any():
+        raise ValueError('One or more joint velocity limit is not positive.')
+
     jacobian_spatial = manip.CalculateJacobian()
     jacobian_angular = manip.CalculateAngularVelocityJacobian()
     jacobian = numpy.vstack((jacobian_spatial, jacobian_angular))
@@ -569,13 +584,14 @@ def ComputeJointVelocityFromTwist(robot, twist,
     twist_active = twist[rows]
     jacobian_active = jacobian[rows, :]
 
-    bounds = [(-x, x) for x in robot.GetActiveDOFMaxVel()]
+    bounds = numpy.column_stack(
+        (-joint_velocity_limits, joint_velocity_limits))
 
     # Check for joint limits
     q_curr = robot.GetActiveDOFValues()
     q_min, q_max = robot.GetActiveDOFLimits()
-    dq_bounds = [(0, max) if q_curr[i] <= q_min[i] + joint_limit_tolerance else
-                 (min, 0) if q_curr[i] >= q_max[i] - joint_limit_tolerance else
+    dq_bounds = [( 0., max) if q_curr[i] <= q_min[i] + joint_limit_tolerance else
+                 (min,  0.) if q_curr[i] >= q_max[i] - joint_limit_tolerance else
                  (min, max) for i, (min, max) in enumerate(bounds)]
 
     if dq_init is None:
@@ -586,9 +602,6 @@ def ComputeJointVelocityFromTwist(robot, twist,
                                        bounds=dq_bounds, approx_grad=False)
 
     dq_opt = opt[0]
-
-    dq_opt = numpy.dot(numpy.linalg.pinv(jacobian), twist)
-
     twist_opt = numpy.dot(jacobian, dq_opt)
 
     return dq_opt, twist_opt
