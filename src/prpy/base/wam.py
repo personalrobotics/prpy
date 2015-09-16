@@ -272,6 +272,7 @@ class WAM(Manipulator):
             with manipulator.GetRobot():
                 old_active_manipulator = manipulator.GetRobot().GetActiveManipulator()
                 manipulator.SetActive()
+                from prpy.planning import PlanningError
                 try:
                     traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
                                                                execute=False, **kw_args)
