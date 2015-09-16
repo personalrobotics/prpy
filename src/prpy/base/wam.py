@@ -272,8 +272,13 @@ class WAM(Manipulator):
             with manipulator.GetRobot():
                 old_active_manipulator = manipulator.GetRobot().GetActiveManipulator()
                 manipulator.SetActive()
-                traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
-                                                           execute=False, **kw_args)
+                try:
+                    traj = manipulator.PlanToEndEffectorOffset(direction, distance, max_distance=max_distance,
+                                                               execute=False, **kw_args)
+                except PlanningError, e:
+                    for (ignore_col_with, ssaver) in zip(ignore_collisions, ignore_col_body_savers):
+                        ssaver.Restore()
+                    raise
 
                 collided_with_obj = False
         try:
