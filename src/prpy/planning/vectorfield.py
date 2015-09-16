@@ -220,10 +220,9 @@ class VectorFieldPlanner(BasePlanner):
 
         # This is a workaround to emulate 'nonlocal' in Python 2.
         nonlocals = {
-            'waypoints': [],
             'exception': None,
-            'cached_indices': [],
-            'last_t': 0.,
+            'cached_index': None,
+            't_check': 0.,
         }
 
         env = robot.GetEnv()
@@ -231,9 +230,13 @@ class VectorFieldPlanner(BasePlanner):
         q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
         qdot_limit = robot.GetDOFVelocityLimits(active_indices)
 
+        robot_cspec = robot.GetActiveConfigurationSpecification()
         cspec = robot.GetActiveConfigurationSpecification('linear')
         cspec.AddDeltaTimeGroup()
         cspec.ResetGroupOffsets()
+
+        path = RaveCreateTrajectory(env, '')
+        path.Init(cspec)
 
         def fn_wrapper(t, q):
             robot.SetActiveDOFValues(q)
@@ -241,6 +244,14 @@ class VectorFieldPlanner(BasePlanner):
 
         def fn_callback(t, q):
             try:
+                is_start = (path.GetNumWaypoints() == 0)
+
+                # Add the waypoint to the trajectory.
+                waypoint = numpy.zeros(cspec.GetDOF())
+                cspec.InsertDeltaTime(waypoint, t - path.GetDuration())
+                cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
+                path.Insert(path.GetNumWaypoints(), waypoint)
+
                 # Check the position lower limit.
                 lower_position_violations = (q < q_limit_min)
                 if lower_position_violations.any():
@@ -258,26 +269,41 @@ class VectorFieldPlanner(BasePlanner):
                     raise JointLimitError(robot,
                         dof_index=active_indices[index],
                         dof_value=q[index],
-                        dof_limit=q_limit_min[index],
+                        dof_limit=q_limit_max[index],
                         description='position')
 
-                # Add the waypoint to the trajectory.
-                waypoint = numpy.zeros(cspec.GetDOF())
-                cspec.InsertDeltaTime(waypoint, t - nonlocals['last_t'])
-                cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
-                nonlocals['waypoints'].append(waypoint)
-                nonlocals['last_t'] = t
+                # Collision check the segment since the last collision check.
+                if path.GetNumWaypoints() == 1:
+                    collision_checks = [(t, q)]
+                else:
+                    collision_checks = GetCollisionCheckPts(
+                        robot, path, include_start=False)
+
+                for t_check, q_check in collision_checks:
+                    robot.SetActiveDOFValues(q_check)
+
+                    report = CollisionReport()
+                    if env.CheckCollision(robot, report=report):
+                        print 'collision'
+                        raise CollisionPlanningError.FromReport(report)
+                    elif robot.CheckSelfCollision(report=report):
+                        print 'self collision'
+                        raise SelfCollisionPlanningError.FromReport(report)
+
+                # TODO: Remove the last waypoint if there was an error.
+
+                nonlocals['t_check'] = t_check
 
                 # Check the termination condition.
-                waypoint_index = len(nonlocals['waypoints'])
+                waypoint_index = path.GetNumWaypoints() - 1
                 status = fn_terminate()
 
                 if status == Status.CONTINUE:
                     pass
                 elif status == Status.CACHE_AND_CONTINUE:
-                    nonlocals['cached_indices'].append(waypoint_index)
+                    nonlocals['cached_index'] = waypoint_index
                 elif status == Status.TERMINATE:
-                    nonlocals['cached_indices'].append(waypoint_index)
+                    nonlocals['cached_index'] = waypoint_index
                     raise TerminationError() # Caught below.
 
                 return 0 # Keep going.
@@ -297,52 +323,15 @@ class VectorFieldPlanner(BasePlanner):
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
         integrator.integrate(t=integration_timelimit)
 
-        waypoints = numpy.array(nonlocals['waypoints'])
-        exception = nonlocals['exception']
-        cached_indices = nonlocals['cached_indices']
+        cached_index = nonlocals['cached_index']
+        exception = nonlocals['exception'] 
 
-        if not cached_indices:
+        if cached_index is None:
             raise exception or PlanningError('An unknown error has occurred.')
 
-        """
-        # Check if the integration terminated early due to an error.
-        if exception is not None:
-            if cached_index is not None:
-                # Print a warning and use the cached solution.
-                logger.warning('Terminated early: %s', str(exception))
-            else:
-                raise exception
-        """
-
-        # Create the full output path. This simplifies collision checking.
-        path = RaveCreateTrajectory(env, '')
-        path.Init(cspec)
-        path.Insert(0, waypoints[0:cached_indices[-1]].ravel())
-
-        # Collision check the path. Record the time of the first collision.
-        report = CollisionReport()
-        exception = None
-
-        for t, q in GetCollisionCheckPts(robot, path):
-            robot.SetActiveDOFValues(q)
-
-            if env.CheckCollision(robot, report=report):
-                exception = CollisionPlanningError.FromReport(report)
-                break
-            elif robot.CheckSelfCollision(report=report):
-                exception = CollisionPlanningError.FromReport(report)
-                break
-
-        # Check if we had a cached trajectory at that time.
-        invalid_index = path.GetFirstWaypointIndexAfterTime(t)
-        valid_cached_indices = [i for i in cached_indices if i < invalid_index]
-
-        if not valid_cached_indices:
-            raise exception or PlanningError('An unknown error has occurred.')
-
-        # Take the longest collision-free cached trajectory.
-        cached_index = max(valid_cached_indices)
-        path.Remove(cached_index + 1, path.GetNumWaypoints())
+        # Remove any parts of the trajectory that are not cached.
+        if cached_index + 1 < path.GetNumWaypoints():
+            path.Remove(cached_index + 1, path.GetNumWaypoints())
 
         return path
 

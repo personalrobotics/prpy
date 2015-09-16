@@ -748,7 +748,8 @@ def ComputeUnitTiming(robot, traj, env=None):
     return new_traj
 
 
-def GetCollisionCheckPts(robot, traj, epsilon=1e-6):
+def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
+                         first_step=None, epsilon=1e-6):
     """
     Generates a list of (time, configuration) pairs to collision check.
 
@@ -768,19 +769,35 @@ def GetCollisionCheckPts(robot, traj, epsilon=1e-6):
             ' path, then consider using util.ComputeUnitTiming to compute its'
             ' arclength parameterization.')
 
+
     cspec = traj.GetConfigurationSpecification()
     dof_indices, _ = cspec.ExtractUsedIndices(robot)
     q_resolutions = robot.GetDOFResolutions()[dof_indices]
     duration = traj.GetDuration()
 
+    if not (0. <= start_time < duration):
+        raise ValueError(
+            'Start time {:.6f} is out of range [0, {:.6f}].'.format(
+                start_time, duration))
+
+    if first_step is None:
+        first_step = duration - start_time
+
+    if not (0. < first_step <= duration - start_time):
+        raise ValueError(
+            'First step {:.6f} is out of range (0, {:.6f}]'.format(
+                first_step, duration - start_time))
+
     # Bisection method. Start at the begining of the trajectory and initialize
     # the stepsize to the end of the trajectory.
-    t_prev = 0.
-    q_prev = cspec.ExtractJointValues(traj.GetWaypoint(0), robot, dof_indices)
-    dt = duration
+    t_prev = start_time
+    q_prev = cspec.ExtractJointValues(
+        traj.GetWaypoint(t_prev), robot, dof_indices)
+    dt = duration - start_time
 
     # Always collision check the first point.
-    yield t_prev, q_prev
+    if include_start:
+        yield t_prev, q_prev
 
     while t_prev < duration - epsilon:
         t_curr = t_prev + dt
