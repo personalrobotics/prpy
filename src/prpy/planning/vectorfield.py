@@ -224,7 +224,7 @@ class VectorFieldPlanner(BasePlanner):
         import time
         import scipy.integrate
 
-        CLA = openravepy.KinBody.CheckLimitsAction
+        CheckLimitsAction = openravepy.KinBody.CheckLimitsAction
 
         # This is a workaround to emulate 'nonlocal' in Python 2.
         nonlocals = {
@@ -246,12 +246,12 @@ class VectorFieldPlanner(BasePlanner):
         path.Init(cspec)
 
         def fn_wrapper(t, q):
-            robot.SetActiveDOFValues(q, CLA.Nothing)
+            robot.SetActiveDOFValues(q, CheckLimitsAction.Nothing)
             return fn_vectorfield()
 
         def fn_status_callback(t, q):
-            # Check joint position limits. Do this before setting the DOF
-            # so we don't set the DOFs out of limits.
+            # Check joint position limits. Do this before setting the DOF so we
+            # don't set the DOFs out of limits.
             lower_position_violations = (q < q_limit_min)
             if lower_position_violations.any():
                 index = lower_position_violations.nonzero()[0][0]
@@ -290,19 +290,21 @@ class VectorFieldPlanner(BasePlanner):
 
         def fn_callback(t, q):
             try:
+                print 'before callback t=', t, 'duration =', path.GetDuration()
                 # Add the waypoint to the trajectory.
                 waypoint = numpy.zeros(cspec.GetDOF())
                 cspec.InsertDeltaTime(waypoint, t - path.GetDuration())
                 cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
                 path.Insert(path.GetNumWaypoints(), waypoint)
+                print 'after  callback t=', t, 'duration =', path.GetDuration()
 
                 # Run constraint checks at DOF resolution.
                 if path.GetNumWaypoints() == 1:
                     checks = [(t, q)]
                 else:
                     # TODO: This should start at t_check.
-                    checks = GetCollisionCheckPts(
-                        robot, path, include_start=False)
+                    checks = GetCollisionCheckPts(robot, path,
+                        include_start=False) #start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
                     fn_status_callback(t_check, q_check)

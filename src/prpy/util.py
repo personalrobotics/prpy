@@ -788,10 +788,12 @@ def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
     q_resolutions = robot.GetDOFResolutions()[dof_indices]
     duration = traj.GetDuration()
 
-    if not (0. <= start_time < duration):
+    if not (0. <= start_time < duration + epsilon):
         raise ValueError(
             'Start time {:.6f} is out of range [0, {:.6f}].'.format(
                 start_time, duration))
+
+    start_time = min(start_time, duration)
 
     if first_step is None:
         first_step = duration - start_time
@@ -806,7 +808,7 @@ def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
     t_prev = start_time
     q_prev = cspec.ExtractJointValues(
         traj.GetWaypoint(t_prev), robot, dof_indices)
-    dt = duration - start_time
+    dt = first_step
 
     # Always collision check the first point.
     if include_start:
