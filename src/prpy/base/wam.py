@@ -348,5 +348,3 @@ class WAM(Manipulator):
                 robot.ExecuteTrajectory(new_traj)
 
             return is_collision
-
-            return is_collision
