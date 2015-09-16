@@ -214,10 +214,9 @@ class VectorFieldPlanner(BasePlanner):
             JointLimitError
         )
         from openravepy import RaveCreateTrajectory
-        from ..util import ComputeJointVelocityFromTwist
+        from ..util import ComputeJointVelocityFromTwist, GetCollisionCheckPts, ComputeUnitTiming
         import time
         import scipy.integrate
-
 
         # This is a workaround to emulate 'nonlocal' in Python 2.
         nonlocals = {
@@ -262,8 +261,6 @@ class VectorFieldPlanner(BasePlanner):
                         dof_limit=q_limit_min[index],
                         description='position')
 
-                # TODO: Check collision.
-
                 # Add the waypoint to the trajectory.
                 waypoint = numpy.zeros(cspec.GetDOF())
                 cspec.InsertDeltaTime(waypoint, t - nonlocals['last_t'])
@@ -287,18 +284,14 @@ class VectorFieldPlanner(BasePlanner):
                 nonlocals['exception'] = e
                 return -1 # Stop.
 
-        """
-        # Check collision.
-        report = openravepy.CollisionReport()
-        if env.CheckCollision(robot, report=report):
-            raise CollisionPlanningError.FromReport(report)
-        elif robot.CheckSelfCollision(report=report):
-            raise CollisionPlanningError.FromReport(report)
-        """
-
         # Integrate the vector field to get a configuration space path.
         integrator = scipy.integrate.ode(f=fn_wrapper)
-        integrator.set_integrator(name='dopri5')
+        integrator.set_integrator(
+            name='dopri5',
+            first_step=0.1,
+            atol=1e-3,
+            rtol=1e-3,
+        )
         integrator.set_solout(fn_callback)
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
         integrator.integrate(t=integration_timelimit)
@@ -315,13 +308,28 @@ class VectorFieldPlanner(BasePlanner):
             else:
                 raise exception
 
-        # Create the output trajectory.
-        if cached_index == 0:
-            raise PlanningError('Trajectory is empty.')
-
+        # Create the full output path and compute its arclength
+        # parameterization. This simplifies collision checking.
         path = RaveCreateTrajectory(env, '')
         path.Init(cspec)
         path.Insert(0, waypoints[0:cached_index].ravel())
+
+        arclength_path = ComputeUnitTiming(robot, path)
+
+        # Collision check the path.
+        exception = None
+
+        for t, q in GetCollisionCheckPts(robot, arclength_path):
+            print t, q
+
+            report = openravepy.CollisionReport()
+
+            if env.CheckCollision(robot, report=report):
+                exception = CollisionPlanningError.FromReport(report)
+                break
+            elif robot.CheckSelfCollision(report=report):
+                exception = CollisionPlanningError.FromReport(report)
+                break
 
         return path
 
