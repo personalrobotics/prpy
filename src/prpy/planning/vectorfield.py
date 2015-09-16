@@ -47,15 +47,24 @@ class TerminationError(PlanningError):
 
 class Status(Enum):
     '''
-    TERMINATE - stop, exit gracefully, and return current trajectory
-    CACHE_AND_CONTINUE - save the current trajectory and CONTINUE.
-                         return the saved trajectory if Exception.
     CONTINUE - keep going
+    TERMINATE - stop gracefully and output the CACHEd trajectory
+    CACHE_AND_CONTINUE - save the current trajectory and CONTINUE.
+                         return the saved trajectory if TERMINATEd.
+    CACHE_AND_TERMINATE - save the current trajectory and TERMINATE
     '''
     TERMINATE = -1
     CACHE_AND_CONTINUE = 0
     CONTINUE = 1
     CACHE_AND_TERMINATE = 2
+
+    @classmethod
+    def DoesTerminate(cls, status):
+        return status in [cls.TERMINATE, cls.CACHE_AND_TERMINATE]
+
+    @classmethod
+    def DoesCache(cls, status):
+        return status in [cls.CACHE_AND_CONTINUE, cls.CACHE_AND_TERMINATE]
 
 
 class VectorFieldPlanner(BasePlanner):
@@ -220,7 +229,7 @@ class VectorFieldPlanner(BasePlanner):
         # This is a workaround to emulate 'nonlocal' in Python 2.
         nonlocals = {
             'exception': None,
-            'cached_index': None,
+            't_cache': None,
             't_check': 0.,
         }
 
@@ -229,7 +238,6 @@ class VectorFieldPlanner(BasePlanner):
         q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
         qdot_limit = robot.GetDOFVelocityLimits(active_indices)
 
-        robot_cspec = robot.GetActiveConfigurationSpecification()
         cspec = robot.GetActiveConfigurationSpecification('linear')
         cspec.AddDeltaTimeGroup()
         cspec.ResetGroupOffsets()
@@ -241,67 +249,67 @@ class VectorFieldPlanner(BasePlanner):
             robot.SetActiveDOFValues(q, CLA.Nothing)
             return fn_vectorfield()
 
+        def fn_status_callback(t, q):
+            # Check joint position limits. Do this before setting the DOF
+            # so we don't set the DOFs out of limits.
+            lower_position_violations = (q < q_limit_min)
+            if lower_position_violations.any():
+                index = lower_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_min[index],
+                    description='position')
+
+            upper_position_violations = (q> q_limit_max)
+            if upper_position_violations.any():
+                index = upper_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_max[index],
+                    description='position')
+
+            robot.SetActiveDOFValues(q)
+
+            # Check collision.
+            report = CollisionReport()
+            if env.CheckCollision(robot, report=report):
+                raise CollisionPlanningError.FromReport(report)
+            elif robot.CheckSelfCollision(report=report):
+                raise SelfCollisionPlanningError.FromReport(report)
+
+            # Check the termination condition.
+            status = fn_terminate()
+
+            if Status.DoesCache(status):
+                nonlocals['t_cache'] = t
+
+            if Status.DoesTerminate(status):
+                raise TerminationError()
+
         def fn_callback(t, q):
             try:
-                is_start = (path.GetNumWaypoints() == 0)
-
                 # Add the waypoint to the trajectory.
                 waypoint = numpy.zeros(cspec.GetDOF())
                 cspec.InsertDeltaTime(waypoint, t - path.GetDuration())
                 cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
                 path.Insert(path.GetNumWaypoints(), waypoint)
 
-                # Check the position lower limit.
-                lower_position_violations = (q < q_limit_min)
-                if lower_position_violations.any():
-                    index = lower_position_violations.nonzero()[0][0]
-                    raise JointLimitError(robot,
-                        dof_index=active_indices[index],
-                        dof_value=q[index],
-                        dof_limit=q_limit_min[index],
-                        description='position')
-
-                # Check the position upper limit.
-                upper_position_violations = (q > q_limit_max)
-                if upper_position_violations.any():
-                    index = upper_position_violations.nonzero()[0][0]
-                    raise JointLimitError(robot,
-                        dof_index=active_indices[index],
-                        dof_value=q[index],
-                        dof_limit=q_limit_max[index],
-                        description='position')
-
-                # Collision check the segment since the last collision check.
+                # Run constraint checks at DOF resolution.
                 if path.GetNumWaypoints() == 1:
-                    collision_checks = [(t, q)]
+                    checks = [(t, q)]
                 else:
-                    collision_checks = GetCollisionCheckPts(
+                    # TODO: This should start at t_check.
+                    checks = GetCollisionCheckPts(
                         robot, path, include_start=False)
 
-                for t_check, q_check in collision_checks:
-                    robot.SetActiveDOFValues(q_check)
+                for t_check, q_check in checks:
+                    fn_status_callback(t_check, q_check)
 
-                    report = CollisionReport()
-                    if env.CheckCollision(robot, report=report):
-                        raise CollisionPlanningError.FromReport(report)
-                    elif robot.CheckSelfCollision(report=report):
-                        raise SelfCollisionPlanningError.FromReport(report)
-
-                # TODO: Remove the last waypoint if there was an error.
-
+                # Record the time of this check so we continue checking at DOF
+                # resolution the next time the integrator takes a step.
                 nonlocals['t_check'] = t_check
-
-                # Check the termination condition.
-                waypoint_index = path.GetNumWaypoints() - 1
-                status = fn_terminate()
-                #print 'status =', status
-
-                if status in [Status.CACHE_AND_CONTINUE,
-                              Status.CACHE_AND_TERMINATE]:
-                    nonlocals['cached_index'] = waypoint_index
-
-                if status in [Status.CACHE_AND_TERMINATE, Status.TERMINATE]:
-                    raise TerminationError() # Caught below.
 
                 return 0 # Keep going.
             except PlanningError as e:
@@ -320,17 +328,28 @@ class VectorFieldPlanner(BasePlanner):
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
         integrator.integrate(t=integration_timelimit)
 
-        cached_index = nonlocals['cached_index']
+        t_cache = nonlocals['t_cache']
         exception = nonlocals['exception'] 
 
-        if cached_index is None:
+        if t_cache is None:
             raise exception or PlanningError('An unknown error has occurred.')
         elif exception:
             logger.warning('Terminated early: %s', str(exception))
 
-        # Remove any parts of the trajectory that are not cached.
-        if cached_index + 1 < path.GetNumWaypoints():
-            path.Remove(cached_index + 1, path.GetNumWaypoints())
+        # Remove any parts of the trajectory that are not cached. This also
+        # strips the (potentially infeasible) timing information.
+        output_cspec = robot.GetActiveConfigurationSpecification('linear')
+        output_path = RaveCreateTrajectory(env, '')
+        output_path.Init(output_cspec)
 
-        return path
+        # Add all waypoints before the last integration step. GetWaypoints does
+        # not include the upper bound, so this is safe.
+        cached_index = path.GetFirstWaypointIndexAfterTime(t_cache)
+        output_path.Insert(0, path.GetWaypoints(0, cached_index), cspec)
+
+        # Add a segment for the feasible part of the last integration step.
+        output_path.Insert(output_path.GetNumWaypoints() - 1,
+            path.Sample(t_cache), cspec)
+
+        return output_path
 
