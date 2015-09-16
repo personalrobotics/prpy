@@ -45,6 +45,11 @@ class TerminationError(PlanningError):
         super(TerminationError, self).__init__('Terminated by callback.')
 
 
+class TimeLimitError(PlanningError):
+    def __init__(self):
+        super(TimeLimitError, self).__init__('Reached time limit.')
+
+
 class Status(Enum):
     '''
     CONTINUE - keep going
@@ -245,11 +250,16 @@ class VectorFieldPlanner(BasePlanner):
         path = RaveCreateTrajectory(env, '')
         path.Init(cspec)
 
+        time_start = time.time()
+
         def fn_wrapper(t, q):
             robot.SetActiveDOFValues(q, CheckLimitsAction.Nothing)
             return fn_vectorfield()
 
         def fn_status_callback(t, q):
+            if time.time() - time_start >= timelimit:
+                raise TimeLimitError()
+
             # Check joint position limits. Do this before setting the DOF so we
             # don't set the DOFs out of limits.
             lower_position_violations = (q < q_limit_min)
@@ -290,13 +300,11 @@ class VectorFieldPlanner(BasePlanner):
 
         def fn_callback(t, q):
             try:
-                print 'before callback t=', t, 'duration =', path.GetDuration()
                 # Add the waypoint to the trajectory.
                 waypoint = numpy.zeros(cspec.GetDOF())
                 cspec.InsertDeltaTime(waypoint, t - path.GetDuration())
                 cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
                 path.Insert(path.GetNumWaypoints(), waypoint)
-                print 'after  callback t=', t, 'duration =', path.GetDuration()
 
                 # Run constraint checks at DOF resolution.
                 if path.GetNumWaypoints() == 1:
@@ -309,9 +317,9 @@ class VectorFieldPlanner(BasePlanner):
                 for t_check, q_check in checks:
                     fn_status_callback(t_check, q_check)
 
-                # Record the time of this check so we continue checking at DOF
-                # resolution the next time the integrator takes a step.
-                nonlocals['t_check'] = t_check
+                    # Record the time of this check so we continue checking at
+                    # DOF resolution the next time the integrator takes a step.
+                    nonlocals['t_check'] = t_check
 
                 return 0 # Keep going.
             except PlanningError as e:
