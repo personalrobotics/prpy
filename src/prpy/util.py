@@ -729,7 +729,17 @@ def IsTimedTrajectory(trajectory):
     cspec = trajectory.GetConfigurationSpecification()
     return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
 
+
 def ComputeUnitTiming(robot, traj, env=None):
+    """
+    Compute the unit velocity timing of a path or trajectory.
+
+    @param robot: robot whose DOFs should be considered
+    @param traj: path or trajectory
+    @param env: environment to create the output trajectory in; defaults to the
+                same environment as the input trajectory
+    @returns: trajectory with unit velocity timing
+    """
     from openravepy import RaveCreateTrajectory
 
     if env is None:
@@ -741,8 +751,6 @@ def ComputeUnitTiming(robot, traj, env=None):
 
     new_traj = RaveCreateTrajectory(env, '')
     new_traj.Init(cspec)
-
-    dof_values_prev = None
 
     for i in range(traj.GetNumWaypoints()):
         waypoint = traj.GetWaypoint(i, cspec)
@@ -764,7 +772,7 @@ def ComputeUnitTiming(robot, traj, env=None):
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
                          first_step=None, epsilon=1e-6):
     """
-    Generates a list of (time, configuration) pairs to collision check.
+    Generate a list of (time, configuration) pairs to collision check.
 
     If every generated configuration is collision free, then the trajectory is
     guaranteed to be collision free up to DOF resolution. This function only
@@ -775,6 +783,8 @@ def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
     @param trajectory: timed trajectory
     @returns generator of (time, configuration) pairs 
     """
+
+    # TODO: This enters an infinite loop if start_time is non-zero.
 
     if not IsTimedTrajectory(traj):
         raise ValueError(

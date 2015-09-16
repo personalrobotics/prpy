@@ -310,7 +310,9 @@ class VectorFieldPlanner(BasePlanner):
                 if path.GetNumWaypoints() == 1:
                     checks = [(t, q)]
                 else:
-                    # TODO: This should start at t_check.
+                    # TODO: This should start at t_check. Unfortunately, a bug
+                    # in GetCollisionCheckPts causes this to enter an infinite
+                    # loop.
                     checks = GetCollisionCheckPts(robot, path,
                         include_start=False) #start_time=nonlocals['t_check'])
 
@@ -327,13 +329,10 @@ class VectorFieldPlanner(BasePlanner):
                 return -1 # Stop.
 
         # Integrate the vector field to get a configuration space path.
+        # TODO: Tune the integrator parameters.
         integrator = scipy.integrate.ode(f=fn_wrapper)
-        integrator.set_integrator(
-            name='dopri5',
-            first_step=0.1,
-            atol=1e-3,
-            rtol=1e-3,
-        )
+        integrator.set_integrator(name='dopri5',
+            first_step=0.1, atol=1e-3, rtol=1e-3)
         integrator.set_solout(fn_callback)
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
         integrator.integrate(t=integration_timelimit)
