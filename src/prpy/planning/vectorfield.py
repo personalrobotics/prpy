@@ -55,6 +55,7 @@ class Status(Enum):
     TERMINATE = -1
     CACHE_AND_CONTINUE = 0
     CONTINUE = 1
+    CACHE_AND_TERMINATE = 2
 
 
 class VectorFieldPlanner(BasePlanner):
@@ -178,10 +179,10 @@ class VectorFieldPlanner(BasePlanner):
                 raise ConstraintViolationPlanningError(
                     'Deviated from straight line constraint.')
 
-            if distance_moved > max_distance:
+            if distance_moved >= max_distance:
                 return Status.TERMINATE
 
-            if distance_moved > distance:
+            if distance_moved >= distance:
                 return Status.CACHE_AND_CONTINUE
 
             return Status.CONTINUE
@@ -297,13 +298,14 @@ class VectorFieldPlanner(BasePlanner):
                 # Check the termination condition.
                 waypoint_index = path.GetNumWaypoints() - 1
                 status = fn_terminate()
+                print 'status =', status
 
-                if status == Status.CONTINUE:
-                    pass
-                elif status == Status.CACHE_AND_CONTINUE:
+                if status in [Status.CACHE_AND_CONTINUE,
+                              Status.CACHE_AND_TERMINATE]:
                     nonlocals['cached_index'] = waypoint_index
-                elif status == Status.TERMINATE:
-                    nonlocals['cached_index'] = waypoint_index
+                    print 'caching at i =', waypoint_index, 't =', t
+
+                if status in [Status.CACHE_AND_TERMINATE, Status.TERMINATE]:
                     raise TerminationError() # Caught below.
 
                 return 0 # Keep going.
@@ -328,6 +330,8 @@ class VectorFieldPlanner(BasePlanner):
 
         if cached_index is None:
             raise exception or PlanningError('An unknown error has occurred.')
+        elif exception:
+            logger.warning('Terminated early: %s', str(exception))
 
         # Remove any parts of the trajectory that are not cached.
         if cached_index + 1 < path.GetNumWaypoints():
