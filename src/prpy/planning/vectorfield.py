@@ -213,7 +213,7 @@ class VectorFieldPlanner(BasePlanner):
             TimeoutPlanningError,
             JointLimitError
         )
-        from openravepy import RaveCreateTrajectory
+        from openravepy import CollisionReport, RaveCreateTrajectory
         from ..util import ComputeJointVelocityFromTwist, GetCollisionCheckPts, ComputeUnitTiming
         import time
         import scipy.integrate
@@ -222,7 +222,7 @@ class VectorFieldPlanner(BasePlanner):
         nonlocals = {
             'waypoints': [],
             'exception': None,
-            'cached_index': None,
+            'cached_indices': [],
             'last_t': 0.,
         }
 
@@ -269,15 +269,16 @@ class VectorFieldPlanner(BasePlanner):
                 nonlocals['last_t'] = t
 
                 # Check the termination condition.
+                waypoint_index = len(nonlocals['waypoints'])
                 status = fn_terminate()
+
                 if status == Status.CONTINUE:
-                    pass # Do nothing.
+                    pass
                 elif status == Status.CACHE_AND_CONTINUE:
-                    nonlocals['cached_index'] = len(nonlocals['waypoints'])
-                    return 0 # Keep going.
+                    nonlocals['cached_indices'].append(waypoint_index)
                 elif status == Status.TERMINATE:
-                    nonlocals['cached_index'] = len(nonlocals['waypoints'])
-                    raise TerminationError()
+                    nonlocals['cached_indices'].append(waypoint_index)
+                    raise TerminationError() # Caught below.
 
                 return 0 # Keep going.
             except PlanningError as e:
@@ -298,8 +299,12 @@ class VectorFieldPlanner(BasePlanner):
 
         waypoints = numpy.array(nonlocals['waypoints'])
         exception = nonlocals['exception']
-        cached_index = nonlocals['cached_index']
+        cached_indices = nonlocals['cached_indices']
 
+        if not cached_indices:
+            raise exception or PlanningError('An unknown error has occurred.')
+
+        """
         # Check if the integration terminated early due to an error.
         if exception is not None:
             if cached_index is not None:
@@ -307,22 +312,19 @@ class VectorFieldPlanner(BasePlanner):
                 logger.warning('Terminated early: %s', str(exception))
             else:
                 raise exception
+        """
 
-        # Create the full output path and compute its arclength
-        # parameterization. This simplifies collision checking.
+        # Create the full output path. This simplifies collision checking.
         path = RaveCreateTrajectory(env, '')
         path.Init(cspec)
-        path.Insert(0, waypoints[0:cached_index].ravel())
+        path.Insert(0, waypoints[0:cached_indices[-1]].ravel())
 
-        arclength_path = ComputeUnitTiming(robot, path)
-
-        # Collision check the path.
+        # Collision check the path. Record the time of the first collision.
+        report = CollisionReport()
         exception = None
 
-        for t, q in GetCollisionCheckPts(robot, arclength_path):
-            print t, q
-
-            report = openravepy.CollisionReport()
+        for t, q in GetCollisionCheckPts(robot, path):
+            robot.SetActiveDOFValues(q)
 
             if env.CheckCollision(robot, report=report):
                 exception = CollisionPlanningError.FromReport(report)
@@ -330,6 +332,17 @@ class VectorFieldPlanner(BasePlanner):
             elif robot.CheckSelfCollision(report=report):
                 exception = CollisionPlanningError.FromReport(report)
                 break
+
+        # Check if we had a cached trajectory at that time.
+        invalid_index = path.GetFirstWaypointIndexAfterTime(t)
+        valid_cached_indices = [i for i in cached_indices if i < invalid_index]
+
+        if not valid_cached_indices:
+            raise exception or PlanningError('An unknown error has occurred.')
+
+        # Take the longest collision-free cached trajectory.
+        cached_index = max(valid_cached_indices)
+        path.Remove(cached_index + 1, path.GetNumWaypoints())
 
         return path
 
