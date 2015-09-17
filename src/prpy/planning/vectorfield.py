@@ -357,7 +357,7 @@ class VectorFieldPlanner(BasePlanner):
         output_path.Insert(0, path.GetWaypoints(0, cached_index), cspec)
 
         # Add a segment for the feasible part of the last integration step.
-        output_path.Insert(output_path.GetNumWaypoints() - 1,
+        output_path.Insert(output_path.GetNumWaypoints(),
             path.Sample(t_cache), cspec)
 
         return output_path
