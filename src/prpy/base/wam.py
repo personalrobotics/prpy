@@ -292,7 +292,7 @@ class WAM(Manipulator):
         # Execute on the real robot by tagging the trajectory with options that
         # tell the controller to stop on force/torque input.
         if not manipulator.simulated:
-            manipulator.SetTrajectoryExecutionOptions(traj, stop_on_ft=True,
+            manipulator.SetTrajectoryExecutionOptions(path, stop_on_ft=True,
                 force_direction=force_direction, force_magnitude=max_force,
                 torque=max_torque)
 
@@ -301,7 +301,8 @@ class WAM(Manipulator):
             try:
                 robot.ExecutePath(path)
                 return False
-            except exceptions.TrajectoryAborted:
+            except exceptions.TrajectoryAborted as e:
+                logger.warn('MoveUntilTouch aborted: %s', str(e))
                 return True
         # Forward-simulate the motion until it hits an object.
         else:
