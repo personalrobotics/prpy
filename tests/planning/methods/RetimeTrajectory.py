@@ -37,7 +37,12 @@ class RetimeTrajectoryTest(object):
             # Compare the waypoint against every input waypoint.
             for icandidate, candidate_waypoint in enumerate(waypoints):
                 if numpy.allclose(joint_values, candidate_waypoint):
-                    self.assertIsNone(waypoint_indices[icandidate])
+                    self.assertIsNone(waypoint_indices[icandidate],
+                        'Input waypoint {} appears twice in the output'
+                        ' trajectory (indices: {} and {})'.format(
+                            icandidate, waypoint_indices[icandidate],
+                            iwaypoint))
+
                     waypoint_indices[icandidate] = iwaypoint
 
         self.assertEquals(waypoint_indices[0], 0)
