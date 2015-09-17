@@ -37,6 +37,35 @@ class CollisionPlanningError(PlanningError):
             return '<unknown>'
 
 
+class JointLimitError(PlanningError):
+    def __init__(self, robot, dof_index, dof_value, dof_limit, description):
+        self.robot = robot
+        self.dof_index = dof_index
+        self.dof_value = dof_value
+        self.dof_limit = dof_limit
+
+        joint = robot.GetJointFromDOFIndex(dof_index)
+        if dof_value < dof_limit:
+            direction = 'lower'
+            comparison = '<'
+        else:
+            direction = 'upper'
+            comparison = '>'
+
+        super(JointLimitError, self).__init__(
+            'Robot "{robot_name:s}" joint "{joint_name:s} axis {joint_axis:d}'
+            ' violates {direction:s} {description:s} limit:'
+            ' {dof_value:.5f} {comparison:s} {dof_limit:.5f}'.format(
+                robot_name=robot.GetName(),
+                joint_name=joint.GetName(),
+                joint_axis=dof_index - joint.GetDOFIndex(),
+                dof_value=dof_value,
+                dof_limit=dof_limit,
+                comparison=comparison,
+                direction=direction,
+                description=description))
+
+
 class SelfCollisionPlanningError(CollisionPlanningError):
     pass
 
