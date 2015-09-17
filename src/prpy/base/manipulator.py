@@ -181,7 +181,7 @@ class Manipulator(openravepy.Robot.Manipulator):
             traj = CopyTrajectory(cloned_traj, env=robot.GetEnv())
 
         # Optionally execute the trajectory.
-        if 'execute' not in kw_args or kw_args['execute']:
+        if kw_args.get('execute', False):
             return self.GetRobot().ExecutePath(traj, **kw_args)
         else:
             return traj

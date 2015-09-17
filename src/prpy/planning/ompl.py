@@ -49,7 +49,7 @@ class OMPLPlanner(BasePlanner):
 
         if self.planner is None:
             raise UnsupportedPlanningError(
-                'Unable to create "{:s}" planner.'.format(planner_name))
+                'Unable to create "{:s}" planner. Is or_ompl installed?'.format(planner_name))
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
