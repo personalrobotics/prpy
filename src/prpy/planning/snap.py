@@ -118,14 +118,17 @@ class SnapPlanner(BasePlanner):
         if check != 0:
             raise PlanningError('Straight line trajectory is not valid.')
 
-        # Create a trajectory that starts at our current configuration.
-        cspec = robot.GetActiveConfigurationSpecification()
+        # Create a two-point trajectory that starts at our current
+        # configuration and takes us to the goal.
         traj = openravepy.RaveCreateTrajectory(self.env, '')
-        traj.Init(cspec)
+        cspec = robot.GetActiveConfigurationSpecification('linear')
+        active_indices = robot.GetActiveDOFIndices()
 
         start_waypoint = numpy.zeros(cspec.GetDOF())
         cspec.InsertJointValues(start_waypoint, start, robot,
                                 active_indices, False)
+
+        traj.Init(cspec)
         traj.Insert(0, start_waypoint.ravel())
 
         # Make the trajectory end at the goal configuration, as long as it

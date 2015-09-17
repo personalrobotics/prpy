@@ -162,7 +162,7 @@ class GreedyIKPlanner(BasePlanner):
 
             # Create a new trajectory starting at current robot location.
             qtraj = openravepy.RaveCreateTrajectory(self.env, '')
-            qtraj.Init(manip.GetArmConfigurationSpecification())
+            qtraj.Init(manip.GetArmConfigurationSpecification('linear'))
             qtraj.Insert(0, robot.GetActiveDOFValues())
 
             # Initial search for workspace path timing: one huge step.
