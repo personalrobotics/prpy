@@ -189,8 +189,12 @@ class BlockDetector(PerceptionModule):
 
                 #Set block name - should we change?
                 block.SetTransform(block_in_world)
-                rand_name = int(numpy.random.randint(1,10000))
-                block.SetName('block'+`rand_name`)
+                valid = False
+                while not valid:
+                    rand_name = 'block' + `int(numpy.random.randint(1,10000))`
+                    valid = env.GetKinBody(rand_name) is None
+                
+                block.SetName(rand_name)
                 env.Add(block)
                 blocks.append(block)
 
