@@ -37,19 +37,39 @@ from base import BasePlanner, PlanningError, PlanningMethod, Tags
 from enum import Enum
 import math
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
+
+
+class TerminationError(PlanningError):
+    def __init__(self):
+        super(TerminationError, self).__init__('Terminated by callback.')
+
+
+class TimeLimitError(PlanningError):
+    def __init__(self):
+        super(TimeLimitError, self).__init__('Reached time limit.')
 
 
 class Status(Enum):
     '''
-    TERMINATE - stop, exit gracefully, and return current trajectory
-    CACHE_AND_CONTINUE - save the current trajectory and CONTINUE.
-                         return the saved trajectory if Exception.
     CONTINUE - keep going
+    TERMINATE - stop gracefully and output the CACHEd trajectory
+    CACHE_AND_CONTINUE - save the current trajectory and CONTINUE.
+                         return the saved trajectory if TERMINATEd.
+    CACHE_AND_TERMINATE - save the current trajectory and TERMINATE
     '''
     TERMINATE = -1
     CACHE_AND_CONTINUE = 0
     CONTINUE = 1
+    CACHE_AND_TERMINATE = 2
+
+    @classmethod
+    def DoesTerminate(cls, status):
+        return status in [cls.TERMINATE, cls.CACHE_AND_TERMINATE]
+
+    @classmethod
+    def DoesCache(cls, status):
+        return status in [cls.CACHE_AND_CONTINUE, cls.CACHE_AND_TERMINATE]
 
 
 class VectorFieldPlanner(BasePlanner):
@@ -78,12 +98,11 @@ class VectorFieldPlanner(BasePlanner):
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             goal_pose)
             dqout, tout = util.ComputeJointVelocityFromTwist(
-                                robot, twist)
+                robot, twist, joint_velocity_limits=numpy.PINF)
+
             # Go as fast as possible
             vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-            dqout = min(abs(vlimits/dqout))*dqout
-
-            return dqout
+            return min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1. for i in xrange(vlimits.shape[0])) * dqout
 
         def CloseEnough():
             pose_error = util.GeodesicDistance(
@@ -135,10 +154,6 @@ class VectorFieldPlanner(BasePlanner):
         direction = numpy.array(direction, dtype='float')
         direction /= numpy.linalg.norm(direction)
 
-        # Default to moving an exact distance.
-        if max_distance is None:
-            max_distance = distance
-
         manip = robot.GetActiveManipulator()
         Tstart = manip.GetEndEffectorTransform()
 
@@ -146,12 +161,10 @@ class VectorFieldPlanner(BasePlanner):
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             Tstart)
             twist[0:3] = direction
-            dqout, tout = util.ComputeJointVelocityFromTwist(
-                    robot, twist)
 
-            # Go as fast as possible
-            vlimits= robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-            dqout = min(abs(vlimits/dqout))*dqout
+            dqout, _ = util.ComputeJointVelocityFromTwist(
+                robot, twist, joint_velocity_limits=numpy.PINF)
+
             return dqout
 
         def TerminateMove():
@@ -160,20 +173,26 @@ class VectorFieldPlanner(BasePlanner):
             Succeed if distance moved is larger than max_distance.
             Cache and continue if distance moved is larger than distance.
             '''
+            from .exceptions import ConstraintViolationPlanningError 
+
             Tnow = manip.GetEndEffectorTransform()
             error = util.GeodesicError(Tstart, Tnow)
             if numpy.fabs(error[3]) > angular_tolerance:
-                raise PlanningError('Deviated from orientation constraint.')
+                raise ConstraintViolationPlanningError(
+                    'Deviated from orientation constraint.')
             distance_moved = numpy.dot(error[0:3], direction)
             position_deviation = numpy.linalg.norm(error[0:3] -
                                                    distance_moved*direction)
             if position_deviation > position_tolerance:
-                raise PlanningError('Deviated from straight line constraint.')
+                raise ConstraintViolationPlanningError(
+                    'Deviated from straight line constraint.')
 
-            if distance_moved > max_distance:
+            if max_distance is None:
+                if distance_moved > distance:
+                    return Status.CACHE_AND_TERMINATE
+            elif distance_moved > max_distance:
                 return Status.TERMINATE
-
-            if distance_moved > distance:
+            elif distance_moved >= distance:
                 return Status.CACHE_AND_CONTINUE
 
             return Status.CONTINUE
@@ -183,6 +202,7 @@ class VectorFieldPlanner(BasePlanner):
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
+                          integration_timelimit=10.,
                           timelimit=5.0, dt_multiplier=1.01, **kw_args):
         """
         Follow a joint space vectorfield to termination.
@@ -198,75 +218,147 @@ class VectorFieldPlanner(BasePlanner):
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
-        start_time = time.time()
+        from .exceptions import (
+            CollisionPlanningError,
+            SelfCollisionPlanningError,
+            TimeoutPlanningError,
+            JointLimitError
+        )
+        from openravepy import CollisionReport, RaveCreateTrajectory
+        from ..util import ComputeJointVelocityFromTwist, GetCollisionCheckPts, ComputeUnitTiming
+        import time
+        import scipy.integrate
 
-        try:
-            with robot:
-                manip = robot.GetActiveManipulator()
-                robot.SetActiveDOFs(manip.GetArmIndices())
-                # Populate joint positions and joint velocities
-                cspec = manip.GetArmConfigurationSpecification('quadratic')
-                cspec.AddDerivativeGroups(1, False)
-                cspec.AddDeltaTimeGroup()
-                cspec.ResetGroupOffsets()
-                qtraj = openravepy.RaveCreateTrajectory(self.env,
-                                                        'GenericTrajectory')
-                qtraj.Init(cspec)
-                cached_traj = None
+        CheckLimitsAction = openravepy.KinBody.CheckLimitsAction
 
-                vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-                dt_step = min(robot.GetActiveDOFResolutions() /
-                              vlimits)
-                dt_step *= dt_multiplier
-                status = fn_terminate()
-                while status != Status.TERMINATE:
-                    # Check for a timeout.
-                    current_time = time.time()
-                    if (timelimit is not None and
-                            current_time - start_time > timelimit):
-                        raise PlanningError('Reached time limit.')
+        # This is a workaround to emulate 'nonlocal' in Python 2.
+        nonlocals = {
+            'exception': None,
+            't_cache': None,
+            't_check': 0.,
+        }
 
-                    dqout = fn_vectorfield()
-                    numsteps = int(math.floor(max(
-                        abs(dqout*dt_step/robot.GetActiveDOFResolutions())
-                        )))
-                    if numsteps == 0:
-                        raise PlanningError('Step size too small, '
-                                            'unable to progress')
-                    dt = dt_step/numsteps
+        env = robot.GetEnv()
+        active_indices = robot.GetActiveDOFIndices()
+        q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+        qdot_limit = robot.GetDOFVelocityLimits(active_indices)
 
-                    for step in xrange(numsteps):
-                        # Check for collisions.
-                        if self.env.CheckCollision(robot):
-                            raise PlanningError('Encountered collision.')
-                        if robot.CheckSelfCollision():
-                            raise PlanningError('Encountered self-collision.')
+        cspec = robot.GetActiveConfigurationSpecification('linear')
+        cspec.AddDeltaTimeGroup()
+        cspec.ResetGroupOffsets()
 
-                        status = fn_terminate()
-                        if status == Status.CACHE_AND_CONTINUE:
-                            cached_traj = util.CopyTrajectory(qtraj)
-                        if status == Status.TERMINATE:
-                            break
+        path = RaveCreateTrajectory(env, '')
+        path.Init(cspec)
 
-                        # Add to trajectory
-                        waypoint = []
-                        q_curr = robot.GetActiveDOFValues()
-                        waypoint.append(q_curr)       # joint position
-                        waypoint.append(dqout)        # joint velocity
-                        waypoint.append([dt])    # delta time
-                        waypoint = numpy.concatenate(waypoint)
-                        qtraj.Insert(qtraj.GetNumWaypoints(), waypoint)
-                        qnew = q_curr + dt*dqout
-                        robot.SetActiveDOFValues(qnew)
+        time_start = time.time()
 
-        except PlanningError as e:
-            if cached_traj is not None:
-                logger.warning('Terminated early: %s', e.message)
-                return cached_traj
-            else:
-                raise
+        def fn_wrapper(t, q):
+            robot.SetActiveDOFValues(q, CheckLimitsAction.Nothing)
+            return fn_vectorfield()
 
-        # TODO: Flag this trajectory as timed.
-        util.SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: 'true'}, append=True)
+        def fn_status_callback(t, q):
+            if time.time() - time_start >= timelimit:
+                raise TimeLimitError()
 
-        return qtraj
+            # Check joint position limits. Do this before setting the DOF so we
+            # don't set the DOFs out of limits.
+            lower_position_violations = (q < q_limit_min)
+            if lower_position_violations.any():
+                index = lower_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_min[index],
+                    description='position')
+
+            upper_position_violations = (q> q_limit_max)
+            if upper_position_violations.any():
+                index = upper_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_max[index],
+                    description='position')
+
+            robot.SetActiveDOFValues(q)
+
+            # Check collision.
+            report = CollisionReport()
+            if env.CheckCollision(robot, report=report):
+                raise CollisionPlanningError.FromReport(report)
+            elif robot.CheckSelfCollision(report=report):
+                raise SelfCollisionPlanningError.FromReport(report)
+
+            # Check the termination condition.
+            status = fn_terminate()
+
+            if Status.DoesCache(status):
+                nonlocals['t_cache'] = t
+
+            if Status.DoesTerminate(status):
+                raise TerminationError()
+
+        def fn_callback(t, q):
+            try:
+                # Add the waypoint to the trajectory.
+                waypoint = numpy.zeros(cspec.GetDOF())
+                cspec.InsertDeltaTime(waypoint, t - path.GetDuration())
+                cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
+                path.Insert(path.GetNumWaypoints(), waypoint)
+
+                # Run constraint checks at DOF resolution.
+                if path.GetNumWaypoints() == 1:
+                    checks = [(t, q)]
+                else:
+                    # TODO: This should start at t_check. Unfortunately, a bug
+                    # in GetCollisionCheckPts causes this to enter an infinite
+                    # loop.
+                    checks = GetCollisionCheckPts(robot, path,
+                        include_start=False) #start_time=nonlocals['t_check'])
+
+                for t_check, q_check in checks:
+                    fn_status_callback(t_check, q_check)
+
+                    # Record the time of this check so we continue checking at
+                    # DOF resolution the next time the integrator takes a step.
+                    nonlocals['t_check'] = t_check
+
+                return 0 # Keep going.
+            except PlanningError as e:
+                nonlocals['exception'] = e
+                return -1 # Stop.
+
+        # Integrate the vector field to get a configuration space path.
+        # TODO: Tune the integrator parameters.
+        integrator = scipy.integrate.ode(f=fn_wrapper)
+        integrator.set_integrator(name='dopri5',
+            first_step=0.1, atol=1e-3, rtol=1e-3)
+        integrator.set_solout(fn_callback)
+        integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
+        integrator.integrate(t=integration_timelimit)
+
+        t_cache = nonlocals['t_cache']
+        exception = nonlocals['exception'] 
+
+        if t_cache is None:
+            raise exception or PlanningError('An unknown error has occurred.')
+        elif exception:
+            logger.warning('Terminated early: %s', str(exception))
+
+        # Remove any parts of the trajectory that are not cached. This also
+        # strips the (potentially infeasible) timing information.
+        output_cspec = robot.GetActiveConfigurationSpecification('linear')
+        output_path = RaveCreateTrajectory(env, '')
+        output_path.Init(output_cspec)
+
+        # Add all waypoints before the last integration step. GetWaypoints does
+        # not include the upper bound, so this is safe.
+        cached_index = path.GetFirstWaypointIndexAfterTime(t_cache)
+        output_path.Insert(0, path.GetWaypoints(0, cached_index), cspec)
+
+        # Add a segment for the feasible part of the last integration step.
+        output_path.Insert(output_path.GetNumWaypoints(),
+            path.Sample(t_cache), cspec)
+
+        return output_path
+

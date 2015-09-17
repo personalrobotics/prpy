@@ -32,9 +32,9 @@ import logging, numpy, openravepy, os, tempfile
 from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   PlanningMethod, Tags)
-from openravepy import PlannerStatus 
+from openravepy import PlannerStatus
 
-logger = logging.getLogger('pypy.planning.ompl')
+logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
@@ -49,7 +49,7 @@ class OMPLPlanner(BasePlanner):
 
         if self.planner is None:
             raise UnsupportedPlanningError(
-                'Unable to create "{:s}" planner.'.format(planner_name))
+                'Unable to create "{:s}" planner. Is or_ompl installed?'.format(planner_name))
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)

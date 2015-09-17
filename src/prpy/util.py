@@ -32,6 +32,10 @@
 import logging, numpy, openravepy, scipy.misc, time, threading, math
 import scipy.optimize
 
+
+logger = logging.getLogger(__name__)
+
+
 def create_sensor(env, args, anonymous=True):
     sensor = openravepy.RaveCreateSensor(env, args)
     if sensor is None:
@@ -283,10 +287,14 @@ def GetTrajectoryTags(traj):
 
     description = traj.GetDescription()
 
-    if description:
-        return json.loads(description)
-    else:
+    if description == '':
         return dict()
+    else:
+        try:
+            return json.loads(description)
+        except ValueError as e:
+            logger.warning('Failed reading tags from trajectory: %s', e.message)
+            return dict()
 
 
 def SetTrajectoryTags(traj, tags, append=False):
@@ -380,43 +388,6 @@ def SimplifyTrajectory(traj, robot):
         reduced_traj.Insert(new_idx, traj.GetWaypoint(old_idx))
     return reduced_traj
 
-def IsInCollision(traj, robot, selfcoll_only=False):
-    report = openravepy.CollisionReport()
-
-    #get trajectory length
-    NN = traj.GetNumWaypoints()
-    ii = 0
-    total_dist = 0.0
-    for ii in range(NN-1):
-        point1 = traj.GetWaypoint(ii)
-        point2 = traj.GetWaypoint(ii+1)
-        dist = 0.0
-        total_dof = robot.GetActiveDOF()
-        for jj in range(total_dof):
-            dist += pow(point1[jj]-point2[jj],2)
-        total_dist += numpy.sqrt(dist)
-    step_dist = 0.04
-    if traj.GetDuration()<0.001:
-        openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
-    total_time = traj.GetDuration()
-    step_time = total_time*step_dist/total_dist
-
-    #check
-    for time in numpy.arange(0.0,total_time,step_time):
-        point = traj.Sample(time)
-        collision = False
-        with robot.GetEnv():
-            robot.SetActiveDOFValues(point)
-            if robot.CheckSelfCollision(report):
-                collision = True
-            if not collision:
-                if  (not selfcoll_only) and robot.GetEnv().CheckCollision(robot,report):
-                    collision = True
-        if collision:
-            return True        
-                
-    return False    
-            
 
 
 class Recorder(object):
@@ -566,10 +537,9 @@ def quadraticObjective(dq, J, dx, *args):
     return objective, gradient
 
 
-def ComputeJointVelocityFromTwist(robot, twist,
-                                  objective=quadraticObjective,
-                                  joint_limit_tolerance=3e-2,
-                                  dq_init=None):
+def ComputeJointVelocityFromTwist(
+        robot, twist, objective=quadraticObjective, dq_init=None,
+        joint_limit_tolerance=3e-2, joint_velocity_limits=None):
     '''
     Computes the optimal joint velocity given a twist by formulating
     the problem as a quadratic optimization with box constraints and
@@ -581,6 +551,8 @@ def ComputeJointVelocityFromTwist(robot, twist,
             defaults to quadraticObjective
     @params dq_init optional initial guess for optimal joint velocity
             defaults to robot.GetActiveDOFVelocities()
+    @params joint_velocity_limits override the robot's joint velocity limit;
+            defaults to robot.GetActiveDOFMaxVel()
     @params joint_limit_tolerance if less then this distance to joint
             limit, velocity is bounded in that direction to 0
     @return dq_opt optimal joint velocity
@@ -590,6 +562,20 @@ def ComputeJointVelocityFromTwist(robot, twist,
     manip = robot.GetActiveManipulator()
     robot.SetActiveDOFs(manip.GetArmIndices())
 
+    if joint_velocity_limits is None:
+        joint_velocity_limits = robot.GetActiveDOFMaxVel()
+    elif isinstance(joint_velocity_limits, float):
+        joint_velocity_limits = numpy.array(
+            [numpy.PINF] * robot.GetActiveDOF())
+
+    if len(joint_velocity_limits) != robot.GetActiveDOF():
+        raise ValueError(
+            'Joint velocity limits has incorrect length:'
+            ' Expected {:d}, got {:d}.'.format(
+                robot.GetActiveDOF(), len(joint_velocity_limits)))
+    elif (joint_velocity_limits <= 0.).any():
+        raise ValueError('One or more joint velocity limit is not positive.')
+
     jacobian_spatial = manip.CalculateJacobian()
     jacobian_angular = manip.CalculateAngularVelocityJacobian()
     jacobian = numpy.vstack((jacobian_spatial, jacobian_angular))
@@ -598,12 +584,14 @@ def ComputeJointVelocityFromTwist(robot, twist,
     twist_active = twist[rows]
     jacobian_active = jacobian[rows, :]
 
-    bounds = [(-x, x) for x in robot.GetActiveDOFMaxVel()]
+    bounds = numpy.column_stack(
+        (-joint_velocity_limits, joint_velocity_limits))
+
     # Check for joint limits
     q_curr = robot.GetActiveDOFValues()
     q_min, q_max = robot.GetActiveDOFLimits()
-    dq_bounds = [(0, max) if (numpy.isclose(q_curr[i], q_min[i], atol=joint_limit_tolerance)) else
-                 (min, 0) if (numpy.isclose(q_curr[i], q_max[i], atol=joint_limit_tolerance)) else
+    dq_bounds = [( 0., max) if q_curr[i] <= q_min[i] + joint_limit_tolerance else
+                 (min,  0.) if q_curr[i] >= q_max[i] - joint_limit_tolerance else
                  (min, max) for i, (min, max) in enumerate(bounds)]
 
     if dq_init is None:
@@ -662,3 +650,232 @@ def GeodesicDistance(t1, t2, r=1.0):
     error = GeodesicError(t1, t2)
     error[3] = r*error[3]
     return numpy.linalg.norm(error)
+
+def FindCatkinResource(package, relative_path):
+    '''
+    Find a Catkin resource in the share directory or
+    the package source directory. Raises IOError
+    if resource is not found.
+    
+    @param relative_path Path relative to share or package 
+    source directory
+    @param package The package to search in
+    @return Absolute path to resource 
+    '''
+    from catkin.find_in_workspaces import find_in_workspaces
+    
+    paths = find_in_workspaces(project=package, search_dirs=['share'],
+                               path=relative_path, first_match_only=True)
+
+    if paths and len(paths) == 1:
+        return paths[0]
+    else:
+        raise IOError('Loading resource "{:s}" failed.'.format(
+                      relative_path))
+
+
+def IsAtTrajectoryStart(robot, trajectory):
+    """
+    Check if robot's DOFs match the start configuration of a trajectory.
+
+    This function examines the current DOF values of the specified robot and
+    compares these values to the first waypoint of the specified trajectory.
+    If every DOF value specified in the trajectory differs by less than the
+    DOF resolution of the specified joint/axis then it will return True.
+    Otherwise, it returns False.
+
+    @param robot: the robot whose active DOFs will be checked
+    @param trajectory: the trajectory whose start configuration will be checked
+    @returns: True if the robot's active DOFs match the given trajectory
+              False if one or more active DOFs differ by DOF resolution
+    """
+    # Get used indices and starting configuration from trajectory.
+    cspec = trajectory.GetConfigurationSpecification()
+    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+    traj_values = cspec.ExtractJointValues(
+        trajectory.GetWaypoint(0), robot, dof_indices)
+
+    # Get current configuration of robot for used indices.
+    with robot.GetEnv():
+        robot_values = robot.GetDOFValues(dof_indices)
+        dof_resolutions = robot.GetDOFResolutions(dof_indices)
+
+    # Check deviation in each DOF, using OpenRAVE's SubtractValue function.
+    dof_infos = zip(dof_indices, traj_values, robot_values, dof_resolutions)
+    for dof_index, traj_value, robot_value, dof_resolution in dof_infos:
+        # Look up the Joint and Axis of the DOF from the robot.
+        joint = robot.GetJointFromDOFIndex(dof_index)
+        axis = dof_index - joint.GetDOFIndex()
+
+        # If any joint deviates too much, return False.
+        delta_value = abs(joint.SubtractValue(traj_value, robot_value, axis))
+        if delta_value > dof_resolution:
+            return False
+
+    # If all joints match, return True.
+    return True
+
+
+def IsTimedTrajectory(trajectory):
+    """
+    Returns True if the trajectory is timed.
+
+    This function checks whether a trajectory has a valid `deltatime` group,
+    indicating that it is a timed trajectory.
+
+    @param trajectory: an OpenRAVE trajectory
+    @returns: True if the trajectory is timed, False otherwise
+    """
+    cspec = trajectory.GetConfigurationSpecification()
+    return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
+
+
+def ComputeUnitTiming(robot, traj, env=None):
+    """
+    Compute the unit velocity timing of a path or trajectory.
+
+    @param robot: robot whose DOFs should be considered
+    @param traj: path or trajectory
+    @param env: environment to create the output trajectory in; defaults to the
+                same environment as the input trajectory
+    @returns: trajectory with unit velocity timing
+    """
+    from openravepy import RaveCreateTrajectory
+
+    if env is None:
+        env = traj.GetEnv()
+
+    cspec = traj.GetConfigurationSpecification()
+    cspec.AddDeltaTimeGroup()
+    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+
+    new_traj = RaveCreateTrajectory(env, '')
+    new_traj.Init(cspec)
+
+    for i in range(traj.GetNumWaypoints()):
+        waypoint = traj.GetWaypoint(i, cspec)
+        dof_values = cspec.ExtractJointValues(waypoint, robot, dof_indices)
+
+        if i == 0:
+            deltatime = 0.
+        else:
+            deltatime = numpy.linalg.norm(dof_values - dof_values_prev)
+
+        dof_values_prev = dof_values
+
+        cspec.InsertDeltaTime(waypoint, deltatime)
+        new_traj.Insert(i, waypoint)
+
+    return new_traj
+
+
+def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
+                         first_step=None, epsilon=1e-6):
+    """
+    Generate a list of (time, configuration) pairs to collision check.
+
+    If every generated configuration is collision free, then the trajectory is
+    guaranteed to be collision free up to DOF resolution. This function only
+    operates on timed trajectories. If you want to use this function on a path,
+    then consider using the util.ComputeUnitTiming function to compute its
+    arclength parameterization.
+
+    @param trajectory: timed trajectory
+    @returns generator of (time, configuration) pairs 
+    """
+
+    # TODO: This enters an infinite loop if start_time is non-zero.
+
+    if not IsTimedTrajectory(traj):
+        raise ValueError(
+            'Trajectory must be timed. If you want to use this function on a'
+            ' path, then consider using util.ComputeUnitTiming to compute its'
+            ' arclength parameterization.')
+
+
+    cspec = traj.GetConfigurationSpecification()
+    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+    q_resolutions = robot.GetDOFResolutions()[dof_indices]
+    duration = traj.GetDuration()
+
+    if not (0. <= start_time < duration + epsilon):
+        raise ValueError(
+            'Start time {:.6f} is out of range [0, {:.6f}].'.format(
+                start_time, duration))
+
+    start_time = min(start_time, duration)
+
+    if first_step is None:
+        first_step = duration - start_time
+
+    if not (0. < first_step <= duration - start_time):
+        raise ValueError(
+            'First step {:.6f} is out of range (0, {:.6f}]'.format(
+                first_step, duration - start_time))
+
+    # Bisection method. Start at the begining of the trajectory and initialize
+    # the stepsize to the end of the trajectory.
+    t_prev = start_time
+    q_prev = cspec.ExtractJointValues(
+        traj.GetWaypoint(t_prev), robot, dof_indices)
+    dt = first_step
+
+    # Always collision check the first point.
+    if include_start:
+        yield t_prev, q_prev
+
+    while t_prev < duration - epsilon:
+        t_curr = t_prev + dt
+        q_curr = cspec.ExtractJointValues(
+            traj.Sample(t_curr), robot, dof_indices)
+
+        # Step violated dof resolution. Halve the step size and continue.
+        if (numpy.abs(q_curr - q_prev) > q_resolutions).any():
+            dt = dt / 2.
+        # Yield this configuration. Double the step size and continue.
+        else:
+            yield t_curr, q_curr
+
+            q_prev = q_curr
+            t_prev = min(t_curr, duration)
+            dt = 2. * dt
+
+
+def IsInCollision(traj, robot, selfcoll_only=False):
+    report = openravepy.CollisionReport()
+
+    #get trajectory length
+    NN = traj.GetNumWaypoints()
+    ii = 0
+    total_dist = 0.0
+    for ii in range(NN-1):
+        point1 = traj.GetWaypoint(ii)
+        point2 = traj.GetWaypoint(ii+1)
+        dist = 0.0
+        total_dof = robot.GetActiveDOF()
+        for jj in range(total_dof):
+            dist += pow(point1[jj]-point2[jj],2)
+        total_dist += numpy.sqrt(dist)
+
+    step_dist = 0.04
+
+    if traj.GetDuration()<0.001:
+        openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
+    total_time = traj.GetDuration()
+    step_time = total_time*step_dist/total_dist
+
+    #check
+    for time in numpy.arange(0.0,total_time,step_time):
+        point = traj.Sample(time)
+        collision = False
+        with robot.GetEnv():
+            robot.SetActiveDOFValues(point)
+            if robot.CheckSelfCollision(report):
+                collision = True
+            if not collision:
+                if  (not selfcoll_only) and robot.GetEnv().CheckCollision(robot,report):
+                    collision = True
+        if collision:
+            return True        
+                
+    return False    

@@ -35,7 +35,7 @@ import openravepy
 from base import (BasePlanner, PlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 
-logger = logging.getLogger('prpy.planning.tsr')
+logger = logging.getLogger(__name__)
 
 
 class TSRPlanner(BasePlanner):
@@ -44,7 +44,10 @@ class TSRPlanner(BasePlanner):
         self.delegate_planner = delegate_planner
 
     def __str__(self):
-        return 'TSRPlanner'
+        if self.delegate_planner is not None:
+            return 'TSRPlanner({:s})'.format(str(self.delegate_planner))
+        else:
+            return 'TSRPlanner'
 
     # TODO: Temporarily disabled based on Pras' feedback.
     """
@@ -119,7 +122,9 @@ class TSRPlanner(BasePlanner):
             ik_param = IkParameterization(
                 tsrchain.sample(), IkParameterizationType.Transform6D)
             ik_solution = manipulator.FindIKSolutions(
-                ik_param, IkFilterOptions.CheckEnvCollisions)
+                ik_param, IkFilterOptions.CheckEnvCollisions,
+                ikreturn=False, releasegil=True
+            )
             if ik_solution.shape[0] > 0:
                 ik_solutions.append(ik_solution)
 
@@ -157,10 +162,10 @@ class TSRPlanner(BasePlanner):
                 try:
                     if ik_set.shape[0] > 1:
                         traj = delegate_planner.PlanToConfigurations(
-                            robot, ik_set)
+                            robot, ik_set, **kw_args)
                     else:
                         traj = delegate_planner.PlanToConfiguration(
-                            robot, ik_set[0])
+                            robot, ik_set[0], **kw_args)
 
                     logger.info('Planned to IK solution set %d of %d.',
                                 i + 1, num_attempts)

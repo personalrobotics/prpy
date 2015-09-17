@@ -415,6 +415,9 @@ object is referenced.
 
 See the classes in `prpy.base` for example implementations of `CloneBindings`.
 
+## Dependencies
+To run prpy, you will need to have installed the pacakge enum34. To do that, go to a local directory and run 
+``sudo pip install enum34``
 
 ## License
 

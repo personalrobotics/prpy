@@ -2,6 +2,86 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.2.0 (2015-08-06)
+------------------
+* Add support for numpy <1.8 which don't support norm(axis=1)
+* Moved CBiRRT TSR serialization into cbirrt.py.
+* Added TSR conversion methods for JSON and YAML.
+* Added generic-object TSRs.
+* Added termcolor dependency.
+* Changed retimers to only Simplify untimed trajectories.
+* Refactored trajectory timing check into utility function.
+* Added check for deltatime without hardcoded any strings.
+* Added proper checking for trajectory timing and length.
+* Added a check within snap planner for one-waypoint trajectories.
+* Added forwarding of kwargs to TSRPlanner's delegate planner.
+* Changed default 'execute' behavior to False.
+* Added support for environment (de)serialization.
+* Added missing environment locks.
+* Added `defer` handling to the checks in ExecuteTrajectory.
+* Added several checks to the ExecuteTrajectory.
+* Jen's uncommited tweaks to the mobile base in simulation vs reality
+* Updating error handling to more correct syntax
+* Use all trajectory DOFs instead of active.
+* Changed loggers to use '__name__' instead of explicit paths.
+* Added a check within snap planner for one-waypoint trajectories.
+* Changed InstanceDeduplicator to use module-logger.
+* Changed defaults in the HauserParabolicSmoother.
+* Added HauserParabolicSmoother timelimit parameter.
+* Added more fine-grained planning exceptions.
+* Moved planning exceptions to a separate file.
+* Contributors: Aaron Johnson, Chris Dellin, Jennifer King, Michael Koval, Pras Velagapudi, Rachel Holladay
+
+1.1.0 (2015-06-01)
+------------------
+* Adding tags for capturing trajectory timing data
+* Update README.md
+  Added enum34 dependency instructions into README
+* Contributors: Jennifer King, Michael Koval, Stefanos Nikolaidis
+
+1.0.0 (2015-05-01)
+------------------
+* Adding planner and planning_method and trajectory tag constants
+* Removing smooth tag from SBPL trajectory
+* Adding helper function for finding catkin resources
+* Fixing bug in name of returned variable from Rotate and Forward
+* Simplified logic in PostProcessPath.
+* Removing need for ExecuteBasePath. Instead base planning now uses ExecutePath.
+* Removing unecessary logging
+* Various fixes/enhancements: 1. Base planners no longer add non-PlanningMethod functions as attributes to robot, 2. Removed double call to SimplifyTrajectory in retimer.py, 3. Changed default smoother to HauserParabolicSmoother, 4. Changed default simplifier to None
+* Fixing format error when raising value error. Fixing logic error in handling defer flag.
+* Restructured defer fixes to raise exception.
+  Instead of printing a warning, this restructures the `defer` argument
+  checking to raise an exception if an invalid value has been provided.
+* Print a warning if defer is not a boolean.
+* Print a warning if GetTrajectoryTags is not JSON.
+* Mico Refactor
+* Changed defer checks to use explicit `is True`.
+  Using `if defer is True:` for checks instead of `if defer:` catches a
+  lot of weird errors that can occur if the positional args to any of the
+  reflected planning-method functions are shifted by one.
+  The previous check would return a Future if an extra argument got
+  passed, which concealed exceptions indicating that the arguments made
+  no sense, and would be passed to subsequent code until something
+  actually tried to query a Trajectory method on the Future.
+* Changed GetTrajectoryTags() to EAFP-style.
+  Instead of using an if-check, GetTrajectoryTags() now just tries
+  JSON deserialization and catches a ValueError. This is more robust as
+  it also catches situations where the deserialization fails due to the
+  trajectory description being invalid or whitespace, but not None.
+* added kwargs to ExecuteTrajectory and PostProcessPath
+* Switched to emprical acceleration limits.
+* CBiRRT and OpenRAVERetimer now use CO_ActiveOnly
+* increased the accelearation limtis
+* Clear UserData in prpy.Clone (fixes `#111 <https://github.com/personalrobotics/prpy/issues/111>`_ and `#114 <https://github.com/personalrobotics/prpy/issues/114>`_)
+* Convert CBiRRT "direction" to a NumPy array.
+* Removed references to numpy.isclose (`#63 <https://github.com/personalrobotics/prpy/issues/63>`_).
+* Added `releasegil` flags to every FindIKSolution(s) call in prpy.
+* Released GIL during TSR Planner.
+  This prevents unnecessary hangs during planning when using python
+  threads.  I see no cases where this would not be necessary.
+* Contributors: ADA Demo, Jennifer King, Michael Koval, Pras, Pras Velagapudi, Rachel Holladay, Stefanos Nikolaidis
+
 0.5.1 (2015-04-15)
 ------------------
 * Merge branch 'feature/MICORefactor' of github.com:personalrobotics/prpy into feature/MICORefactor

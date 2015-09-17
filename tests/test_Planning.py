@@ -3,6 +3,7 @@ import openravepy
 import unittest
 import numpy
 from openravepy import Environment
+from prpy.clone import CloneException
 from prpy.planning.base import PlanningError
 from prpy.planning.cbirrt import CBiRRTPlanner
 from prpy.planning.ompl import OMPLPlanner, OMPLSimplifier
@@ -183,7 +184,7 @@ class PlanToConfigurationTest(object):
             self.robot.SetActiveDOFValues(self.config_self_collision)
 
         # Test/Assert
-        with self.assertRaises(PlanningError):
+        with self.assertRaises((PlanningError, CloneException)):
             self.planner.PlanToConfiguration(
                 self.robot, self.config_feasible_goal)
 
@@ -255,7 +256,7 @@ class PlanToEndEffectorPoseTest(object):
             self.robot.SetActiveDOFValues(self.config_self_collision)
 
         # Test/Assert
-        with self.assertRaises(PlanningError):
+        with self.assertRaises((PlanningError, CloneException)):
             self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
 
     def test_PlanToEndEffectorPose_GoalInCollision_Throws(self):

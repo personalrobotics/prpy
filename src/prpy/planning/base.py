@@ -34,21 +34,19 @@ import logging
 import openravepy
 from ..clone import Clone
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
+from .exceptions import PlanningError, UnsupportedPlanningError
 
-logger = logging.getLogger('planning')
+logger = logging.getLogger(__name__)
 
 
 class Tags(object):
     SMOOTH = 'smooth'
     CONSTRAINED = 'constrained'
-
-
-class PlanningError(Exception):
-    pass
-
-
-class UnsupportedPlanningError(PlanningError):
-    pass
+    PLANNER = 'planner'
+    METHOD = 'planning_method'
+    PLAN_TIME = 'planning_time'
+    POSTPROCESS_TIME = 'postprocess_time'
+    EXECUTION_TIME = 'execution_time'
 
 
 class MetaPlanningError(PlanningError):
@@ -80,8 +78,8 @@ class PlanningMethod(object):
                     # used to generate it. We don't overwrite these tags if
                     # they already exist.
                     tags = GetTrajectoryTags(planner_traj)
-                    tags.setdefault('planner', instance.__class__.__name__)
-                    tags.setdefault('planning_method', self.func.__name__)
+                    tags.setdefault(Tags.PLANNER, instance.__class__.__name__)
+                    tags.setdefault(Tags.METHOD, self.func.__name__)
                     SetTrajectoryTags(planner_traj, tags, append=False)
 
                     return CopyTrajectory(planner_traj, env=env)
@@ -121,12 +119,14 @@ class Planner(object):
 
 class BasePlanner(Planner):
     def __init__(self):
+        super(BasePlanner, self).__init__()
         self.env = openravepy.Environment()
 
 class MetaPlanner(Planner):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self):
+        super(MetaPlanner, self).__init__()
         self._planners = list()
 
     def has_planning_method(self, method_name):
@@ -183,7 +183,7 @@ class MetaPlanner(Planner):
         meta_wrapper.__name__ = method_name
         docstrings = list()
         for planner in self.get_planners_recursive(method_name):
-            if hasattr(planner, method_name):
+            if planner.has_planning_method(method_name):
                 planner_method = getattr(planner, method_name)
                 docstrings.append((planner, planner_method))
 
@@ -218,6 +218,7 @@ class MetaPlanner(Planner):
 
 class Sequence(MetaPlanner):
     def __init__(self, *planners):
+        super(Sequence, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -225,7 +226,7 @@ class Sequence(MetaPlanner):
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
-                if hasattr(planner, method_name)]
+                if planner.has_planning_method(method_name)]
 
     def plan(self, method, args, kw_args):
         from ..util import Timer
@@ -234,7 +235,7 @@ class Sequence(MetaPlanner):
 
         for planner in self._planners:
             try:
-                if hasattr(planner, method):
+                if planner.has_planning_method(method):
                     logger.info('Sequence - Calling planner "%s".', str(planner))
                     planner_method = getattr(planner, method)
                     kw_args['defer'] = False
@@ -261,6 +262,7 @@ class Sequence(MetaPlanner):
 
 class Ranked(MetaPlanner):
     def __init__(self, *planners):
+        super(Ranked, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -268,7 +270,7 @@ class Ranked(MetaPlanner):
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
-                if hasattr(planner, method_name)]
+                if planner.has_planning_method(method_name)]
 
     def plan(self, method, args, kw_args):
         all_planners = self._planners
@@ -277,7 +279,7 @@ class Ranked(MetaPlanner):
 
         # Find only planners that support the required planning method.
         for index, planner in enumerate(all_planners):
-            if not hasattr(planner, method):
+            if not planner.has_planning_method(method):
                 results[index] = PlanningError(
                     "{:s} does not implement method {:s}."
                     .format(planner, method)
@@ -330,6 +332,7 @@ class Ranked(MetaPlanner):
 
 class FirstSupported(MetaPlanner):
     def __init__(self, *planners):
+        super(FirstSupported, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -337,7 +340,7 @@ class FirstSupported(MetaPlanner):
 
     def get_planners(self, method_name):
         return [planner for planner in self._planners
-                if hasattr(planner, method_name)]
+                if planner.has_planning_method(method_name)]
 
     def plan(self, method, args, kw_args):
         for planner in self._planners:
@@ -354,6 +357,7 @@ class FirstSupported(MetaPlanner):
 
 class MethodMask(MetaPlanner):
     def __init__(self, planner, methods):
+        super(MethodMask, self).__init__()
         self._methods = set(methods)
         self._planner = planner
         self._planners = [planner]

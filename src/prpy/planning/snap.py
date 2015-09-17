@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -32,6 +32,7 @@ import openravepy
 from ..util import SetTrajectoryTags
 from base import BasePlanner, PlanningError, PlanningMethod, Tags
 
+
 class SnapPlanner(BasePlanner):
     """Planner that checks the straight-line trajectory to the goal.
 
@@ -40,7 +41,7 @@ class SnapPlanner(BasePlanner):
     due to an environment or self collision, the planner immediately returns
     failure by raising a PlanningError. Collision checking is performed using
     the standard CheckPathAllConstraints method.
-    
+
     SnapPlanner is intended to be used only as a "short circuit" to speed up
     planning between nearby configurations. This planner is most commonly used
     as the first item in a Sequence meta-planner to avoid calling a motion
@@ -48,7 +49,7 @@ class SnapPlanner(BasePlanner):
     """
     def __init__(self):
         super(SnapPlanner, self).__init__()
- 
+
     def __str__(self):
         return 'SnapPlanner'
 
@@ -86,9 +87,11 @@ class SnapPlanner(BasePlanner):
         # close to the configuration of the arm, so we don't need to do any
         # custom IK ranking.
         manipulator = robot.GetActiveManipulator()
-        current_config = robot.GetDOFValues(manipulator.GetArmIndices())
         ik_param = openravepy.IkParameterization(goal_pose, ikp.Transform6D)
-        ik_solution = manipulator.FindIKSolution(ik_param, ikfo.CheckEnvCollisions)
+        ik_solution = manipulator.FindIKSolution(
+            ik_param, ikfo.CheckEnvCollisions,
+            ikreturn=False, releasegil=True
+        )
 
         if ik_solution is None:
             raise PlanningError('There is no IK solution at the goal pose.')
@@ -98,7 +101,7 @@ class SnapPlanner(BasePlanner):
     def _Snap(self, robot, goal, **kw_args):
         Closed = openravepy.Interval.Closed
 
-        curr = robot.GetActiveDOFValues()
+        start = robot.GetActiveDOFValues()
         active_indices = robot.GetActiveDOFIndices()
 
         # Use the CheckPathAllConstraints helper function to collision check
@@ -107,7 +110,7 @@ class SnapPlanner(BasePlanner):
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
         params.SetGoalConfig(goal)
-        check = params.CheckPathAllConstraints(curr, goal, [], [], 0., Closed)
+        check = params.CheckPathAllConstraints(start, goal, [], [], 0., Closed)
 
         # The function returns a bitmask of ConstraintFilterOptions flags,
         # indicating which constraints are violated. We'll abort if any
@@ -115,20 +118,24 @@ class SnapPlanner(BasePlanner):
         if check != 0:
             raise PlanningError('Straight line trajectory is not valid.')
 
-        # Create a two-point trajectory that starts at our current
-        # configuration and takes us to the goal.
-        traj = openravepy.RaveCreateTrajectory(self.env, '')
+        # Create a trajectory that starts at our current configuration.
         cspec = robot.GetActiveConfigurationSpecification()
-        active_indices = robot.GetActiveDOFIndices()
-
-        waypoints = numpy.zeros((2, cspec.GetDOF()))
-        cspec.InsertJointValues(waypoints[0, :], curr, robot,
-                                active_indices, False)
-        cspec.InsertJointValues(waypoints[1, :], goal, robot,
-                                active_indices, False)
-
+        traj = openravepy.RaveCreateTrajectory(self.env, '')
         traj.Init(cspec)
-        traj.Insert(0, waypoints.ravel())
 
+        start_waypoint = numpy.zeros(cspec.GetDOF())
+        cspec.InsertJointValues(start_waypoint, start, robot,
+                                active_indices, False)
+        traj.Insert(0, start_waypoint.ravel())
+
+        # Make the trajectory end at the goal configuration, as long as it
+        # was not identical to the start configuration.
+        if not numpy.allclose(start, goal):
+            goal_waypoint = numpy.zeros(cspec.GetDOF())
+            cspec.InsertJointValues(goal_waypoint, goal, robot,
+                                    active_indices, False)
+            traj.Insert(1, goal_waypoint.ravel())
+
+        # Tag the return trajectory as smooth (in joint space) and return it.
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
