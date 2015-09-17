@@ -125,21 +125,16 @@ class BlockDetector(PerceptionModule):
             env = robot.GetEnv()
 
             # Get the pr-ordata package path
+            import prpy.util
             data_dir = prpy.util.FindCatkinResource('pr_ordata', 'data')
             block_path = os.path.join(data_dir, 'objects', 'block.kinbody.xml')
-                    
-            # Place blocks in a pattern on the table
-            #table_aabb = table.ComputeAABB()
-            #table_height = table_aabb.pos()[2] + table_aabb.extents()[2]
-            #table_corner = numpy.eye(4)
-            #table_corner[:3,3] = [table_aabb.pos()[0] - table_aabb.extents()[0],
-            #                      table_aabb.pos()[1] - table_aabb.extents()[1],
-            #                      table_height]
             
             detected_blocks = self.find_blocks(cloud_topic=self.point_cloud_topic)
-
-            table_in_world = table.GetTransform();
-            table_aabb = table.ComputeAABB()
+        
+            # Place blocks on the table
+            from prpy.util import ComputeEnabledAABB
+            with prpy.rave.Disabled(table, padding_only=True):
+                table_aabb = ComputeEnabledAABB(table)
             z = table_aabb.pos()[2] + table_aabb.extents()[2] + table_z_offset #OFFSET SET AT TOP
 
             for b in detected_blocks:
