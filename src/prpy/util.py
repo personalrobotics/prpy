@@ -730,6 +730,27 @@ def IsTimedTrajectory(trajectory):
     return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
 
 
+def UntimeTrajectory(trajectory, env=None):
+    """
+    Returns an untimed copy of the provided trajectory.
+
+    This function strips the DeltaTime group from a timed trajectory to create
+    an untimed trajectory.
+
+    @param trajectory: an OpenRAVE trajectory
+    @returns: an untimed copy of the provided trajectory.
+    """
+    cspec = trajectory.GetConfigurationSpecification()
+    cspec.RemoveGroups('deltatime', True)
+    waypoints = trajectory.GetWaypoints(0, trajectory.GetNumWaypoints(), cspec)
+
+    path = openravepy.RaveCreateTrajectory(env or trajectory.GetEnv(),
+                                           trajectory.GetXMLId())
+    path.Init(cspec)
+    path.Insert(0, waypoints)
+    return path
+
+
 def ComputeUnitTiming(robot, traj, env=None):
     """
     Compute the unit velocity timing of a path or trajectory.
