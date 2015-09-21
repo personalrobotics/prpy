@@ -761,8 +761,8 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
     @return pva_list List of list of derivatives at specified times.
                      Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the i-th derivative of position
-                     Of size |times| x |derivatives|
+                     The i-th element is the derivatives[i]-th derivative
+                     of position of size |times| x |derivatives|
 
     """
     duration = traj.GetDuration()
@@ -780,11 +780,9 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     for t in times:
         pva = [None] * len(derivatives)
         trajdata = traj.Sample(t)
-        for i in range(len(derivatives)):
-            if i in derivatives:
-                pva[i] = cspec.ExtractJointValues(trajdata, robot,
-                                                  dof_indices, i)
-        pva_list.append(pva)
+    for i, deriv in enumerate(derivatives):
+        pva[i] = cspec.ExtractJointValues(trajdata, robot, dof_indices, deriv)
+    pva_list.append(pva)
 
     return pva_list
 
@@ -799,8 +797,8 @@ def JointStateFromTraj(robot, traj, time, derivatives=[0, 1, 2]):
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
     @return pva_list List of list of derivatives at specified times.
                      Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the i-th derivative of position
-                     Of size |times| x |derivatives|
+                     The i-th element is the derivatives[i]-th derivative
+                     of position of size |times| x |derivatives|
     """
     return JointStatesFromTraj(robot, traj, (time,), derivatives)[0]
 
@@ -820,8 +818,8 @@ def BodyPointsStatesFromJointStates(bodypoints,
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
     @return bodypoint_list List of list of derivatives at specified times.
                            Inserts 'None' for unavailable or undesired fields
-                           The i-th element is the i-th derivative of position
-                           Of size |jointstates| x |bodypoints| x |derivatives|
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
     """
 
     # Convert derivatives to numpy array
@@ -895,8 +893,8 @@ def BodyPointsStatesFromJointState(bodypoints, jointstate,
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
     @return bodypoint_list List of list of derivatives at specified times.
                            Inserts 'None' for unavailable or undesired fields
-                           The i-th element is the i-th derivative of position
-                           Of size |jointstates| x |bodypoints| x |derivatives|
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
     """
     return BodyPointsStatesFromJointStates(bodypoints, (jointstate,),
                                            derivatives)[0]
@@ -915,8 +913,8 @@ def BodyPointsStatesFromTraj(bodypoints, traj, times, derivatives=[0, 1, 2]):
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
     @return bodypoint_list List of list of derivatives at specified times.
                            Inserts 'None' for unavailable or undesired fields
-                           The i-th element is the i-th derivative of position
-                           Of size |jointstates| x |bodypoints| x |derivatives|
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
     """
     # Assume everything belongs to the same robot
     robot = bodypoints[0][0].manipulator.GetRobot()
@@ -939,7 +937,7 @@ def BodyPointsStateFromTraj(bodypoints, traj, time, derivatives=[0, 1, 2]):
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
     @return bodypoint_list List of list of derivatives at specified times.
                            Inserts 'None' for unavailable or undesired fields
-                           The i-th element is the i-th derivative of position
-                           Of size |jointstates| x |bodypoints| x |derivatives|
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
     """
     return BodyPointsStatesFromTraj(bodypoints, traj, (time,), derivatives)[0]
