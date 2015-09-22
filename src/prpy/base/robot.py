@@ -447,6 +447,13 @@ class Robot(openravepy.Robot):
         if traj.GetNumWaypoints() <= 0:
             raise ValueError('Trajectory must contain at least one waypoint.')
 
+        # Check if this trajectory contains both affine and joint DOFs
+        cspec = traj.GetConfigurationSpecification()
+        needs_base = util.HasAffineDOFs(cspec)
+        needs_joints = util.HasJointDOFs(cspec)
+        if needs_base and needs_joints:
+            raise ValueError('Trajectories with affine and joint DOFs are not supported')
+
         # Check that the current configuration of the robot matches the
         # initial configuration specified by the trajectory.
         if not util.IsAtTrajectoryStart(self, traj):
@@ -474,9 +481,6 @@ class Robot(openravepy.Robot):
             warnings.warn('Executing zero-length trajectory. Please update the'
                           ' function that produced this trajectory to return a'
                           ' single-waypoint trajectory.', FutureWarning)
-
-        # TODO: Check if this trajectory contains the base.
-        needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
 

@@ -96,17 +96,23 @@ def CreatePlannerParametersString(options, params=None,
 
     return lxml.etree.tostring(params_xml)
 
-def HasAffineDOFs(cspec):
-    def has_group(cspec, group_name):
-        try:
-            cspec.GetGroupFromName(group_name)
-            return True
-        except openravepy.openrave_exception:
-            return False
+def HasGroup(cspec, group_name):
+    try:
+        cspec.GetGroupFromName(group_name)
+        return True
+    except openravepy.openrave_exception:
+        return False
 
-    return (has_group(cspec, 'affine_transform')
-         or has_group(cspec, 'affine_velocities')
-         or has_group(cspec, 'affine_accelerations'))
+def HasAffineDOFs(cspec):
+    return (HasGroup(cspec, 'affine_transform')
+         or HasGroup(cspec, 'affine_velocities')
+         or HasGroup(cspec, 'affine_accelerations'))
+
+def HasJointDOFs(cspec):
+    return (HasGroup(cspec, 'joint_values')
+            or HasGroup(cspec, 'joint_velocities')
+            or HasGroup(cspec, 'joint_accelerations')
+            or HasGroup(cspec, 'joint_torques'))
 
 def GetTrajectoryIndices(traj):
     try:
@@ -710,28 +716,55 @@ def IsAtTrajectoryStart(robot, trajectory):
     @returns: True if the robot's active DOFs match the given trajectory
               False if one or more active DOFs differ by DOF resolution
     """
-    # Get used indices and starting configuration from trajectory.
     cspec = trajectory.GetConfigurationSpecification()
-    dof_indices, _ = cspec.ExtractUsedIndices(robot)
-    traj_values = cspec.ExtractJointValues(
-        trajectory.GetWaypoint(0), robot, dof_indices)
+    needs_base = HasAffineDOFs(cspec)
+    needs_joints = HasJointDOFs(cspec)
+    
+    if needs_base and needs_joints:
+        raise ValueError('Trajectories with affine and joint DOFs are not supported')
 
-    # Get current configuration of robot for used indices.
-    with robot.GetEnv():
-        robot_values = robot.GetDOFValues(dof_indices)
-        dof_resolutions = robot.GetDOFResolutions(dof_indices)
+    if needs_base:
+        doft = openravepy.DOFAffine.X | openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis
+        current_pose = openravepy.RaveGetAffineDOFValuesFromTransform(robot.GetTransform(), doft)
+        start_transform = numpy.eye(4)
+        start_transform = cspec.ExtractTransform(start_transform, trajectory.GetWaypoint(0), robot)
+        traj_start = openravepy.RaveGetAffineDOFValuesFromTransform(start_transform, doft)
 
-    # Check deviation in each DOF, using OpenRAVE's SubtractValue function.
-    dof_infos = zip(dof_indices, traj_values, robot_values, dof_resolutions)
-    for dof_index, traj_value, robot_value, dof_resolution in dof_infos:
-        # Look up the Joint and Axis of the DOF from the robot.
-        joint = robot.GetJointFromDOFIndex(dof_index)
-        axis = dof_index - joint.GetDOFIndex()
-
-        # If any joint deviates too much, return False.
-        delta_value = abs(joint.SubtractValue(traj_value, robot_value, axis))
-        if delta_value > dof_resolution:
+        # Compare translation distance
+        trans_delta_value = abs(current_pose[:2] - traj_start[:2])
+        trans_resolution = robot.GetAffineTranslationResolution()[:2]
+        if trans_delta_value[0] > trans_resolution[0] or \
+           trans_delta_value[1] > trans_resolution[1]:
             return False
+        
+        # Compare rotation distance
+        rot_delta_value = (current_pose[2] - traj_start[2] + numpy.pi) % (2.*numpy.pi) - numpy.pi
+        rot_resolution = robot.GetAffineRotationAxisResolution()[2] # Rotation about z?
+        if rot_delta_value > rot_resolution:
+            return False
+
+    else:
+        # Get used indices and starting configuration from trajectory.
+        dof_indices, _ = cspec.ExtractUsedIndices(robot)
+        traj_values = cspec.ExtractJointValues(
+            trajectory.GetWaypoint(0), robot, dof_indices)
+
+        # Get current configuration of robot for used indices.
+        with robot.GetEnv():
+            robot_values = robot.GetDOFValues(dof_indices)
+            dof_resolutions = robot.GetDOFResolutions(dof_indices)
+            
+        # Check deviation in each DOF, using OpenRAVE's SubtractValue function.
+        dof_infos = zip(dof_indices, traj_values, robot_values, dof_resolutions)
+        for dof_index, traj_value, robot_value, dof_resolution in dof_infos:
+            # Look up the Joint and Axis of the DOF from the robot.
+            joint = robot.GetJointFromDOFIndex(dof_index)
+            axis = dof_index - joint.GetDOFIndex()
+            
+            # If any joint deviates too much, return False.
+            delta_value = abs(joint.SubtractValue(traj_value, robot_value, axis))
+            if delta_value > dof_resolution:
+                return False
 
     # If all joints match, return True.
     return True
