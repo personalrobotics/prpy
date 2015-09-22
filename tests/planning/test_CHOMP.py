@@ -1,10 +1,5 @@
-#!/usr/bin/env python
-import os
-if os.environ.get('ROS_DISTRO', 'hydro')[0] in 'abcdef':
-    import roslib; roslib.load_manifest('prpy')
+from unittest import TestCase
 
-import openravepy, unittest, numpy
-from prpy.planning.chomp import DistanceFieldManager
 
 class CHOMPModuleMock(object):
     def __init__(self, env):
@@ -33,9 +28,13 @@ class CHOMPModuleMock(object):
         })
         self.sequence += 1
 
-class DistanceFieldManagerTest(unittest.TestCase):
+
+class DistanceFieldManagerTest(TestCase):
     def setUp(self):
-        self.env = openravepy.Environment()
+        from prpy.planning.chomp import DistanceFieldManager
+        from openravepy import Environment
+
+        self.env = Environment()
         self.env.Load('data/wamtest2.env.xml')
         self.robot = self.env.GetRobot('BarrettWAM')
         self.body = self.env.GetKinBody('mug-table')
@@ -161,5 +160,5 @@ class DistanceFieldManagerTest(unittest.TestCase):
         self.assertLess(self.module.removefield_args[0]['__sequence__'],
                         self.module.computedistancefield_args[0]['__sequence__'])
 
-if __name__ == '__main__':
-    unittest.main()
+
+# TODO: Also add tests for the CHOMP planner.
