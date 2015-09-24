@@ -723,6 +723,9 @@ def IsAtTrajectoryStart(robot, trajectory):
     if needs_base and needs_joints:
         raise ValueError('Trajectories with affine and joint DOFs are not supported')
 
+    if trajectory.GetEnv() != robot.GetEnv():
+        raise ValueError('The environment attached to the trajectory does not match the environment attached to the robot')
+
     if needs_base:
         doft = openravepy.DOFAffine.X | openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis
         current_pose = openravepy.RaveGetAffineDOFValuesFromTransform(robot.GetTransform(), doft)
