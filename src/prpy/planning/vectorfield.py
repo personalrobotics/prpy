@@ -361,7 +361,11 @@ class VectorFieldPlanner(BasePlanner):
             path.Sample(t_cache), cspec)
 
         # Flag this trajectory as constrained.
-        # TODO: Flag this trajectory as timed.
-        util.SetTrajectoryTags(output_path, {Tags.CONSTRAINED: 'true'}, append=True)
+        util.SetTrajectoryTags(
+            output_path, {
+                Tags.CONSTRAINED: 'true',
+                Tags.SMOOTH: 'true'
+            }, append=True
+        )
         return output_path
 
