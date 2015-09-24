@@ -32,15 +32,95 @@ https://www.safaribooksonline.com/blog/2014/02/11/altering-display-existing-clas
 """
 import logging
 import io
+import os
 import scipy
 import openravepy
 from IPython import get_ipython
 
 logger = logging.getLogger(__name__)
+_module_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+def GeometryToDict(geometry):
+    """ Convert an OpenRAVE Geometry to a dictionary of properties. """
+    props = dict()
+    props['transform'] = geometry.GetTransformPose()
+    props['color'] = {
+        'diffuse': geometry.GetDiffuseColor(),
+        'ambient': geometry.GetDiffuseColor(),
+        'transparency': geometry.GetTransparency()
+    }
+    props['render'] = {
+        'filename': geometry.GetRenderFilename(),
+        'scale': geometry.GetRenderScale(),
+    }
+
+    geometry_type = geometry.GetType()
+    geometry_mesh = geometry.GetCollisionMesh()
+    props['collision'] = {
+        'type': geometry_type,
+        'indices': geometry_mesh.indices,
+        'vertices': geometry_mesh.vertices
+    }
+
+    if geometry_type == openravepy.GeometryType.Box:
+        props['collision']['extents'] = geometry.GetBoxExtents()
+    elif geometry_type == openravepy.GeometryType.Cylinder:
+        props['collision']['height'] = geometry.GetCylinderHeight()
+        props['collision']['radius'] = geometry.GetCylinderRadius()
+    elif geometry_type == openravepy.GeometryType.None:
+        pass
+    elif geometry_type == openravepy.GeometryType.Sphere:
+        props['collision']['radius'] = geometry.GetSphereRadius()
+    elif geometry_type == openravepy.GeometryType.Trimesh:
+        pass
+    else:
+        logger.warn("Found unexpected geometry type: {:d}"
+                    .format(geometry_type))
+
+    return props
+
+
+def LinkToDict(link):
+    """ Convert an OpenRAVE Link to a dictionary of properties. """
+    props = {
+        'name': link.GetName(),
+        'transform': link.GetTransformPose()
+    }
+
+    props['geometries'] = [GeometryToDict(g)
+                           for g in link.GetGeometries() if g.IsVisible()]
+
+    return props
+
+
+def BodyToDict(body):
+    """ Convert an OpenRAVE Body to a dictionary of properties. """
+    props = {
+        'name': body.GetName(),
+        'transform': body.GetTransformPose()
+    }
+
+    props['links'] = [LinkToDict(l)
+                      for l in body.GetLinks() if l.IsVisible()]
+
+    return props
 
 
 def EnvironmentToHTML(env):
-    return "<html><body>HELLO I AM CHEESE</body></html"
+    import jinja2
+    j2 = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(_module_dir),
+        trim_blocks=True
+    )
+
+    # Get all of the geometries in this OpenRAVE environment.
+    bodies = [BodyToDict(body)
+              for body in env.GetBodies() if body.IsVisible()]
+
+    return j2.get_template('environment_test.html').render(
+        bodies=bodies
+    )
 
 
 def EnvironmentToPNG(env, width=640, height=480):
@@ -83,6 +163,9 @@ def Initialize():
     # Register a handler for the OpenRAVE HTML formatter.
     html_formatter = ip.display_formatter.formatters['text/html']
     html_formatter.for_type(openravepy.Environment, EnvironmentToHTML)
+
+    # png_formatter = ip.display_formatter.formatters['image/png']
+    # png_formatter.for_type(openravepy.Environment, EnvironmentToPNG)
 
 # Try to load the extensions into the current environment.
 Initialize()
