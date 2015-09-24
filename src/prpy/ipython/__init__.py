@@ -25,3 +25,64 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+"""
+This module implements some custom representation types based on:
+https://ipython.org/ipython-doc/dev/config/integrating.html
+https://www.safaribooksonline.com/blog/2014/02/11/altering-display-existing-classes-ipython/
+"""
+import logging
+import io
+import scipy
+import openravepy
+from IPython import get_ipython
+
+logger = logging.getLogger(__name__)
+
+
+def EnvironmentToHTML(env):
+    return "<html><body>HELLO I AM CHEESE</body></html"
+
+
+def EnvironmentToPNG(env, width=640, height=480):
+    """
+    Takes a screenshot of the OpenRAVE environment and returns it as a PNG.
+
+    This requires a screenshot capable viewer to be attached to the
+    environment.
+
+    @param env the environment that should be displayed
+    """
+    image_buffer = io.BytesIO()
+    intrinsics = [width, width, width/2., height/2.]
+
+    viewer = env.GetViewer()
+    # Get the environment viewer used to generate a screenshot.
+    if not viewer:
+        logger.warn("Unable to generate PNG: no viewer was attached.")
+        return image_buffer.getvalue()
+
+    # Attempt to take a screenshot and compress it as a PNG.
+    try:
+        image = viewer.GetCameraImage(
+            width, height, env.GetViewer().GetCameraTransform(), intrinsics)
+        scipy.misc.imsave(image_buffer, image, format='png')
+    except openravepy.openrave_exception as e:
+        logger.warn("Unable to generate PNG: {:s}".format(e.message()))
+    return image_buffer.getvalue()
+
+
+def Initialize():
+    """
+    Loads IPython extensions into the current environment.
+    """
+    # Get IPython reference if it exists.
+    ip = get_ipython()
+    if not ip:
+        return
+
+    # Register a handler for the OpenRAVE HTML formatter.
+    html_formatter = ip.display_formatter.formatters['text/html']
+    html_formatter.for_type(openravepy.Environment, EnvironmentToHTML)
+
+# Try to load the extensions into the current environment.
+Initialize()
