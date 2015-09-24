@@ -41,12 +41,44 @@ logger = logging.getLogger(__name__)
 
 class Tags(object):
     SMOOTH = 'smooth'
+    """
+    The `SMOOTH` tag means waypoints are close enough together that we can
+    approximate derivatives at the waypoints using divided differences. i.e.
+    we can safely fit a spline without collision checking.
+    """
+
     CONSTRAINED = 'constrained'
+    """
+    The `CONSTRAINED` tag means that the geometric path described by these
+    waypoints respects a constraint.  This means that the path cannot be
+    geometrically altered arbitrarily, at the risk of violating the original
+    constraint, it should only be changed in timing.
+    """
+
     PLANNER = 'planner'
+    """
+    The name of the planner used to generate a trajectory.
+    """
+
     METHOD = 'planning_method'
+    """
+    The type of planning call used to generate a trajectory.
+    """
+
     PLAN_TIME = 'planning_time'
+    """
+    The amount of time that was spent by a planner finding a solution.
+    """
+
     POSTPROCESS_TIME = 'postprocess_time'
+    """
+    The amount of time that was spent modifying the trajectory for execution.
+    """
+
     EXECUTION_TIME = 'execution_time'
+    """
+    The amount of time that was spent actually running a trajectory.
+    """
 
 
 class MetaPlanningError(PlanningError):
