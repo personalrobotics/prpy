@@ -31,6 +31,7 @@
 import logging
 import numpy
 import openravepy
+import time
 import warnings
 from manipulator import Manipulator
 from prpy.clone import Clone
@@ -298,12 +299,16 @@ class WAM(Manipulator):
 
             manipulator.hand.TareForceTorqueSensor()
 
+            vl = manipulator.GetVelocityLimits()
             try:
+                manipulator.SetVelocityLimits(0.25*vl, 0.5)
                 robot.ExecutePath(path)
                 return False
             except exceptions.TrajectoryAborted as e:
                 logger.warn('MoveUntilTouch aborted: %s', str(e))
                 return True
+            finally:
+                manipulator.SetVelocityLimits(vl, 0.5)
         # Forward-simulate the motion until it hits an object.
         else:
             traj = robot.PostProcessPath(path)
