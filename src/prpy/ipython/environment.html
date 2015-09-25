@@ -70,6 +70,31 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         ambient.position.set(1.0, 1.0, 2.0);
         scene.add(ambient);
 
+        {% for scene in scenes -%}
+        // SCENES "{{ scene.name }}"
+        var scenes = {}
+        {
+            var scene = new THREE.Object3D();
+            {% for mesh in scene.meshes -%}
+            {
+                var geometry = new THREE.BufferGeometry();
+                var vertices = new Float32Array({{ mesh.vertices }});
+                geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+                var indices = new Uint16Array({{ mesh.indices }});
+                geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+                var mesh = new THREE.Mesh(geometry, material);
+                // mesh.position.set({{ mesh.position | join(', ') }});
+                // mesh.quaternion.set({{ mesh.quaternion | join(', ') }});
+
+                scene.add(mesh);
+            }
+            {% endfor %}
+            scenes['{{ scene.name }}'] = scene
+        }
+        {% endfor %}
+
         {% for body in bodies -%}
         {% for link in body.links -%}
         // LINK "{{ body.name }} - {{ link.name }}"
@@ -120,23 +145,11 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
 
                 link.add(mesh);
                 {%- else %}
-                {% for mesh in geom.render.meshes -%}
                 // RENDER
-                {
-                    var geometry = new THREE.BufferGeometry();
-                    var vertices = new Float32Array({{ mesh.vertices }});
-                    geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
-
-                    var indices = new Uint16Array({{ mesh.indices }});
-                    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-
-                    var mesh = new THREE.Mesh(geometry, material);
-                    mesh.position.set({{ geom.position | join(', ') }});
-                    mesh.quaternion.set({{ geom.quaternion | join(', ') }});
-
+                if ('{{ geom.render.filename }}' in scenes) {
+                    var mesh = scenes['{{ geom.render.filename }}'].clone()
                     link.add(mesh);
                 }
-                {% endfor %}
                 {%- endif %}
             }
             {% endfor %}

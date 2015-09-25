@@ -38,15 +38,21 @@ import openravepy
 
 logger = logging.getLogger(__name__)
 _module_dir = os.path.dirname(os.path.abspath(__file__))
+_render_cache = dict()
 
 
-def AssimpMeshToDict(mesh):
-    """ Convert an Assimp Mesh to a dictionary of properties """
+def AssimpSceneToDict(filename, scene):
+    """ Convert an Assimp Scene to a dictionary of properties """
     props = {
-        'indices': mesh.faces.ravel().tolist(),
-        'normals': mesh.normals.ravel().tolist(),
-        'vertices': mesh.vertices.ravel().tolist()
+        'name': filename
     }
+    props['meshes'] = [
+        {
+            'indices': mesh.faces.ravel().tolist(),
+            'normals': mesh.normals.ravel().tolist(),
+            'vertices': mesh.vertices.ravel().tolist()
+        } for mesh in scene.meshes
+    ]
     return props
 
 
@@ -96,13 +102,13 @@ def GeometryToDict(geometry):
         'scale': geometry_renderscale
     }
 
-    if geometry_renderfilename and 'ur10' in geometry_renderfilename:
-        # DEBUG: fix me!
-        print "LOADING {:s}".format(geometry_renderfilename)
-        import pyassimp
-        geometry_scene = pyassimp.load(geometry_renderfilename)
-        props['render']['meshes'] = [AssimpMeshToDict(mesh)
-                                     for mesh in geometry_scene.meshes]
+    if geometry_renderfilename:
+        if geometry_renderfilename not in _render_cache:
+            # DEBUG: fix me!
+            print "LOADING {:s}".format(geometry_renderfilename)
+            import pyassimp
+            scene = pyassimp.load(geometry_renderfilename)
+            _render_cache[geometry_renderfilename] = scene
 
     return props
 
@@ -116,8 +122,7 @@ def LinkToDict(link):
         'position': pose[4:]
     }
     props['geometries'] = [GeometryToDict(g)
-                           for g in link.GetGeometries()
-                           if g.IsVisible()]
+                           for g in link.GetGeometries() if g.IsVisible()]
     return props
 
 
@@ -154,8 +159,13 @@ def EnvironmentToHTML(env):
     bodies = [BodyToDict(body)
               for body in env.GetBodies() if body.IsVisible()]
 
+    # TODO: FIX THIS
+    scenes = [AssimpSceneToDict(name, scene)
+              for name, scene in _render_cache.iteritems()]
+
     return j2.get_template('environment.html').render(
-        bodies=bodies
+        bodies=bodies,
+        scenes=scenes
     )
 
 
@@ -207,6 +217,13 @@ def Initialize():
 
     # png_formatter = ip.display_formatter.formatters['image/png']
     # png_formatter.for_type(openravepy.Environment, EnvironmentToPNG)
+
+
+def ClearRenderCache():
+    """
+    Removes all previously loaded render meshes from the cache.
+    """
+    _render_cache.clear()
 
 # Try to load the extensions into the current environment.
 Initialize()
