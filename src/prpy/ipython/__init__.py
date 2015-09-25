@@ -40,6 +40,16 @@ logger = logging.getLogger(__name__)
 _module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
+def AssimpMeshToDict(mesh):
+    """ Convert an Assimp Mesh to a dictionary of properties """
+    props = {
+        'indices': mesh.faces.ravel().tolist(),
+        'normals': mesh.normals.ravel().tolist(),
+        'vertices': mesh.vertices.ravel().tolist()
+    }
+    return props
+
+
 def GeometryToDict(geometry):
     """ Convert an OpenRAVE Geometry to a dictionary of properties. """
     pose = geometry.GetTransformPose()
@@ -51,23 +61,20 @@ def GeometryToDict(geometry):
             'ambient': geometry.GetAmbientColor(),
             'opacity': 1.0 - geometry.GetTransparency(),
             'isTransparent': geometry.GetTransparency() > 0.0
-        },
-        'render': {
-            'filename': geometry.GetRenderFilename(),
-            'scale': geometry.GetRenderScale(),
         }
     }
 
+    # Store information about the collision mesh.
     geometry_type = geometry.GetType()
     geometry_mesh = geometry.GetCollisionMesh()
     props['collision'] = {
-        'type': geometry_type,
+        'type': str(geometry_type),
         'indices': geometry_mesh.indices.ravel().tolist(),
         'vertices': geometry_mesh.vertices.ravel().tolist()
     }
 
     if geometry_type == openravepy.GeometryType.Box:
-        props['collision']['extents'] = geometry.GetBoxExtents()
+        props['collision']['extents'] = 2*geometry.GetBoxExtents()
     elif geometry_type == openravepy.GeometryType.Cylinder:
         props['collision']['height'] = geometry.GetCylinderHeight()
         props['collision']['radius'] = geometry.GetCylinderRadius()
@@ -81,6 +88,22 @@ def GeometryToDict(geometry):
         logger.warn("Found unexpected geometry type: {:d}"
                     .format(geometry_type))
 
+    # Store information about the render mesh.
+    geometry_renderfilename = geometry.GetRenderFilename()
+    geometry_renderscale = geometry.GetRenderScale()
+    props['render'] = {
+        'filename': geometry_renderfilename,
+        'scale': geometry_renderscale
+    }
+
+    if geometry_renderfilename and 'ur10' in geometry_renderfilename:
+        # DEBUG: fix me!
+        print "LOADING {:s}".format(geometry_renderfilename)
+        import pyassimp
+        geometry_scene = pyassimp.load(geometry_renderfilename)
+        props['render']['meshes'] = [AssimpMeshToDict(mesh)
+                                     for mesh in geometry_scene.meshes]
+
     return props
 
 
@@ -93,8 +116,8 @@ def LinkToDict(link):
         'position': pose[4:]
     }
     props['geometries'] = [GeometryToDict(g)
-                           for g in link.GetGeometries()]
-    # if g.IsVisible()]  # TODO: Put this back later.
+                           for g in link.GetGeometries()
+                           if g.IsVisible()]
     return props
 
 
@@ -112,7 +135,17 @@ def BodyToDict(body):
 
 
 def EnvironmentToHTML(env):
-    import jinja2
+    try:
+        import jinja2
+    except ImportError:
+        raise ImportError('HTML OpenRAVE rendering requires Jinja2.')
+
+    try:
+        import pyassimp
+        assert pyassimp  # We use this import later, just test for it now.
+    except ImportError:
+        logger.warn("Render mesh display requires PyAssimp.")
+
     j2 = jinja2.Environment(
         loader=jinja2.FileSystemLoader(_module_dir)
     )

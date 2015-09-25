@@ -66,6 +66,10 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         light.position.set(1.0, 1.0, 2.0);
         scene.add(light);
 
+        var ambient = new THREE.AmbientLight(0x808080);
+        ambient.position.set(1.0, 1.0, 2.0);
+        scene.add(ambient);
+
         {% for body in bodies -%}
         {% for link in body.links -%}
         // LINK "{{ body.name }} - {{ link.name }}"
@@ -78,25 +82,62 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
             {% for geom in link.geometries -%}
             // GEOMETRY
             {
-                var geometry = new THREE.BufferGeometry();
-                var vertices = new Float32Array({{ geom.collision.vertices }});
-                var indices = new Uint16Array({{ geom.collision.indices }});
-
-                geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
-                geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-
+                {% if not geom.render.filename -%}
+                // COLLISION
+                // Type: {{ geom.collision.type }}
                 var material = new THREE.MeshLambertMaterial({
                     color: new THREE.Color({{ geom.color.diffuse | join(', ') }}),
-                    emissive: new THREE.Color({{ geom.color.diffuse | join(', ') }}),
+                    emissive: new THREE.Color({{ geom.color.ambient | join(', ') }}),
                     opacity: {{ geom.color.opacity }},
                     transparent: {% if geom.color.isTransparent %}true{% else %}false{% endif %}
                 });
+
+                {% if geom.collision.type == 'Box' -%}
+                var geometry = new THREE.BoxGeometry(
+                    {{ geom.collision.extents | join(', ') }}
+                );
+                {% elif geom.collision.type == 'Cylinder' -%}
+                var geometry = new THREE.CylinderGeometry(
+                    {{ geom.collision.radius }}, {{ geom.collision.radius }},
+                    {{ geom.collision.height }}, 32
+                );
+                {% elif geom.collision.type == 'Sphere' -%}
+                var geometry = new THREE.SphereGeometry(
+                    {{ geom.collision.radius }}, 32, 32
+                );
+                {% elif geom.collision.type == 'Trimesh' -%}
+                var geometry = new THREE.BufferGeometry();
+                var vertices = new Float32Array({{ geom.collision.vertices }});
+                geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+                var indices = new Uint16Array({{ geom.collision.indices }});
+                geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+                {%- endif -%}
 
                 var mesh = new THREE.Mesh(geometry, material);
                 mesh.position.set({{ geom.position | join(', ') }});
                 mesh.quaternion.set({{ geom.quaternion | join(', ') }});
 
                 link.add(mesh);
+                {%- else %}
+                {% for mesh in geom.render.meshes -%}
+                // RENDER
+                {
+                    var geometry = new THREE.BufferGeometry();
+                    var vertices = new Float32Array({{ mesh.vertices }});
+                    geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+                    var indices = new Uint16Array({{ mesh.indices }});
+                    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+                    var mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set({{ geom.position | join(', ') }});
+                    mesh.quaternion.set({{ geom.quaternion | join(', ') }});
+
+                    link.add(mesh);
+                }
+                {% endfor %}
+                {%- endif %}
             }
             {% endfor %}
             scene.add(link);
