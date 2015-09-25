@@ -1,4 +1,4 @@
-# Copyright (c) 2013, Carnegie Mellon University
+# Copyright (c) 2015, Carnegie Mellon University
 # All rights reserved.
 # Authors: Pras Velagapudi <pkv@cs.cmu.edu>
 #
@@ -35,7 +35,6 @@ import io
 import os
 import scipy
 import openravepy
-from IPython import get_ipython
 
 logger = logging.getLogger(__name__)
 _module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -43,24 +42,28 @@ _module_dir = os.path.dirname(os.path.abspath(__file__))
 
 def GeometryToDict(geometry):
     """ Convert an OpenRAVE Geometry to a dictionary of properties. """
-    props = dict()
-    props['transform'] = geometry.GetTransformPose()
-    props['color'] = {
-        'diffuse': geometry.GetDiffuseColor(),
-        'ambient': geometry.GetDiffuseColor(),
-        'transparency': geometry.GetTransparency()
-    }
-    props['render'] = {
-        'filename': geometry.GetRenderFilename(),
-        'scale': geometry.GetRenderScale(),
+    pose = geometry.GetTransformPose()
+    props = {
+        'quaternion': pose[[1, 2, 3, 0]],  # Reorder (w,x,y,z) to (x,y,z,w).
+        'position': pose[4:],
+        'color': {
+            'diffuse': geometry.GetDiffuseColor(),
+            'ambient': geometry.GetAmbientColor(),
+            'opacity': 1.0 - geometry.GetTransparency(),
+            'isTransparent': geometry.GetTransparency() > 0.0
+        },
+        'render': {
+            'filename': geometry.GetRenderFilename(),
+            'scale': geometry.GetRenderScale(),
+        }
     }
 
     geometry_type = geometry.GetType()
     geometry_mesh = geometry.GetCollisionMesh()
     props['collision'] = {
         'type': geometry_type,
-        'indices': geometry_mesh.indices,
-        'vertices': geometry_mesh.vertices
+        'indices': geometry_mesh.indices.ravel()[::-1].tolist(),
+        'vertices': geometry_mesh.vertices.ravel().tolist()
     }
 
     if geometry_type == openravepy.GeometryType.Box:
@@ -83,42 +86,41 @@ def GeometryToDict(geometry):
 
 def LinkToDict(link):
     """ Convert an OpenRAVE Link to a dictionary of properties. """
+    pose = link.GetTransformPose()
     props = {
         'name': link.GetName(),
-        'transform': link.GetTransformPose()
+        'quaternion': pose[[1, 2, 3, 0]],  # Reorder (w,x,y,z) to (x,y,z,w).
+        'position': pose[4:]
     }
-
     props['geometries'] = [GeometryToDict(g)
                            for g in link.GetGeometries() if g.IsVisible()]
-
     return props
 
 
 def BodyToDict(body):
     """ Convert an OpenRAVE Body to a dictionary of properties. """
+    pose = body.GetTransformPose()
     props = {
         'name': body.GetName(),
-        'transform': body.GetTransformPose()
+        'quaternion': pose[[1, 2, 3, 0]],  # Reorder (w,x,y,z) to (x,y,z,w).
+        'position': pose[4:]
     }
-
     props['links'] = [LinkToDict(l)
                       for l in body.GetLinks() if l.IsVisible()]
-
     return props
 
 
 def EnvironmentToHTML(env):
     import jinja2
     j2 = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(_module_dir),
-        trim_blocks=True
+        loader=jinja2.FileSystemLoader(_module_dir)
     )
 
     # Get all of the geometries in this OpenRAVE environment.
     bodies = [BodyToDict(body)
               for body in env.GetBodies() if body.IsVisible()]
 
-    return j2.get_template('environment_test.html').render(
+    return j2.get_template('environment.html').render(
         bodies=bodies
     )
 
@@ -155,10 +157,15 @@ def Initialize():
     """
     Loads IPython extensions into the current environment.
     """
-    # Get IPython reference if it exists.
-    ip = get_ipython()
-    if not ip:
-        return
+    # Attempt to load the IPython module.
+    try:
+        from IPython import get_ipython
+        ip = get_ipython()
+        if not ip:
+            return
+        # TODO: better error handling.
+    except ImportError:
+        raise ImportError('This feature requires IPython 1.0+')
 
     # Register a handler for the OpenRAVE HTML formatter.
     html_formatter = ip.display_formatter.formatters['text/html']
