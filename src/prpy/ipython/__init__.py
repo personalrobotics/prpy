@@ -62,7 +62,7 @@ def GeometryToDict(geometry):
     geometry_mesh = geometry.GetCollisionMesh()
     props['collision'] = {
         'type': geometry_type,
-        'indices': geometry_mesh.indices.ravel()[::-1].tolist(),
+        'indices': geometry_mesh.indices.ravel().tolist(),
         'vertices': geometry_mesh.vertices.ravel().tolist()
     }
 
@@ -93,7 +93,8 @@ def LinkToDict(link):
         'position': pose[4:]
     }
     props['geometries'] = [GeometryToDict(g)
-                           for g in link.GetGeometries() if g.IsVisible()]
+                           for g in link.GetGeometries()]
+    # if g.IsVisible()]  # TODO: Put this back later.
     return props
 
 

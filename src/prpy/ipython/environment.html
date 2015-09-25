@@ -2,28 +2,8 @@
 Copyright (c) 2015, Carnegie Mellon University
 All rights reserved.
 Authors: Pras Velagapudi <pkv@cs.cmu.edu>
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-- Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-- Neither the name of Carnegie Mellon University nor the names of its
-  contributors may be used to endorse or promote products derived from this
-  software without specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
 -->
+
 <!-- Create main element to store the display object. -->
 <div id="three-js-content"></div>
 
@@ -68,7 +48,8 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
             NEAR = 0.1, FAR = 20000;
         camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
         scene.add(camera);
-        camera.position.set(0, 2.0, 2.0);
+        camera.position.set(0.0, 2.0, 2.0);
+        camera.up.set(0.0, 0.0, 1.0);
         camera.lookAt(scene.position);  
 
         // RENDERER
@@ -82,54 +63,45 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
 
         // LIGHT
         var light = new THREE.PointLight(0xffffff);
-        light.position.set(1.0, 1.0, 1.0);
+        light.position.set(1.0, 1.0, 2.0);
         scene.add(light);
 
         {% for body in bodies -%}
-        // BODY "{{ body.name }}"
+        {% for link in body.links -%}
+        // LINK "{{ body.name }} - {{ link.name }}"
         {
-            var body = new THREE.Object3D();
-            body.name = "{{ body.name }}";
-            body.position.set({{ body.position | join(', ') }});
-            body.quaternion.set({{ body.quaternion | join(', ') }});
+            var link = new THREE.Object3D();
+            link.name = "{{ body.name }} - {{ link.name }}";
+            link.position.set({{ link.position | join(', ') }});
+            link.quaternion.set({{ link.quaternion | join(', ') }});
 
-            {% for link in body.links -%}
-            // LINK "{{ link.name }}"
+            {% for geom in link.geometries -%}
+            // GEOMETRY
             {
-                var link = new THREE.Object3D();
-                link.name = "{{ link.name }}";
-                link.position.set({{ link.position | join(', ') }});
-                link.quaternion.set({{ link.quaternion | join(', ') }});
+                var geometry = new THREE.BufferGeometry();
+                var vertices = new Float32Array({{ geom.collision.vertices }});
+                var indices = new Uint16Array({{ geom.collision.indices }});
 
-                {% for geom in link.geometries -%}
-                // GEOMETRY
-                {
-                    var geometry = new THREE.BufferGeometry();
-                    var vertices = new Float32Array({{ geom.collision.vertices }});
-                    var indices = new Uint16Array({{ geom.collision.indices }});
+                geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-                    geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
-                    geometry.setIndex(new THREE.BufferAttribute(indices, 3));
+                var material = new THREE.MeshLambertMaterial({
+                    color: new THREE.Color({{ geom.color.diffuse | join(', ') }}),
+                    emissive: new THREE.Color({{ geom.color.diffuse | join(', ') }}),
+                    opacity: {{ geom.color.opacity }},
+                    transparent: {% if geom.color.isTransparent %}true{% else %}false{% endif %}
+                });
 
-                    var material = new THREE.MeshLambertMaterial({
-                        color: new THREE.Color({{ geom.color.diffuse | join(', ') }}),
-                        emissive: new THREE.Color({{ geom.color.diffuse | join(', ') }}),
-                        opacity: {{ geom.color.opacity }},
-                        transparent: {% if geom.color.isTransparent %}true{% else %}false{% endif %}
-                    });
+                var mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set({{ geom.position | join(', ') }});
+                mesh.quaternion.set({{ geom.quaternion | join(', ') }});
 
-                    var mesh = new THREE.Mesh(geometry, material);
-                    mesh.position.set({{ geom.position | join(', ') }});
-                    mesh.quaternion.set({{ geom.quaternion | join(', ') }});
-
-                    link.add(mesh);
-                }
-                {% endfor %}
-                body.add(link);
+                link.add(mesh);
             }
             {% endfor %}
-            scene.add(body);
+            scene.add(link);
         }
+        {% endfor %}
         {% endfor %}
     }
 
