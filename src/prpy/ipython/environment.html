@@ -18,14 +18,52 @@ require.config({
         OrbitControls: "http://threejs.org/examples/js/controls/OrbitControls"
     },
     shim: {
-        THREE: { exports: 'THREE' },
-        Detector: { exports: 'Detector' },
-        OrbitControls: { exports: 'OrbitControls' }
+        THREE: { exports: "THREE" },
+        Detector: { exports: "Detector" },
+        OrbitControls: {
+            deps: ['THREE'],
+            exports: "OrbitControls"
+        }
     }
 });
 
 require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitControls) {
-    'use strict';
+    "use strict";
+
+    var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    // Helper function to decode Base64 strings into binary ArrayBuffers.
+    function base64ToArrayBuffer(base64)
+    {
+        console.log("Starting translation.")
+        var bufferLength = base64.length * 0.75,
+        len = base64.length, i, p = 0,
+        encoded1, encoded2, encoded3, encoded4;
+
+        if (base64[base64.length - 1] === "=") {
+            bufferLength--;
+            if (base64[base64.length - 2] === "=") {
+                bufferLength--;
+            }
+        }
+
+        var arraybuffer = new ArrayBuffer(bufferLength),
+        bytes = new Uint8Array(arraybuffer);
+
+        for (i = 0; i < len; i+=4) {
+            encoded1 = chars.indexOf(base64[i]);
+            encoded2 = chars.indexOf(base64[i+1]);
+            encoded3 = chars.indexOf(base64[i+2]);
+            encoded4 = chars.indexOf(base64[i+3]);
+
+            bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
+            bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+            bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
+        }
+
+        console.log("Ending translation.")
+        return arraybuffer;
+    }
 
     // Check for WebGL compatibility.
     if (!Detector.webgl)
@@ -37,6 +75,8 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
     // Create Three.js scene to render environment.
     function init() 
     {
+        console.log("Initialized scene.")
+
         // SCENE
         scene = new THREE.Scene();
 
@@ -55,7 +95,7 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         // RENDERER
         renderer = new THREE.WebGLRenderer({ antialias:true });
         renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-        container = document.getElementById('three-js-content');
+        container = document.getElementById("three-js-content");
         container.appendChild(renderer.domElement);
 
         // CONTROLS
@@ -71,27 +111,38 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         scene.add(ambient);
 
         {% for scene in scenes -%}
-        // SCENES "{{ scene.name }}"
+        // SCENE "{{ scene.name }}"
         var scenes = {}
         {
-            var scene = new THREE.Object3D();
-            {% for mesh in scene.meshes -%}
+            // Add all meshes to the scene.
+            var meshes = {}
+            {% for name, mesh in scene.meshes.iteritems() -%}
             {
                 var geometry = new THREE.BufferGeometry();
-                var vertices = new Float32Array({{ mesh.vertices }});
-                geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                {#
+                var b64vertices = "{{ mesh.vertices }}";
+                var vertices = new Float32Array(base64ToArrayBuffer(b64vertices));
+                geometry.addAttribute("position", new THREE.BufferAttribute(vertices, 3));
 
-                var indices = new Uint16Array({{ mesh.indices }});
+                var b64indices = "{{ mesh.indices }}";
+                var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+                #}
 
-                var mesh = new THREE.Mesh(geometry, material);
-                // mesh.position.set({{ mesh.position | join(', ') }});
-                // mesh.quaternion.set({{ mesh.quaternion | join(', ') }});
-
-                scene.add(mesh);
+                meshes["{{ name }}"] = new THREE.Mesh(geometry, material);
             }
             {% endfor %}
-            scenes['{{ scene.name }}'] = scene
+
+            // Assemble flattened scenegraph.
+            var scene = new THREE.Object3D();
+            {% for entity in scene.entities -%}
+            {
+                var node = meshes["{{ entity.name }}"].clone()
+                node.matrix.set({{ entity.transform | join(", ") }});
+                scene.add(node);
+            }
+            {% endfor %}
+            scenes["{{ scene.name }}"] = scene
         }
         {% endfor %}
 
@@ -101,53 +152,57 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         {
             var link = new THREE.Object3D();
             link.name = "{{ body.name }} - {{ link.name }}";
-            link.position.set({{ link.position | join(', ') }});
-            link.quaternion.set({{ link.quaternion | join(', ') }});
+            link.position.set({{ link.position | join(", ") }});
+            link.quaternion.set({{ link.quaternion | join(", ") }});
 
             {% for geom in link.geometries -%}
             // GEOMETRY
             {
                 {% if not geom.render.filename -%}
-                // COLLISION
-                // Type: {{ geom.collision.type }}
+                // COLLISION: {{ geom.collision.type }}
                 var material = new THREE.MeshLambertMaterial({
-                    color: new THREE.Color({{ geom.color.diffuse | join(', ') }}),
-                    emissive: new THREE.Color({{ geom.color.ambient | join(', ') }}),
+                    color: new THREE.Color({{ geom.color.diffuse | join(", ") }}),
+                    emissive: new THREE.Color({{ geom.color.ambient | join(", ") }}),
                     opacity: {{ geom.color.opacity }},
                     transparent: {% if geom.color.isTransparent %}true{% else %}false{% endif %}
                 });
 
-                {% if geom.collision.type == 'Box' -%}
+                {% if geom.collision.type == "Box" -%}
                 var geometry = new THREE.BoxGeometry(
-                    {{ geom.collision.extents | join(', ') }}
+                    {{ geom.collision.extents | join(", ") }}
                 );
-                {% elif geom.collision.type == 'Cylinder' -%}
+                {% elif geom.collision.type == "Cylinder" -%}
                 var geometry = new THREE.CylinderGeometry(
                     {{ geom.collision.radius }}, {{ geom.collision.radius }},
                     {{ geom.collision.height }}, 32
                 );
-                {% elif geom.collision.type == 'Sphere' -%}
+                {% elif geom.collision.type == "Sphere" -%}
                 var geometry = new THREE.SphereGeometry(
                     {{ geom.collision.radius }}, 32, 32
                 );
-                {% elif geom.collision.type == 'Trimesh' -%}
+                {% elif geom.collision.type == "Trimesh" -%}
                 var geometry = new THREE.BufferGeometry();
-                var vertices = new Float32Array({{ geom.collision.vertices }});
-                geometry.addAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
-                var indices = new Uint16Array({{ geom.collision.indices }});
+                {#
+                var b64vertices = "{{ geom.collision.vertices }}";
+                var vertices = new Float32Array(base64ToArrayBuffer(b64vertices));
+                geometry.addAttribute("position", new THREE.BufferAttribute(vertices, 3));
+
+                var b64indices = "{{ geom.collision.indices }}";
+                var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+                #}
                 {%- endif -%}
 
                 var mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set({{ geom.position | join(', ') }});
-                mesh.quaternion.set({{ geom.quaternion | join(', ') }});
+                mesh.position.set({{ geom.position | join(", ") }});
+                mesh.quaternion.set({{ geom.quaternion | join(", ") }});
 
                 link.add(mesh);
                 {%- else %}
                 // RENDER
-                if ('{{ geom.render.filename }}' in scenes) {
-                    var mesh = scenes['{{ geom.render.filename }}'].clone()
+                if ("{{ geom.render.filename }}" in scenes) {
+                    var mesh = scenes["{{ geom.render.filename }}"].clone()
                     link.add(mesh);
                 }
                 {%- endif %}
