@@ -173,13 +173,13 @@ def EnvironmentToHTML(env):
     bodies = [BodyToDict(body)
               for body in env.GetBodies() if body.IsVisible()]
 
-    # TODO: FIX THIS
-    scenes = [AssimpSceneToDict(name, scene)
-              for name, scene in _render_cache.iteritems()]
+    # Add all the models referenced in this scene.
+    models = [AssimpSceneToDict(name, model)
+              for name, model in _render_cache.iteritems()]
 
     return j2.get_template('environment.html').render(
         bodies=bodies,
-        scenes=scenes
+        models=models
     )
 
 

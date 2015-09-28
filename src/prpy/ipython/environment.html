@@ -21,7 +21,7 @@ require.config({
         THREE: { exports: "THREE" },
         Detector: { exports: "Detector" },
         OrbitControls: {
-            deps: ['THREE'],
+            deps: ["THREE"],
             exports: "OrbitControls"
         }
     }
@@ -110,16 +110,16 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         ambient.position.set(1.0, 1.0, 2.0);
         scene.add(ambient);
 
-        {% for scene in scenes -%}
-        // SCENE "{{ scene.name }}"
-        var scenes = {}
+        var models = {}
+        {% for model in models -%}
+        // MODEL "{{ model.name }}"
         {
-            // Add all meshes to the scene.
+            // Add all meshes used in the model.
             var meshes = {}
-            {% for name, mesh in scene.meshes.iteritems() -%}
+            {% for name, mesh in model.meshes.iteritems() -%}
             {
                 var geometry = new THREE.BufferGeometry();
-                {#
+
                 var b64vertices = "{{ mesh.vertices }}";
                 var vertices = new Float32Array(base64ToArrayBuffer(b64vertices));
                 geometry.addAttribute("position", new THREE.BufferAttribute(vertices, 3));
@@ -127,22 +127,21 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 var b64indices = "{{ mesh.indices }}";
                 var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-                #}
 
                 meshes["{{ name }}"] = new THREE.Mesh(geometry, material);
             }
-            {% endfor %}
+            {% endfor -%}
 
-            // Assemble flattened scenegraph.
-            var scene = new THREE.Object3D();
-            {% for entity in scene.entities -%}
-            {
+            // Assemble flattened scenegraph from the meshes.
+            var model = new THREE.Object3D();
+            {% for entity in model.entities -%}
+            if ("{{ entity.name }}" in meshes) {
                 var node = meshes["{{ entity.name }}"].clone()
                 node.matrix.set({{ entity.transform | join(", ") }});
-                scene.add(node);
+                model.add(node);
             }
-            {% endfor %}
-            scenes["{{ scene.name }}"] = scene
+            {% endfor -%}
+            models["{{ model.name }}"] = model
         }
         {% endfor %}
 
@@ -183,7 +182,6 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 {% elif geom.collision.type == "Trimesh" -%}
                 var geometry = new THREE.BufferGeometry();
 
-                {#
                 var b64vertices = "{{ geom.collision.vertices }}";
                 var vertices = new Float32Array(base64ToArrayBuffer(b64vertices));
                 geometry.addAttribute("position", new THREE.BufferAttribute(vertices, 3));
@@ -191,7 +189,6 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 var b64indices = "{{ geom.collision.indices }}";
                 var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-                #}
                 {%- endif -%}
 
                 var mesh = new THREE.Mesh(geometry, material);
@@ -199,10 +196,10 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 mesh.quaternion.set({{ geom.quaternion | join(", ") }});
 
                 link.add(mesh);
-                {%- else %}
+                {%- else -%}
                 // RENDER
-                if ("{{ geom.render.filename }}" in scenes) {
-                    var mesh = scenes["{{ geom.render.filename }}"].clone()
+                if ("{{ geom.render.filename }}" in models) {
+                    var mesh = models["{{ geom.render.filename }}"].clone()
                     link.add(mesh);
                 }
                 {%- endif %}
