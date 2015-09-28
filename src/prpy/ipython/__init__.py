@@ -57,7 +57,8 @@ def AssimpSceneGraphToList(node, transform):
 def AssimpSceneToDict(filename, scene):
     """ Convert an Assimp Scene to a dictionary of properties """
     props = {
-        'name': filename
+        'name': filename,
+        'materials': scene.materials
     }
     props['meshes'] = {
         mesh.name: {
@@ -66,7 +67,8 @@ def AssimpSceneToDict(filename, scene):
             'normals': base64.b64encode(
                 mesh.normals.ravel().astype(numpy.float32)),
             'vertices': base64.b64encode(
-                mesh.vertices.ravel().astype(numpy.float32))
+                mesh.vertices.ravel().astype(numpy.float32)),
+            'materialindex': mesh.materialindex
         } for mesh in scene.meshes
     }
     props['entities'] = AssimpSceneGraphToList(scene.rootnode, numpy.eye(4))

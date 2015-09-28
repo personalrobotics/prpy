@@ -110,16 +110,28 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         ambient.position.set(1.0, 1.0, 2.0);
         scene.add(ambient);
 
-        // DEFAULT MATERIAL
-        var material = new THREE.MeshLambertMaterial({
-            color: new THREE.Color(0.5, 0.5, 0.0),
-            emissive: new THREE.Color(0.0, 0.5, 0.5)
-        });
-
         var models = {}
         {% for model in models -%}
         // MODEL "{{ model.name }}"
         {
+            // Add all materials used in the model.
+            var materials = []
+            {% for material in model.materials -%}
+            {
+                var material = new THREE.MeshLambertMaterial({
+                    {% if material.properties.emissive -%}
+                    emissive: new THREE.Color({{ material.properties.emissive | join(", ") }}),
+                    {% endif -%}
+                    {% if material.properties.diffuse -%}
+                    color: new THREE.Color({{ material.properties.diffuse[:3] | join(", ") }})
+                    {%- else -%}
+                    color: new THREE.Color(0.5, 0.5, 0.5),
+                    {%- endif %}
+                });
+                materials.push(material);
+            }
+            {% endfor -%}
+
             // Add all meshes used in the model.
             var meshes = {}
             {% for name, mesh in model.meshes.iteritems() -%}
@@ -138,7 +150,7 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-                meshes["{{ name }}"] = new THREE.Mesh(geometry, material);
+                meshes["{{ name }}"] = new THREE.Mesh(geometry, material[{{ mesh.materialindex }}]);
             }
             {% endfor -%}
 
