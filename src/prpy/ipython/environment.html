@@ -35,7 +35,6 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
     // Helper function to decode Base64 strings into binary ArrayBuffers.
     function base64ToArrayBuffer(base64)
     {
-        console.log("Starting translation.")
         var bufferLength = base64.length * 0.75,
         len = base64.length, i, p = 0,
         encoded1, encoded2, encoded3, encoded4;
@@ -61,7 +60,6 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
             bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
         }
 
-        console.log("Ending translation.")
         return arraybuffer;
     }
 
@@ -150,7 +148,7 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-                meshes["{{ name }}"] = new THREE.Mesh(geometry, material[{{ mesh.materialindex }}]);
+                meshes["{{ name }}"] = new THREE.Mesh(geometry, materials[{{ mesh.materialindex }}]);
             }
             {% endfor -%}
 
