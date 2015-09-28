@@ -110,6 +110,12 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         ambient.position.set(1.0, 1.0, 2.0);
         scene.add(ambient);
 
+        // DEFAULT MATERIAL
+        var material = new THREE.MeshLambertMaterial({
+            color: new THREE.Color(0.5, 0.5, 0.0),
+            emissive: new THREE.Color(0.0, 0.5, 0.5)
+        });
+
         var models = {}
         {% for model in models -%}
         // MODEL "{{ model.name }}"
@@ -123,6 +129,10 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 var b64vertices = "{{ mesh.vertices }}";
                 var vertices = new Float32Array(base64ToArrayBuffer(b64vertices));
                 geometry.addAttribute("position", new THREE.BufferAttribute(vertices, 3));
+
+                var b64normals = "{{ mesh.normals }}";
+                var normals = new Float32Array(base64ToArrayBuffer(b64normals));
+                geometry.addAttribute("normal", new THREE.BufferAttribute(normals, 3));
 
                 var b64indices = "{{ mesh.indices }}";
                 var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
