@@ -61,9 +61,12 @@ def AssimpSceneToDict(filename, scene):
     }
     props['meshes'] = {
         mesh.name: {
-            'indices': base64.b64encode(mesh.faces.ravel()),
-            'normals': base64.b64encode(mesh.normals.ravel()),
-            'vertices': base64.b64encode(mesh.vertices.ravel())
+            'indices': base64.b64encode(
+                mesh.faces.ravel().astype(numpy.uint16)),
+            'normals': base64.b64encode(
+                mesh.normals.ravel().astype(numpy.float32)),
+            'vertices': base64.b64encode(
+                mesh.vertices.ravel().astype(numpy.float32))
         } for mesh in scene.meshes
     }
     props['entities'] = AssimpSceneGraphToList(scene.rootnode, numpy.eye(4))
@@ -89,8 +92,10 @@ def GeometryToDict(geometry):
     geometry_mesh = geometry.GetCollisionMesh()
     props['collision'] = {
         'type': str(geometry_type),
-        'indices': base64.b64encode(geometry_mesh.indices.ravel()),
-        'vertices': base64.b64encode(geometry_mesh.vertices.ravel())
+        'indices': base64.b64encode(
+            geometry_mesh.indices.ravel().astype(numpy.uint16)),
+        'vertices': base64.b64encode(
+            geometry_mesh.vertices.ravel().astype(numpy.float32))
     }
 
     if geometry_type == openravepy.GeometryType.Box:
