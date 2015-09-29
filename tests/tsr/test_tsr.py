@@ -1,6 +1,6 @@
 import numpy
 from numpy import pi
-from prpy.tsr import Tsr
+from prpy.tsr import TSR
 from unittest import TestCase
 
 
@@ -14,7 +14,7 @@ class TsrTest(TestCase):
               [0.,   0.],    # roll
               [pi,   pi],    # pitch
               [-pi, -pi]]  # yaw
-        tsr = Tsr(Bw=Bw)
+        tsr = TSR(Bw=Bw)
         s = tsr.sample_xyzrpy()
         self.assertTrue(numpy.all(s >= Bw[:, 0]))
         self.assertTrue(numpy.all(s <= Bw[:, 1]))
@@ -26,7 +26,7 @@ class TsrTest(TestCase):
               [pi,        3.*pi],  # roll
               [pi/2.,   3*pi/2.],  # pitch
               [-3*pi/2., -pi/2.]]  # yaw
-        tsr = Tsr(Bw=Bw)
+        tsr = TSR(Bw=Bw)
         s = tsr.sample_xyzrpy()
         self.assertTrue(numpy.all(s >= Bw[:, 0]))
         self.assertTrue(numpy.all(s <= Bw[:, 1]))

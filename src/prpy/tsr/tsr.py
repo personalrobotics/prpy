@@ -77,10 +77,11 @@ class TSR(object):
         # We will now create a continuous version of the bound to maintain:
         # 1. Bw[i,1] > Bw[i,0] which is necessary for LBFGS-B
         # 2. signed rotations, necessary for expressiveness
-        Bw_interval = Bw[3:6, 1] - Bw[3:6, 0]
+        Bw_cont = numpy.copy(self.Bw)
+
+        Bw_interval = Bw_cont[3:6, 1] - Bw_cont[3:6, 0]
         Bw_interval = numpy.minimum(Bw_interval, 2*pi)
 
-        Bw_cont = numpy.copy(self.Bw)
         Bw_cont[3:6, 0] = wrap_to_interval(Bw_cont[3:6, 0])
         Bw_cont[3:6, 1] = Bw_cont[3:6, 0] + Bw_interval
 
