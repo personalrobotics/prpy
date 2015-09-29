@@ -126,7 +126,10 @@ def GeometryToDict(geometry):
     if geometry_renderfilename:
         if geometry_renderfilename not in _render_cache:
             # DEBUG: fix me!
-            print "LOADING {:s}".format(geometry_renderfilename)
+            from IPython.core.display import clear_output
+            clear_output()
+            print "Loading mesh: '{:s}'".format(geometry_renderfilename)
+
             import pyassimp
             scene = pyassimp.load(geometry_renderfilename)
             _render_cache[geometry_renderfilename] = scene
@@ -183,6 +186,10 @@ def EnvironmentToHTML(env):
     # Add all the models referenced in this scene.
     models = [AssimpSceneToDict(name, model)
               for name, model in _render_cache.iteritems()]
+
+    # Clear random debugging output.
+    from IPython.core.display import clear_output
+    clear_output()
 
     return j2.get_template('environment.html').render(
         bodies=bodies,
