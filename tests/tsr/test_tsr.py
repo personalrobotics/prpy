@@ -16,6 +16,8 @@ class TsrTest(TestCase):
               [-pi, -pi]]  # yaw
         tsr = TSR(Bw=Bw)
         s = tsr.sample_xyzrpy()
+
+        Bw = numpy.array(Bw)
         self.assertTrue(numpy.all(s >= Bw[:, 0]))
         self.assertTrue(numpy.all(s <= Bw[:, 1]))
 
@@ -28,5 +30,7 @@ class TsrTest(TestCase):
               [-3*pi/2., -pi/2.]]  # yaw
         tsr = TSR(Bw=Bw)
         s = tsr.sample_xyzrpy()
+
+        Bw = numpy.array(Bw)
         self.assertTrue(numpy.all(s >= Bw[:, 0]))
         self.assertTrue(numpy.all(s <= Bw[:, 1]))
