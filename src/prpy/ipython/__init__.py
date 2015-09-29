@@ -30,29 +30,48 @@ This module implements some custom representation types based on:
 https://ipython.org/ipython-doc/dev/config/integrating.html
 https://www.safaribooksonline.com/blog/2014/02/11/altering-display-existing-classes-ipython/
 """
-import logging
+import base64
 import io
+import logging
+import numpy
+import openravepy
 import os
 import scipy
-import openravepy
 
 logger = logging.getLogger(__name__)
 _module_dir = os.path.dirname(os.path.abspath(__file__))
 _render_cache = dict()
 
 
+def AssimpSceneGraphToList(node, transform):
+    """ Flattens an Assimp scenegraph into a list of nodes. """
+    node_transform = numpy.dot(transform, node.transformation)
+    node_list = [{'name': mesh.name,
+                  'transform': node_transform.ravel().tolist()}
+                 for mesh in node.meshes]
+    for child in node.children:
+        node_list += AssimpSceneGraphToList(child, node_transform)
+    return node_list
+
+
 def AssimpSceneToDict(filename, scene):
     """ Convert an Assimp Scene to a dictionary of properties """
     props = {
-        'name': filename
+        'name': filename,
+        'materials': scene.materials
     }
-    props['meshes'] = [
-        {
-            'indices': mesh.faces.ravel().tolist(),
-            'normals': mesh.normals.ravel().tolist(),
-            'vertices': mesh.vertices.ravel().tolist()
+    props['meshes'] = {
+        mesh.name: {
+            'indices': base64.b64encode(
+                mesh.faces.ravel().astype(numpy.uint16)),
+            'normals': base64.b64encode(
+                mesh.normals.ravel().astype(numpy.float32)),
+            'vertices': base64.b64encode(
+                mesh.vertices.ravel().astype(numpy.float32)),
+            'materialindex': mesh.materialindex
         } for mesh in scene.meshes
-    ]
+    }
+    props['entities'] = AssimpSceneGraphToList(scene.rootnode, numpy.eye(4))
     return props
 
 
@@ -75,8 +94,10 @@ def GeometryToDict(geometry):
     geometry_mesh = geometry.GetCollisionMesh()
     props['collision'] = {
         'type': str(geometry_type),
-        'indices': geometry_mesh.indices.ravel().tolist(),
-        'vertices': geometry_mesh.vertices.ravel().tolist()
+        'indices': base64.b64encode(
+            geometry_mesh.indices.ravel().astype(numpy.uint16)),
+        'vertices': base64.b64encode(
+            geometry_mesh.vertices.ravel().astype(numpy.float32))
     }
 
     if geometry_type == openravepy.GeometryType.Box:
@@ -159,13 +180,13 @@ def EnvironmentToHTML(env):
     bodies = [BodyToDict(body)
               for body in env.GetBodies() if body.IsVisible()]
 
-    # TODO: FIX THIS
-    scenes = [AssimpSceneToDict(name, scene)
-              for name, scene in _render_cache.iteritems()]
+    # Add all the models referenced in this scene.
+    models = [AssimpSceneToDict(name, model)
+              for name, model in _render_cache.iteritems()]
 
     return j2.get_template('environment.html').render(
         bodies=bodies,
-        scenes=scenes
+        models=models
     )
 
 
