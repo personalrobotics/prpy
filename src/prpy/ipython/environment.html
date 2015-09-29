@@ -78,12 +78,15 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         // SCENE
         scene = new THREE.Scene();
 
+        // CONTAINER
+        container = document.getElementById("three-js-content");
+
         // CAMERA
-        var SCREEN_WIDTH = window.innerWidth,
-            SCREEN_HEIGHT = window.innerHeight;
         var VIEW_ANGLE = 45,
-            ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT,
+            ASPECT = 16. / 9.,
             NEAR = 0.1, FAR = 20000;
+        var WIDTH = container.clientWidth,
+            HEIGHT = WIDTH / ASPECT;
         camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
         scene.add(camera);
         camera.position.set(0.0, 2.0, 2.0);
@@ -92,12 +95,23 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
 
         // RENDERER
         renderer = new THREE.WebGLRenderer({ antialias:true });
-        renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-        container = document.getElementById("three-js-content");
+        renderer.setSize(WIDTH, HEIGHT);
         container.appendChild(renderer.domElement);
 
         // CONTROLS
         controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        // WINDOW RESIZE
+        function onWindowResize(event)
+        {
+            var width = container.clientWidth;
+            var height = container.clientWidth / ASPECT;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            controls.handleResize();
+        }
+        window.addEventListener("resize", onWindowResize, false);
 
         // LIGHT
         var light = new THREE.PointLight(0xffffff);
