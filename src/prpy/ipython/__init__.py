@@ -85,7 +85,10 @@ def GeometryToDict(geometry):
             'diffuse': geometry.GetDiffuseColor(),
             'ambient': geometry.GetAmbientColor(),
             'opacity': 1.0 - geometry.GetTransparency(),
-            'isTransparent': geometry.GetTransparency() > 0.0
+            'isTransparent': geometry.GetTransparency() > 0.0,
+            'isDefault':
+                numpy.array_equal(geometry.GetDiffuseColor(), [1., 1., 1.]) and
+                numpy.array_equal(geometry.GetAmbientColor(), [0., 0., 0.])
         }
     }
 

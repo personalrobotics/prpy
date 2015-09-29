@@ -109,7 +109,6 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
             renderer.setSize(width, height);
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
-            controls.handleResize();
         }
         window.addEventListener("resize", onWindowResize, false);
 
@@ -119,7 +118,6 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
         scene.add(light);
 
         var ambient = new THREE.AmbientLight(0x808080);
-        ambient.position.set(1.0, 1.0, 2.0);
         scene.add(ambient);
 
         var models = {}
@@ -191,15 +189,15 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
             {% for geom in link.geometries -%}
             // GEOMETRY
             {
-                {% if not geom.render.filename -%}
-                // COLLISION: {{ geom.collision.type }}
+                // MATERIAL
                 var material = new THREE.MeshLambertMaterial({
                     color: new THREE.Color({{ geom.color.diffuse | join(", ") }}),
-                    emissive: new THREE.Color({{ geom.color.ambient | join(", ") }}),
                     opacity: {{ geom.color.opacity }},
                     transparent: {% if geom.color.isTransparent %}true{% else %}false{% endif %}
                 });
 
+                {% if not geom.render.filename -%}
+                // COLLISION: {{ geom.collision.type }}
                 {% if geom.collision.type == "Box" -%}
                 var geometry = new THREE.BoxGeometry(
                     {{ geom.collision.extents | join(", ") }}
@@ -237,6 +235,14 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 if ("{{ geom.render.filename }}" in models) {
                     var mesh = models["{{ geom.render.filename }}"].clone()
                     mesh.scale.set({{ geom.render.scale | join(", ") }})
+
+                    {% if not geom.color.isDefault -%}
+                    mesh.traverse(function (child) {
+                        if (child instanceof THREE.Mesh)
+                            child.material = material;
+                    });
+                    {%- endif -%}
+
                     link.add(mesh);
                 }
                 {%- endif %}
