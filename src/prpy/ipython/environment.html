@@ -195,6 +195,8 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                     {{ geom.collision.radius }}, {{ geom.collision.radius }},
                     {{ geom.collision.height }}, 32
                 );
+                {% elif geom.collision.type == "None" -%}
+                var geometry = new THREE.Geometry()
                 {% elif geom.collision.type == "Sphere" -%}
                 var geometry = new THREE.SphereGeometry(
                     {{ geom.collision.radius }}, 32, 32
