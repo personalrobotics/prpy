@@ -63,7 +63,7 @@ def AssimpSceneToDict(filename, scene):
     props['meshes'] = {
         mesh.name: {
             'indices': base64.b64encode(
-                mesh.faces.ravel().astype(numpy.uint16)),
+                mesh.faces.ravel().astype(numpy.uint32)),
             'normals': base64.b64encode(
                 mesh.normals.ravel().astype(numpy.float32)),
             'vertices': base64.b64encode(
@@ -95,7 +95,7 @@ def GeometryToDict(geometry):
     props['collision'] = {
         'type': str(geometry_type),
         'indices': base64.b64encode(
-            geometry_mesh.indices.ravel().astype(numpy.uint16)),
+            geometry_mesh.indices.ravel().astype(numpy.uint32)),
         'vertices': base64.b64encode(
             geometry_mesh.vertices.ravel().astype(numpy.float32))
     }

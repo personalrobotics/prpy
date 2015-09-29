@@ -159,7 +159,7 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 geometry.addAttribute("normal", new THREE.BufferAttribute(normals, 3));
 
                 var b64indices = "{{ mesh.indices }}";
-                var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
+                var indices = new Uint32Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
                 meshes["{{ name }}"] = new THREE.Mesh(geometry, materials[{{ mesh.materialindex }}]);
@@ -223,7 +223,7 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 geometry.addAttribute("position", new THREE.BufferAttribute(vertices, 3));
 
                 var b64indices = "{{ geom.collision.indices }}";
-                var indices = new Uint16Array(base64ToArrayBuffer(b64indices));
+                var indices = new Uint32Array(base64ToArrayBuffer(b64indices));
                 geometry.setIndex(new THREE.BufferAttribute(indices, 1));
                 {%- endif -%}
 
