@@ -236,6 +236,7 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                 // RENDER
                 if ("{{ geom.render.filename }}" in models) {
                     var mesh = models["{{ geom.render.filename }}"].clone()
+                    mesh.scale.set({{ geom.render.scale | join(", ") }})
                     link.add(mesh);
                 }
                 {%- endif %}
