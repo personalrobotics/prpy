@@ -133,10 +133,9 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
                     emissive: new THREE.Color({{ material.properties.emissive | join(", ") }}),
                     {% endif -%}
                     {% if material.properties.diffuse -%}
-                    color: new THREE.Color({{ material.properties.diffuse[:3] | join(", ") }})
-                    {%- else -%}
-                    color: new THREE.Color(0.5, 0.5, 0.5)
+                    color: new THREE.Color({{ material.properties.diffuse[:3] | join(", ") }}),
                     {%- endif %}
+                    name: "{{ material.properties.name }}"
                 });
                 materials.push(material);
             }
