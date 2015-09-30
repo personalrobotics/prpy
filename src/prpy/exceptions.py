@@ -4,7 +4,13 @@ class PrPyException(Exception):
     """
 
 
-class TrajectoryNotExecutable(PrPyException):
+class TrajectoryException(PrPyException):
+    """
+    Trajectory failed to execute.
+    """
+
+
+class TrajectoryNotExecutable(TrajectoryException):
     """
     Trajectory could not begin execution.
 
@@ -17,13 +23,13 @@ class TrajectoryNotExecutable(PrPyException):
     """
 
 
-class TrajectoryAborted(PrPyException):
+class TrajectoryAborted(TrajectoryException):
     """
     Trajectory was aborted.
     """
 
 
-class TrajectoryStalled(PrPyException):
+class TrajectoryStalled(TrajectoryException):
     """
     Trajectory stalled.
     """
