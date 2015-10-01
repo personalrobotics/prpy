@@ -167,8 +167,11 @@ require(["THREE", "Detector", "OrbitControls"], function(THREE, Detector, OrbitC
             var model = new THREE.Object3D();
             {% for entity in model.entities -%}
             if ("{{ entity.name }}" in meshes) {
-                var node = meshes["{{ entity.name }}"].clone()
-                node.matrix.set({{ entity.transform | join(", ") }});
+                var transform = new THREE.Matrix4();
+                transform.set({{ entity.transform | join(", ") }});
+
+                var node = meshes["{{ entity.name }}"].clone();
+                node.applyMatrix(transform);
                 model.add(node);
             }
             {% endfor -%}
