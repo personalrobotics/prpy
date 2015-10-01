@@ -71,6 +71,7 @@ def AssimpSceneToDict(filename, scene):
             'materialindex': mesh.materialindex
         } for mesh in scene.meshes
     }
+    scene.rootnode.transformation = numpy.eye(4)  # TODO: Why do we need this?
     props['entities'] = AssimpSceneGraphToList(scene.rootnode, numpy.eye(4))
     return props
 
