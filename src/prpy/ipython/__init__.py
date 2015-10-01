@@ -129,9 +129,7 @@ def GeometryToDict(geometry):
 
     if geometry_renderfilename:
         if geometry_renderfilename not in _render_cache:
-            # DEBUG: fix me!
-            from IPython.core.display import clear_output
-            clear_output()
+            # TODO: format me better!
             print "Loading mesh: '{:s}'".format(geometry_renderfilename)
 
             import pyassimp
