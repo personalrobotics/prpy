@@ -36,9 +36,7 @@ logger = logging.getLogger(__name__)
 class SimulatedPerceptionModule(PerceptionModule):
     
     def __init__(self):
-        
         super(SimulatedPerceptionModule, self).__init__()
-        
 
     def __str__(self):
         return 'Simulated'
