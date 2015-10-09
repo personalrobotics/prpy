@@ -35,6 +35,13 @@ logger = logging.getLogger(__name__)
 class RockModule(PerceptionModule):
 
     def __init__(self, kinbody_path, detection_frame, destination_frame):
+        """
+        Initialize the rock module
+        Args:
+            kinbody_path(string): The path to the directory that has kinbodies of objects
+            detection_frame(string): The TF frame of the camera
+            destination_frame(string): The TF frame of the world
+        """
         super(RockModule, self).__init__()
         self.kinbody_path = kinbody_path
         self.detection_frame = detection_frame

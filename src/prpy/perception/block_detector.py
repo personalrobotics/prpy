@@ -100,7 +100,7 @@ class BlockDetector(PerceptionModule):
             from prpy.util import ComputeEnabledAABB
             with prpy.rave.Disabled(table, padding_only=True):
                 table_aabb = ComputeEnabledAABB(table)
-            z = table_aabb.pos()[2] + table_aabb.extents()[2] + table_z_offset #OFFSET SET AT TOP
+                z = table_aabb.pos()[2] + table_aabb.extents()[2] + table_z_offset #OFFSET SET AT TOP
 
             for b in detected_blocks:
 
