@@ -40,12 +40,12 @@ class ApriltagsModule(PerceptionModule):
                  detection_frame, destination_frame):
         """
         This initializes an April Tags detector.
-        Args:
-            marker_topic (string): The ROS topic to read markers from. Typically the output topic for April Tags
-            marker_data_path(string): The json file where the association between tag and object is stored
-            kinbody_path: The path to the folder where kinbodies are stored
-            detection_frame: The TF frame of the camera
-            destination_frame: The desired world TF frame
+        
+        @param marker_topic The ROS topic to read markers from. Typically the output topic for April Tags
+        @param marker_data_path The json file where the association between tag and object is stored
+        @param kinbody_path The path to the folder where kinbodies are stored
+        @param detection_frame The TF frame of the camera
+        @param destination_frame The desired world TF frame
         """
 
         super(ApriltagsModule, self).__init__()

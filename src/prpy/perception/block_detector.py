@@ -80,7 +80,7 @@ class BlockDetector(PerceptionModule):
 
 
     @PerceptionMethod
-    def DetectBlocks(self, robot, table, blocks=None, **kw_args):
+    def DetectBlocks(self, robot, table, blocks=None,timeout=10, **kw_args):
         """
         Place blocks on the table
         """
@@ -121,8 +121,8 @@ class BlockDetector(PerceptionModule):
                 self.listener.waitForTransform(
                         self.detection_frame,
                         self.destination_frame,
-                        rospy.Time(),
-                        rospy.Duration(5))
+                        rospy.Time(0),
+                        rospy.Duration(timeout))
 
                 frame_trans, frame_rot = self.listener.lookupTransform(
                         self.destination_frame,

@@ -37,10 +37,10 @@ class RockModule(PerceptionModule):
     def __init__(self, kinbody_path, detection_frame, destination_frame):
         """
         Initialize the rock module
-        Args:
-            kinbody_path(string): The path to the directory that has kinbodies of objects
-            detection_frame(string): The TF frame of the camera
-            destination_frame(string): The TF frame of the world
+        
+        @param kinbody_path The path to the directory that has kinbodies of objects
+        @param detection_frame The TF frame of the camera
+        @param destination_frame The TF frame of the world
         """
         super(RockModule, self).__init__()
         self.kinbody_path = kinbody_path
