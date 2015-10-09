@@ -235,3 +235,229 @@ def disable_padding(body, enable=False):
     for link in body.GetLinks():
         if link.GetName().startswith('padding_'):
             link.Enable(enable)
+
+
+def add_box(env, name, x_len=0.1, y_len=0.1, z_len=0.1):
+    """Add simple box kinbody to OpenRAVE environment"""
+    with env:
+       box = openravepy.RaveCreateKinBody(env, '')
+       success = box.InitFromBoxes(numpy.array([[0,0,0,x_len,y_len,z_len]]))
+       box.SetName(name)
+       env.Add(box)
+       return box
+
+
+def resize_box(env, body, x=None, y=None, z=None):
+    """Resize a simple (single-link) box kinbody"""
+    with env:
+       env.Remove(body)
+       orig_transform = body.GetTransform()
+       geom_data = body.GetLinks()[0].GetGeometries()[0].GetInfo()._vGeomData
+       box = numpy.array([[0,0,0,geom_data[0], geom_data[1], geom_data[2]]])
+       if x or x == 0.0:
+          box[0,3] = x
+       if y or y == 0.0:
+          box[0,4] = y
+       if z or z == 0.0:
+          box[0,5] = z
+       success = body.InitFromBoxes(box)
+       body.SetTransform(orig_transform)
+       env.Add(body)
+
+
+def _interactive_resize_box(stdscr, env, body):
+   import curses
+   RESIZE_SCALE = 0.01
+
+   def print_size(l,w,h):
+      stdscr.addstr('\rlength: {}, width: {}, height: {}'.format(l, w, h))
+
+   stdscr.clear()
+   stdscr.addstr("'b': increase length, 'b': decrease length\n")
+   stdscr.addstr("'h': increase width, 'l': decrease width\n")
+   stdscr.addstr("'k': increase height, 'j': decrease height\n")
+   stdscr.addstr("'q': quit\n")
+   stdscr.addstr("(vi-style commands)\n")
+   stdscr.refresh()
+   while 1:
+      geom_data = body.GetLinks()[0].GetGeometries()[0].GetInfo()._vGeomData
+      l = geom_data[0]
+      w = geom_data[1]
+      h = geom_data[2]
+
+      c = stdscr.getch()
+      # length
+      if c == ord('b'):
+         new_l = l + RESIZE_SCALE
+         resize_box(env, body, x=new_l)
+         print_size(new_l, w, h)
+      elif c == ord('n'):
+         new_l = l - RESIZE_SCALE
+         if new_l > 0.0:
+            resize_box(env, body, x=new_l)
+            print_size(new_l, w, h)
+      # width
+      elif c == ord('h'):
+         new_w = w + RESIZE_SCALE
+         resize_box(env, body, y=new_w)
+         print_size(l, new_w, h)
+      elif c == ord('l'):
+         new_w = w - RESIZE_SCALE
+         if new_w > 0.0:
+            resize_box(env, body, y=new_w)
+            print_size(l, new_w, h)
+      # height
+      elif c == ord('k'):
+         new_h = h + RESIZE_SCALE
+         resize_box(env, body, z=new_h)
+         print_size(l, w, new_h)
+      elif c == ord('j'):
+         new_h = h - RESIZE_SCALE
+         if new_h > 0.0:
+            resize_box(env, body, z=new_h)
+            print_size(l, w, new_h)
+      elif c == ord('q'):
+         break
+
+
+def add_cylinder(env, name, radius=0.03, height=0.12):
+    """Add simple cylinder kinbody to OpenRAVE environment"""
+    with env:
+       geom = openravepy.KinBody.Link.GeometryInfo()
+       geom._type = openravepy.GeometryType.Cylinder
+       geom._vGeomData = [radius, height]
+       geom._vDiffuseColor = [1,0,0]
+       link = openravepy.KinBody.LinkInfo()
+       link._vgeometryinfos = [geom]
+       link._name = 'link0'
+       cyl = openravepy.RaveCreateKinBody(env, '')
+       success = cyl.Init([link], [])
+       cyl.SetName(name)
+       env.Add(cyl)
+       return cyl
+
+
+def resize_cylinder(env, body, radius=None, height=None):
+    """Resize simple (single-link) cylinder kinbody"""
+    with env:
+       env.Remove(body)
+       geom = body.GetLinks()[0].GetGeometries()[0].GetInfo()
+       if radius or radius == 0.0:
+          geom._vGeomData[0] = radius
+       if height or height == 0.0:
+          geom._vGeomData[1] = height
+       link = body.GetLinks()[0].GetInfo()
+       link._vgeometryinfos = [geom]
+       success = body.Init([link],[])
+       env.Add(body)
+
+
+def _interactive_resize_cylinder(stdscr, env, body):
+   import curses
+   RESIZE_SCALE = 0.01
+
+   def print_size(h,r):
+         stdscr.addstr('\rheight: {}, radius: {}'.format(h, r))
+
+   stdscr.clear()
+   stdscr.addstr("'i': increase height, 'j': decrease height\n")
+   stdscr.addstr("'h': increase radius, 'l': decrease radius\n")
+   stdscr.addstr("'q': quit\n")
+   stdscr.addstr("(vi-style commands)\n")
+   stdscr.refresh()
+   while 1:
+      geom_data = body.GetLinks()[0].GetGeometries()[0].GetInfo()._vGeomData
+      r = geom_data[0]
+      h = geom_data[1]
+      c = stdscr.getch()
+      if c == ord('k'):
+         new_h = h + RESIZE_SCALE
+         resize_cylinder(env, body, height=new_h)
+         print_size(new_h, r)
+      if c == ord('j'):
+         new_h = h - RESIZE_SCALE
+         if new_h > 0.0:
+            resize_cylinder(env, body, height=new_h)
+            print_size(new_h, r)
+      if c == ord('h'):
+         new_r = r + RESIZE_SCALE
+         resize_cylinder(env, body, radius=new_r)
+         print_size(h, new_r)
+      if c == ord('l'):
+         new_r = r - RESIZE_SCALE
+         if new_r > 0.0:
+            resize_cylinder(env, body, radius=new_r)
+            print_size(h, new_r)
+      elif c == ord('q'):
+         break
+
+
+def add_sphere(env, name, radius=0.03):
+    """Add simple sphere kinbody to OpenRAVE environment"""
+    with env:
+       geom = openravepy.KinBody.Link.GeometryInfo()
+       geom._type = openravepy.GeometryType.Sphere
+       geom._vGeomData = [radius]
+       geom._vDiffuseColor = [1,0,0]
+       link = openravepy.KinBody.LinkInfo()
+       link._vgeometryinfos = [geom]
+       link._name = 'link0'
+       sphere = openravepy.RaveCreateKinBody(env, '')
+       success = sphere.Init([link], [])
+       sphere.SetName(name)
+       env.Add(sphere)
+       return sphere
+
+
+def resize_sphere(env, body, radius=None):
+    """Resize simple (single-link) sphere kinbody"""
+    with env:
+       env.Remove(body)
+       geom = body.GetLinks()[0].GetGeometries()[0].GetInfo()
+       if radius or radius == 0.0:
+          geom._vGeomData[0] = radius
+          link = body.GetLinks()[0].GetInfo()
+          link._vgeometryinfos = [geom]
+          success = body.Init([link],[])
+          env.Add(body)
+
+
+def _interactive_resize_sphere(stdscr, env, body):
+   import curses
+   RESIZE_SCALE = 0.01
+   stdscr.clear()
+   stdscr.addstr("'k': increase radius, 'j': decrease radius, 'q': quit\n")
+   stdscr.addstr("(vi-style commands)\n")
+   stdscr.refresh()
+   while 1:
+      r = body.GetLinks()[0].GetGeometries()[0].GetInfo()._vGeomData[0]
+      c = stdscr.getch()
+      if c == ord('k'):
+         new_r = r + RESIZE_SCALE
+         resize_sphere(env, body, radius=new_r)
+         stdscr.addstr('\rradius: {}'.format(new_r))
+      if c == ord('j'):
+         new_r = r - RESIZE_SCALE
+         if new_r > 0.0:
+            resize_sphere(env, body, radius=new_r)
+            stdscr.addstr('\rradius: {}'.format(new_r))
+      elif c == ord('q'):
+         break
+
+
+def resize_primitive_interactive(env, body):
+   """Live, interactive primitive object resizing
+
+   NOTE: cannot be used in a script because it creates a curses UI
+   that requires user input
+   """
+   import curses.wrapper
+   body_type = body.GetLinks()[0].GetGeometries()[0].GetType()
+   if body_type is openravepy.GeometryType.Sphere:
+      curses.wrapper(_interactive_resize_sphere, env, body)
+   if body_type is openravepy.GeometryType.Cylinder:
+      curses.wrapper(_interactive_resize_cylinder, env, body)
+   if body_type is openravepy.GeometryType.Box:
+      curses.wrapper(_interactive_resize_box, env, body)
+   else:
+      print "Unknown body type. Unable to resize"
