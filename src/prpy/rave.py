@@ -266,7 +266,6 @@ def resize_box(env, body, x=None, y=None, z=None):
 
 
 def _interactive_resize_box(stdscr, env, body):
-   import curses
    RESIZE_SCALE = 0.01
 
    def print_size(l,w,h):
@@ -353,7 +352,6 @@ def resize_cylinder(env, body, radius=None, height=None):
 
 
 def _interactive_resize_cylinder(stdscr, env, body):
-   import curses
    RESIZE_SCALE = 0.01
 
    def print_size(h,r):
@@ -423,7 +421,6 @@ def resize_sphere(env, body, radius=None):
 
 
 def _interactive_resize_sphere(stdscr, env, body):
-   import curses
    RESIZE_SCALE = 0.01
    stdscr.clear()
    stdscr.addstr("'k': increase radius, 'j': decrease radius, 'q': quit\n")
@@ -445,19 +442,22 @@ def _interactive_resize_sphere(stdscr, env, body):
          break
 
 
-def resize_primitive_interactive(env, body):
-   """Live, interactive primitive object resizing
+def resize_primitive_interactive(body):
+   """Live, interactive primitive object kinbody resizing
 
    NOTE: cannot be used in a script because it creates a curses UI
    that requires user input
    """
+   assert type(body) is openravepy.KinBody, "body must be an OpenRAVE KinBody"
+
    import curses.wrapper
+   env = body.GetEnv()
    body_type = body.GetLinks()[0].GetGeometries()[0].GetType()
    if body_type is openravepy.GeometryType.Sphere:
       curses.wrapper(_interactive_resize_sphere, env, body)
-   if body_type is openravepy.GeometryType.Cylinder:
+   elif body_type is openravepy.GeometryType.Cylinder:
       curses.wrapper(_interactive_resize_cylinder, env, body)
-   if body_type is openravepy.GeometryType.Box:
+   elif body_type is openravepy.GeometryType.Box:
       curses.wrapper(_interactive_resize_box, env, body)
    else:
-      print "Unknown body type. Unable to resize"
+      logging.warn("Unknown body type. Unable to resize")
