@@ -102,7 +102,7 @@ class RockModule(PerceptionModule):
 
     @PerceptionMethod
     def DetectObjectNearPose(self, robot, obj_name, pose, 
-                             search_extents=[-0.1, -0.1, 0.],
+                             search_extents=None,
                              kinbody_path=None,
                              detection_frame=None,
                              destination_frame=None):
@@ -120,6 +120,9 @@ class RockModule(PerceptionModule):
            (if None defaults to the frame used to intialize the module)
         @return A list of detected kinbodies
         """
+        if search_extents is None: 
+            search_extents=[-0.1, -0.1, 0.]
+
         # Initial the detector
         rock_detector = self._GetDetector(robot.GetEnv(),
                                      kinbody_path,
