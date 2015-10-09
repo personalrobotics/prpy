@@ -91,8 +91,7 @@ class BlockDetector(PerceptionModule):
 
             # Get the pr-ordata package path
             import prpy.util
-            data_dir = prpy.util.FindCatkinResource('pr_ordata', 'data')
-            block_path = os.path.join(data_dir, 'objects', 'block.kinbody.xml')
+            block_path = os.path.join('objects', 'block.kinbody.xml')
             
             detected_blocks = self.find_blocks(cloud_topic=self.point_cloud_topic)
         
