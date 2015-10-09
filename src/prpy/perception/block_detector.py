@@ -8,6 +8,9 @@ from tf.transformations import quaternion_matrix,euler_from_matrix,euler_matrix
 
 from base import PerceptionModule, PerceptionMethod
 
+import logging
+logger = logging.getLogger(__name__)
+
 table_z_offset = -0.02
 
 class BlockDetector(PerceptionModule):
@@ -55,9 +58,9 @@ class BlockDetector(PerceptionModule):
         @param box_max: maximum coordinsates of search area in camera frame
         """
 
-        print "waiting for service..."
+        logging.info("waiting for service...")
         rospy.wait_for_service(service_name);
-        print "Calling service..."
+        logging.info("Calling service...")
         try:
             box_min_pt = geometry_msgs.msg.Point();
             box_min_pt.x = box_min[0];
@@ -72,47 +75,9 @@ class BlockDetector(PerceptionModule):
             response = service(cloud_topic, segment_planes, num_planes, plane_distance, segment_depth, min_depth, max_depth, cluster_tolerance, min_cluster_size, max_cluster_size, segment_box, box_min_pt, box_max_pt);
             return response.blocks;
         except rospy.ServiceException, e:
-            print "Service call failed: %s"%e
+            logging.error("Service call failed: %s", str(e))
             return []
 
-
-    @PerceptionMethod
-    def DetectObjects(self, robot, **kw_args):
-        """
-        Detect the table and the bin
-        """
-        env = robot.GetEnv()
-
-        # Get the pr-ordata package path
-        data_dir = prpy.util.FindCatkinResource('pr_ordata', 'data')
-
-        # Place the table in the environment
-        #table_path = os.path.join(data_dir, 'furniture', 'table.kinbody.xml')
-        #table = env.ReadKinBodyXMLFile(table_path)
-        #env.Add(table)
-        
-        #table_in_robot = numpy.array([[0., 0., 1., 1.025],
-        #                              [1., 0., 0., 0.],
-        #                              [0., 1., 0., 0.],
-        #                              [0., 0., 0., 1.]])
-        #table_in_world = numpy.dot(robot.GetTransform(), table_in_robot)
-        #table.SetTransform(table_in_world)
-        #table_aabb = table.ComputeAABB()
-        #table_height = table_aabb.pos()[2] + table_aabb.extents()[2] 
-
-        # TODO: Add a bin to the edge of the table for placing the blocks into
-        #tray_path = os.path.join(data_dir, 'objects', 'wicker_tray.kinbody.xml')
-        #tray = env.ReadKinBodyXMLFile(tray_path)
-        #tray_aabb = tray.ComputeAABB()
-        #env.Add(tray)
-
-        #xpose = table
-        #tray_in_table = numpy.array([[1., 0., 0., -0.7607], # right edge - -.99575 + .235
-        #                             [0., 0., 1., table_height + 0.01],
-        #                             [0.,-1., 0., 0.],
-        #                             [0., 0., 0., 1.]])
-        #tray_in_world = numpy.dot(table.GetTransform(), tray_in_table)
-        #tray.SetTransform(tray_in_world)
 
     @PerceptionMethod
     def DetectBlocks(self, robot, table, blocks=[], **kw_args):
