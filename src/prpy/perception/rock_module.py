@@ -48,7 +48,7 @@ class RockModule(PerceptionModule):
         self.destination_frame = destination_frame
 
     def __str__(self):
-        return 'RockModule'
+        return self.__class__.__name__
 
     def _GetDetector(self, env, kinbody_path, detection_frame, destination_frame):
         """
