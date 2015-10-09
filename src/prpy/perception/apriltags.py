@@ -38,6 +38,15 @@ class ApriltagsModule(PerceptionModule):
     
     def __init__(self, marker_topic, marker_data_path, kinbody_path,
                  detection_frame, destination_frame):
+        """
+        This initializes an April Tags detector.
+        Args:
+            marker_topic (string): The ROS topic to read markers from. Typically the output topic for April Tags
+            marker_data_path(string): The json file where the association between tag and object is stored
+            kinbody_path: The path to the folder where kinbodies are stored
+            detection_frame: The TF frame of the camera
+            destination_frame: The desired world TF frame
+        """
 
         super(ApriltagsModule, self).__init__()
         
@@ -51,7 +60,7 @@ class ApriltagsModule(PerceptionModule):
     def __str__(self):
         return 'Apriltags'
 
-    def DetectObjects(self, robot, object_names, **kw_args):
+    def DetectObjects(self, env, object_names, **kw_args):
         """
         This hack detects only the objects in object_names. Updates existing
         objects, but only adds objects in the object_names list.
@@ -60,19 +69,19 @@ class ApriltagsModule(PerceptionModule):
         detected = [];
         for body in added_kinbodies:
             if not (body.GetName() in object_names):
-                body.GetEnvironment().RemoveKinbody(body);
+                env.RemoveKinbody(body);
             else:
                 detected.append(body);
         return detected;
                 
-    def DetectObject(self, robot, object_name, **kw_args):
+    def DetectObject(self, env, object_name, **kw_args):
         """
         Detects a single named object.
         """
-        return (self.DetectObjects(robot, object_names=[object_name], **kw_args))[0][0];
-        
-    @PerceptionMethod
-    def DetectObjects(self, robot, **kw_args):
+        return (self._DetectObjects( env, object_names=[object_name], **kw_args))[0][0];
+
+
+    def _DetectObjects(self, env, **kw_args):
         """
         Use the apriltags service to detect objects and add them to the
         environment
@@ -108,7 +117,7 @@ class ApriltagsModule(PerceptionModule):
             # TODO: Creating detector is not instant...might want
             #  to just do this once in the constructor
             import kinbody_detector.kinbody_detector as kd
-            detector = kd.KinBodyDetector(robot.GetEnv(),
+            detector = kd.KinBodyDetector(env,
                                           marker_data_path,
                                           kinbody_path,
                                           marker_topic,
@@ -119,5 +128,12 @@ class ApriltagsModule(PerceptionModule):
             return detector.Update()
         except Exception, e:
             logger.error('Detecton failed update: %s' % str(e))
-            raise 
+            raise
+
+    @PerceptionMethod
+    def DetectObjects(self, robot, **kw_args):
+        """
+        Overriden method for detection_frame
+        """
+        return (self._DetectObjects(robot.GetEnv(),**kwargs))
                                           
