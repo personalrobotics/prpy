@@ -80,11 +80,11 @@ class BlockDetector(PerceptionModule):
 
 
     @PerceptionMethod
-    def DetectBlocks(self, robot, table, blocks=[], **kw_args):
+    def DetectBlocks(self, robot, table, blocks=None, **kw_args):
         """
         Place blocks on the table
         """
-        if len(blocks) == 0:
+        if blocks is not None and len(blocks) == 0:
             # Add all blocks
         
             env = robot.GetEnv()
