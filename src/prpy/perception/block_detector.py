@@ -16,6 +16,13 @@ table_z_offset = -0.02
 class BlockDetector(PerceptionModule):
 
     def __init__(self,point_cloud_topic,detection_frame,destination_frame):
+        """
+        Initializes a Block Detector
+
+        @param point_cloud_topic the name of the point-cloud to read from
+        @param detection_frame the TF frame of the camera
+        @param destination_frame the TF frame of block_in_world
+        """
 
         super(PerceptionModule, self).__init__()
 
