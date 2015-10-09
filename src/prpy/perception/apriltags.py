@@ -135,5 +135,5 @@ class ApriltagsModule(PerceptionModule):
         """
         Overriden method for detection_frame
         """
-        return (self._DetectObjects(robot.GetEnv(),**kwargs))
+        return self._DetectObjects(robot.GetEnv(),**kwargs)
                                           
