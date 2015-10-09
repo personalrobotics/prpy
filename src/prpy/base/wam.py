@@ -31,7 +31,6 @@
 import logging
 import numpy
 import openravepy
-import time
 import warnings
 from manipulator import Manipulator
 from prpy.clone import Clone
@@ -158,6 +157,7 @@ class WAM(Manipulator):
 
         if not inCollision:
             for i in range(1,steps):
+                import time
                 manipulator.Servo(velocities)
                 time.sleep(timeStep)
             manipulator.Servo([0] * len(manipulator.GetArmIndices()))
