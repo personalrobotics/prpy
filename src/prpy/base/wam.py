@@ -305,7 +305,7 @@ class WAM(Manipulator):
 
             try:
                 with robot.CreateRobotStateSaver(Robot.SaveParameters.JointMaxVelocityAndAcceleration):
-                    v1 = robot.GetVelocityLimits()
+                    vl = robot.GetDOFVelocityLimits()
                     manipulator.SetVelocityLimits(velocity_limit_scale*vl, 0.5)
                     robot.ExecutePath(path)
                 return False
