@@ -88,6 +88,8 @@ class Robot(openravepy.Robot):
             method_names.update(self.planner.get_planning_method_names())
         if hasattr(self, 'actions') and self.actions is not None:
             method_names.update(self.actions.get_actions())
+        if hasattr(self, 'detector') and self.detector is not None:
+            method_names.update(self.detector.get_perception_method_names())
 
         return list(method_names)
 
@@ -109,6 +111,14 @@ class Robot(openravepy.Robot):
               and self.actions.has_action(name)):
 
             delegate_method = self.actions.get_action(name)
+            @functools.wraps(delegate_method)
+            def wrapper_method(*args, **kw_args):
+                return delegate_method(self, *args, **kw_args)
+            return wrapper_method
+        elif (hasattr(self, 'detector') and self.detector is not None
+              and self.detector.has_perception_method(name)):
+            
+            delegate_method = getattr(self.detector, name)
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return delegate_method(self, *args, **kw_args)

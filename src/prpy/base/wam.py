@@ -157,6 +157,7 @@ class WAM(Manipulator):
 
         if not inCollision:
             for i in range(1,steps):
+                import time
                 manipulator.Servo(velocities)
                 time.sleep(timeStep)
             manipulator.Servo([0] * len(manipulator.GetArmIndices()))
@@ -223,7 +224,8 @@ class WAM(Manipulator):
             manipulator.controller.SendCommand('ClearStatus')
 
     def MoveUntilTouch(manipulator, direction, distance, max_distance=None,
-                       max_force=5.0, max_torque=None, ignore_collisions=None, **kw_args):
+                       max_force=5.0, max_torque=None, ignore_collisions=None,
+                       velocity_limit_scale=0.25, **kw_args):
         """Execute a straight move-until-touch action.
         This action stops when a sufficient force is is felt or the manipulator
         moves the maximum distance. The motion is considered successful if the
@@ -235,7 +237,10 @@ class WAM(Manipulator):
         @param max_distance maximum distance in meters
         @param max_force maximum force in Newtons
         @param max_torque maximum torque in Newton-Meters
-        @param ignore_collisions collisions with these objects are ignored when planning the path, e.g. the object you think you will touch
+        @param ignore_collisions collisions with these objects are ignored when 
+        planning the path, e.g. the object you think you will touch
+        @param velocity_limit_scale A multiplier to use to scale velocity limits 
+        when executing MoveUntilTouch ( < 1 in most cases).           
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
@@ -299,7 +304,10 @@ class WAM(Manipulator):
             manipulator.hand.TareForceTorqueSensor()
 
             try:
-                robot.ExecutePath(path)
+                with robot.CreateRobotStateSaver(Robot.SaveParameters.JointMaxVelocityAndAcceleration):
+                    vl = robot.GetDOFVelocityLimits()
+                    manipulator.SetVelocityLimits(velocity_limit_scale*vl, 0.5)
+                    robot.ExecutePath(path)
                 return False
             except exceptions.TrajectoryAborted as e:
                 logger.warn('MoveUntilTouch aborted: %s', str(e))

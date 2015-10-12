@@ -715,7 +715,6 @@ def IsAtTrajectoryStart(robot, trajectory):
     # If all joints match, return True.
     return True
 
-
 def IsTimedTrajectory(trajectory):
     """
     Returns True if the trajectory is timed.
@@ -729,6 +728,30 @@ def IsTimedTrajectory(trajectory):
     cspec = trajectory.GetConfigurationSpecification()
     return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
 
+def ComputeEnabledAABB(kinbody):
+    """
+    Returns the AABB of the enabled links of a KinBody.
+
+    @param kinbody: an OpenRAVE KinBody
+    @returns: AABB of the enabled links of the KinBody
+    """
+    from numpy import NINF, PINF
+    from openravepy import AABB
+
+    min_corner = numpy.array([PINF] * 3)
+    max_corner = numpy.array([NINF] * 3)
+
+    for link in kinbody.GetLinks():
+        if link.IsEnabled():
+            link_aabb = link.ComputeAABB()
+            center = link_aabb.pos()
+            half_extents = link_aabb.extents()
+            min_corner = numpy.minimum(center - half_extents, min_corner)
+            max_corner = numpy.maximum(center + half_extents, max_corner)
+
+    center = (min_corner + max_corner) / 2.
+    half_extents = (max_corner - min_corner) / 2.
+    return AABB(center, half_extents)
 
 def UntimeTrajectory(trajectory, env=None):
     """
@@ -1092,3 +1115,4 @@ def BodyPointsStateFromTraj(bodypoints, traj, time, derivatives=[0, 1, 2]):
                            of position of size |times| x |derivatives|
     """
     return BodyPointsStatesFromTraj(bodypoints, traj, (time,), derivatives)[0]
+
