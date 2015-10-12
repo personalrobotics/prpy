@@ -63,6 +63,8 @@ class BlockDetector(PerceptionModule):
         @param segment_box: flag to discard points outside of (box_min, box_max)
         @param box_min: minimum coordinsates of search area in camera frame
         @param box_max: maximum coordinsates of search area in camera frame
+
+        @return list of blocks found, if any
         """
 
         logging.info("waiting for service...")
@@ -89,7 +91,13 @@ class BlockDetector(PerceptionModule):
     @PerceptionMethod
     def DetectBlocks(self, robot, table, blocks=None,timeout=10, **kw_args):
         """
-        Place blocks on the table
+        Calls detector for blocks and places them on the table
+
+        @param robot: The robot instance using the detector
+        @param table: The kinbody for the table on which the blocks are placed
+        @blocks: List of blocks currently in the environment; if present, redetection not done
+
+        @return The list of blocks detected
         """
         if blocks is not None and len(blocks) == 0:
             # Add all blocks
