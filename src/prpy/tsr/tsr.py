@@ -36,26 +36,6 @@ NANBW = numpy.ones(6)*float('nan')
 EPSILON = 0.001
 
 
-def wrap_to_interval(angles, lower=-pi):
-    """
-    Wraps an angle into a semi-closed interval of width 2*pi.
-
-    By default, this interval is `[-pi, pi)`.  However, the lower bound of the
-    interval can be specified to wrap to the interval `[lower, lower + 2*pi)`.
-
-    If `lower` is an array the same length as angles, the bounds will be
-    applied element-wise to each angle in `angles`.
-
-    See: http://stackoverflow.com/a/32266181
-
-    @param angles an angle or 1D array of angles to wrap
-    @type  angles float or numpy.array
-    @param lower optional lower bound on wrapping interval
-    @type  lower float or numpy.array
-    """
-    return (angles - lower) % (2*pi) + lower
-
-
 class TSR(object):
     """ A Task-Space-Region (TSR) represents a motion constraint. """
     def __init__(self, T0_w=None, Tw_e=None, Bw=None,
@@ -82,6 +62,7 @@ class TSR(object):
         Bw_interval = Bw_cont[3:6, 1] - Bw_cont[3:6, 0]
         Bw_interval = numpy.minimum(Bw_interval, 2*pi)
 
+        from prpy.util import wrap_to_interval
         Bw_cont[3:6, 0] = wrap_to_interval(Bw_cont[3:6, 0])
         Bw_cont[3:6, 1] = Bw_cont[3:6, 0] + Bw_interval
 
@@ -200,6 +181,7 @@ class TSR(object):
         @return check a (3,) vector of True if within and False if outside
         """
         # Unwrap rpy to Bw_cont.
+        from prpy.util import wrap_to_interval
         rpy = wrap_to_interval(rpy, lower=Bw[:, 0])
 
         # Check bounds condition on RPY component.
@@ -398,6 +380,7 @@ class TSR(object):
                                 if numpy.isnan(x) else x
                                 for i, x in enumerate(xyzrpy)])
         # Unwrap rpy to [-pi, pi]
+        from prpy.util import wrap_to_interval
         Bw_sample[3:6] = wrap_to_interval(Bw_sample[3:6])
         return Bw_sample
 

@@ -720,7 +720,7 @@ def IsAtTrajectoryStart(robot, trajectory):
             return False
         
         # Compare rotation distance
-        rot_delta_value = (current_pose[2] - traj_start[2] + numpy.pi) % (2.*numpy.pi) - numpy.pi
+        rot_delta_value = abs(wrap_to_interval(current_pose[2] - traj_start[2]))
         rot_resolution = robot.GetAffineRotationAxisResolution()[2] # Rotation about z?
         if rot_delta_value > rot_resolution:
             return False
@@ -1152,3 +1152,17 @@ def BodyPointsStateFromTraj(bodypoints, traj, time, derivatives=[0, 1, 2]):
     """
     return BodyPointsStatesFromTraj(bodypoints, traj, (time,), derivatives)[0]
 
+def wrap_to_interval(angles, lower=-numpy.pi):
+    """
+    Wraps an angle into a semi-closed interval of width 2*pi.
+    By default, this interval is `[-pi, pi)`.  However, the lower bound of the
+    interval can be specified to wrap to the interval `[lower, lower + 2*pi)`.
+    If `lower` is an array the same length as angles, the bounds will be
+    applied element-wise to each angle in `angles`.
+    See: http://stackoverflow.com/a/32266181
+    @param angles an angle or 1D array of angles to wrap
+    @type  angles float or numpy.array
+    @param lower optional lower bound on wrapping interval
+    @type  lower float or numpy.array
+    """
+    return (angles - lower) % (2*numpy.pi) + lower
