@@ -31,6 +31,7 @@
 import abc
 import functools
 import logging
+import numpy
 import openravepy
 from ..clone import Clone
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
@@ -97,9 +98,34 @@ class PlanningMethod(object):
         env = robot.GetEnv()
         defer = kw_args.get('defer')
 
+        # Store the original joint values and indices.
+        joint_indices = [robot.GetActiveDOFIndices(), None]
+        joint_values = [robot.GetActiveDOFValues(), None]
+
         with Clone(env, clone_env=instance.env,
                    lock=True, unlock=False) as cloned_env:
             cloned_robot = cloned_env.Cloned(robot)
+
+            # Store the cloned joint values and indices.
+            joint_indices[1] = cloned_robot.GetActiveDOFIndices()
+            joint_values[1] = cloned_robot.GetActiveDOFValues()
+
+            # Check for mismatches in the cloning and hackily reset them.
+            # (This is due to a possible bug in OpenRAVE environment cloning where in
+            # certain situations, the Active DOF ordering and values do not match the
+            # parent environment.  It seems to be exacerbated by multirotation joints,
+            # but the exact cause and repeatability is unclear at this point.)
+            if not numpy.array_equal(joint_indices[0], joint_indices[1]):
+                logger.warning("Cloned Active DOF index mismatch: %s != %s",
+                               str(joint_indices[0]),
+                               str(joint_indices[1]))
+                cloned_robot.SetActiveDOFs(joint_indices[0])
+
+            if not numpy.allclose(joint_values[0], joint_values[1]):
+                logger.warning("Cloned Active DOF value mismatch: %s != %s",
+                               str(joint_values[0]),
+                               str(joint_values[1]))
+                cloned_robot.SetActiveDOFValues(joint_values[0])
 
             def call_planner():
                 try:
