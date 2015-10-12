@@ -64,6 +64,9 @@ class ApriltagsModule(PerceptionModule):
         """
         This hack detects only the objects in object_names. Updates existing
         objects, but only adds objects in the object_names list.
+
+        @param env: The current OpenRAVE environment
+        @param object_names: The list of names of objects to detect
         """
         added_kinbodies, updated_kinbodies = self._DetectObjects(env, **kw_args);
         detected = [];
@@ -86,6 +89,15 @@ class ApriltagsModule(PerceptionModule):
         """
         Use the apriltags service to detect objects and add them to the
         environment. Params are as in __init__.
+
+        @param env: The current OpenRAVE environment
+        @param marker_topic The ROS topic to read markers from. Typically the output topic for April Tags
+        @param marker_data_path The json file where the association between tag and object is stored
+        @param kinbody_path The path to the folder where kinbodies are stored
+        @param detection_frame The TF frame of the camera
+        @param destination_frame The desired world TF frame
+
+        @return The list of kinbodies associated with the detected apriltags
         """
         try:
             # Allow caller to override any of the initial parameters
