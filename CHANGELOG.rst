@@ -2,6 +2,33 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Added a perception pipeline (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_)
+* Added actions (and other functionality) for the block sorting demo (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_, `#194 <https://github.com/personalrobotics/prpy/issues/194>`_)
+* Added unit tests for planners (`#169 <https://github.com/personalrobotics/prpy/issues/169>`_)
+* Added helper functions for computing body point acceleration twists (`#166 <https://github.com/personalrobotics/prpy/issues/166>`_)
+* Added a common base class for trajectory exceptions and an exception for precondition violation (`#196 <https://github.com/personalrobotics/prpy/issues/196>`_)
+* Added documentation for `prpy.base.Tags` (`#193 <https://github.com/personalrobotics/prpy/issues/193>`_)
+* Added missing trajectory flags to VectorFieldPlanner (`#191 <https://github.com/personalrobotics/prpy/issues/191>`_)
+* Added UntimeTrajectory() to strip timing from trajectories (`#187 <https://github.com/personalrobotics/prpy/issues/187>`_)
+* Added ComputeEnabledAABB function
+* Added a better error message when or_ompl is missing (`#178 <https://github.com/personalrobotics/prpy/issues/178>`_)
+* Added support for OWD execution options
+* Refactored TSR and TSRChain classes (`#159 <https://github.com/personalrobotics/prpy/issues/159>`_)
+* Refactored MoveUntilTouch and fixed simulation (`#180 <https://github.com/personalrobotics/prpy/issues/180>`, `#173 <https://github.com/personalrobotics/prpy/issues/173>`_)
+* Refactored and cleaned up the Planner and MetaPlanner base classes (`#176 <https://github.com/personalrobotics/prpy/issues/176>`_, `#162 <https://github.com/personalrobotics/prpy/issues/162>`_)
+* Refactored  VectorFieldPlanner to use a numerical integrator (`#184 <https://github.com/personalrobotics/prpy/issues/184>`_)
+* Fixed acceleration limits on ADA for the MICO2 hardware upgrade (`#186 <https://github.com/personalrobotics/prpy/issues/186>`_)
+* Fixed _PlanWrapper on Manipulator to default to execute=False (`#183 <https://github.com/personalrobotics/prpy/issues/183>`_)
+* Fixed sign on tolerance in ComputeJointVelocityFromTwist (`#177 <https://github.com/personalrobotics/prpy/issues/177>`_) 
+* Fixed GreedyIK planner in MoveUntilTouch (`#174 <https://github.com/personalrobotics/prpy/issues/174>`_)
+* Fixed the name of the timelimit argument in HauserParabolicSmoother
+* Fixed PostProcessPath to preserve trajectory tags
+* Removed unnecessary sleep in WAM tare command
+* Deprecated the GetVelocityLimits override on WAM (`#175 <https://github.com/personalrobotics/prpy/issues/175>`_)
+* Contributors: Anton Kuznetsov, Chris Dellin, Jennifer King, Michael Koval, Pras Velagapudi, Rachel Holladay, Shervin Javdani, Shushman, Shushman Choudhury, Siddhartha Srinivasa, Stefanos Nikolaidis, Aaron Johnson, Matt Klingsmith
+
 1.2.0 (2015-08-06)
 ------------------
 * Add support for numpy <1.8 which don't support norm(axis=1)
