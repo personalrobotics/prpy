@@ -394,43 +394,6 @@ def SimplifyTrajectory(traj, robot):
         reduced_traj.Insert(new_idx, traj.GetWaypoint(old_idx))
     return reduced_traj
 
-def IsInCollision(traj, robot, selfcoll_only=False):
-    report = openravepy.CollisionReport()
-
-    #get trajectory length
-    NN = traj.GetNumWaypoints()
-    ii = 0
-    total_dist = 0.0
-    for ii in range(NN-1):
-        point1 = traj.GetWaypoint(ii)
-        point2 = traj.GetWaypoint(ii+1)
-        dist = 0.0
-        total_dof = robot.GetActiveDOF()
-        for jj in range(total_dof):
-            dist += pow(point1[jj]-point2[jj],2)
-        total_dist += numpy.sqrt(dist)
-    step_dist = 0.04
-    if traj.GetDuration()<0.001:
-        openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
-    total_time = traj.GetDuration()
-    step_time = total_time*step_dist/total_dist
-
-    #check
-    for time in numpy.arange(0.0,total_time,step_time):
-        point = traj.Sample(time)
-        collision = False
-        with robot.GetEnv():
-            robot.SetActiveDOFValues(point)
-            if robot.CheckSelfCollision(report):
-                collision = True
-            if not collision:
-                if  (not selfcoll_only) and robot.GetEnv().CheckCollision(robot,report):
-                    collision = True
-        if collision:
-            return True        
-                
-    return False    
-            
 
 
 class Recorder(object):
@@ -580,10 +543,9 @@ def quadraticObjective(dq, J, dx, *args):
     return objective, gradient
 
 
-def ComputeJointVelocityFromTwist(robot, twist,
-                                  objective=quadraticObjective,
-                                  joint_limit_tolerance=3e-2,
-                                  dq_init=None):
+def ComputeJointVelocityFromTwist(
+        robot, twist, objective=quadraticObjective, dq_init=None,
+        joint_limit_tolerance=3e-2, joint_velocity_limits=None):
     '''
     Computes the optimal joint velocity given a twist by formulating
     the problem as a quadratic optimization with box constraints and
@@ -595,6 +557,8 @@ def ComputeJointVelocityFromTwist(robot, twist,
             defaults to quadraticObjective
     @params dq_init optional initial guess for optimal joint velocity
             defaults to robot.GetActiveDOFVelocities()
+    @params joint_velocity_limits override the robot's joint velocity limit;
+            defaults to robot.GetActiveDOFMaxVel()
     @params joint_limit_tolerance if less then this distance to joint
             limit, velocity is bounded in that direction to 0
     @return dq_opt optimal joint velocity
@@ -604,6 +568,20 @@ def ComputeJointVelocityFromTwist(robot, twist,
     manip = robot.GetActiveManipulator()
     robot.SetActiveDOFs(manip.GetArmIndices())
 
+    if joint_velocity_limits is None:
+        joint_velocity_limits = robot.GetActiveDOFMaxVel()
+    elif isinstance(joint_velocity_limits, float):
+        joint_velocity_limits = numpy.array(
+            [numpy.PINF] * robot.GetActiveDOF())
+
+    if len(joint_velocity_limits) != robot.GetActiveDOF():
+        raise ValueError(
+            'Joint velocity limits has incorrect length:'
+            ' Expected {:d}, got {:d}.'.format(
+                robot.GetActiveDOF(), len(joint_velocity_limits)))
+    elif (joint_velocity_limits <= 0.).any():
+        raise ValueError('One or more joint velocity limit is not positive.')
+
     jacobian_spatial = manip.CalculateJacobian()
     jacobian_angular = manip.CalculateAngularVelocityJacobian()
     jacobian = numpy.vstack((jacobian_spatial, jacobian_angular))
@@ -612,13 +590,14 @@ def ComputeJointVelocityFromTwist(robot, twist,
     twist_active = twist[rows]
     jacobian_active = jacobian[rows, :]
 
-    bounds = [(-x, x) for x in robot.GetActiveDOFMaxVel()]
+    bounds = numpy.column_stack(
+        (-joint_velocity_limits, joint_velocity_limits))
 
     # Check for joint limits
     q_curr = robot.GetActiveDOFValues()
     q_min, q_max = robot.GetActiveDOFLimits()
-    dq_bounds = [(0, max) if q_curr[i] <= q_min[i] + joint_limit_tolerance else
-                 (min, 0) if q_curr[i] >= q_max[i] - joint_limit_tolerance else
+    dq_bounds = [( 0., max) if q_curr[i] <= q_min[i] + joint_limit_tolerance else
+                 (min,  0.) if q_curr[i] >= q_max[i] - joint_limit_tolerance else
                  (min, max) for i, (min, max) in enumerate(bounds)]
 
     if dq_init is None:
@@ -772,7 +751,6 @@ def IsAtTrajectoryStart(robot, trajectory):
     # If all joints match, return True.
     return True
 
-
 def IsTimedTrajectory(trajectory):
     """
     Returns True if the trajectory is timed.
@@ -785,3 +763,392 @@ def IsTimedTrajectory(trajectory):
     """
     cspec = trajectory.GetConfigurationSpecification()
     return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
+
+def ComputeEnabledAABB(kinbody):
+    """
+    Returns the AABB of the enabled links of a KinBody.
+
+    @param kinbody: an OpenRAVE KinBody
+    @returns: AABB of the enabled links of the KinBody
+    """
+    from numpy import NINF, PINF
+    from openravepy import AABB
+
+    min_corner = numpy.array([PINF] * 3)
+    max_corner = numpy.array([NINF] * 3)
+
+    for link in kinbody.GetLinks():
+        if link.IsEnabled():
+            link_aabb = link.ComputeAABB()
+            center = link_aabb.pos()
+            half_extents = link_aabb.extents()
+            min_corner = numpy.minimum(center - half_extents, min_corner)
+            max_corner = numpy.maximum(center + half_extents, max_corner)
+
+    center = (min_corner + max_corner) / 2.
+    half_extents = (max_corner - min_corner) / 2.
+    return AABB(center, half_extents)
+
+def UntimeTrajectory(trajectory, env=None):
+    """
+    Returns an untimed copy of the provided trajectory.
+
+    This function strips the DeltaTime group from a timed trajectory to create
+    an untimed trajectory.
+
+    @param trajectory: an OpenRAVE trajectory
+    @returns: an untimed copy of the provided trajectory.
+    """
+    cspec = trajectory.GetConfigurationSpecification()
+    cspec.RemoveGroups('deltatime', True)
+    waypoints = trajectory.GetWaypoints(0, trajectory.GetNumWaypoints(), cspec)
+
+    path = openravepy.RaveCreateTrajectory(env or trajectory.GetEnv(),
+                                           trajectory.GetXMLId())
+    path.Init(cspec)
+    path.Insert(0, waypoints)
+    return path
+
+
+def ComputeUnitTiming(robot, traj, env=None):
+    """
+    Compute the unit velocity timing of a path or trajectory.
+
+    @param robot: robot whose DOFs should be considered
+    @param traj: path or trajectory
+    @param env: environment to create the output trajectory in; defaults to the
+                same environment as the input trajectory
+    @returns: trajectory with unit velocity timing
+    """
+    from openravepy import RaveCreateTrajectory
+
+    if env is None:
+        env = traj.GetEnv()
+
+    cspec = traj.GetConfigurationSpecification()
+    cspec.AddDeltaTimeGroup()
+    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+
+    new_traj = RaveCreateTrajectory(env, '')
+    new_traj.Init(cspec)
+
+    for i in range(traj.GetNumWaypoints()):
+        waypoint = traj.GetWaypoint(i, cspec)
+        dof_values = cspec.ExtractJointValues(waypoint, robot, dof_indices)
+
+        if i == 0:
+            deltatime = 0.
+        else:
+            deltatime = numpy.linalg.norm(dof_values - dof_values_prev)
+
+        dof_values_prev = dof_values
+
+        cspec.InsertDeltaTime(waypoint, deltatime)
+        new_traj.Insert(i, waypoint)
+
+    return new_traj
+
+
+def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
+                         first_step=None, epsilon=1e-6):
+    """
+    Generate a list of (time, configuration) pairs to collision check.
+
+    If every generated configuration is collision free, then the trajectory is
+    guaranteed to be collision free up to DOF resolution. This function only
+    operates on timed trajectories. If you want to use this function on a path,
+    then consider using the util.ComputeUnitTiming function to compute its
+    arclength parameterization.
+
+    @param trajectory: timed trajectory
+    @returns generator of (time, configuration) pairs 
+    """
+
+    # TODO: This enters an infinite loop if start_time is non-zero.
+
+    if not IsTimedTrajectory(traj):
+        raise ValueError(
+            'Trajectory must be timed. If you want to use this function on a'
+            ' path, then consider using util.ComputeUnitTiming to compute its'
+            ' arclength parameterization.')
+
+
+    cspec = traj.GetConfigurationSpecification()
+    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+    q_resolutions = robot.GetDOFResolutions()[dof_indices]
+    duration = traj.GetDuration()
+
+    if not (0. <= start_time < duration + epsilon):
+        raise ValueError(
+            'Start time {:.6f} is out of range [0, {:.6f}].'.format(
+                start_time, duration))
+
+    start_time = min(start_time, duration)
+
+    if first_step is None:
+        first_step = duration - start_time
+
+    if not (0. < first_step <= duration - start_time):
+        raise ValueError(
+            'First step {:.6f} is out of range (0, {:.6f}]'.format(
+                first_step, duration - start_time))
+
+    # Bisection method. Start at the begining of the trajectory and initialize
+    # the stepsize to the end of the trajectory.
+    t_prev = start_time
+    q_prev = cspec.ExtractJointValues(
+        traj.GetWaypoint(t_prev), robot, dof_indices)
+    dt = first_step
+
+    # Always collision check the first point.
+    if include_start:
+        yield t_prev, q_prev
+
+    while t_prev < duration - epsilon:
+        t_curr = t_prev + dt
+        q_curr = cspec.ExtractJointValues(
+            traj.Sample(t_curr), robot, dof_indices)
+
+        # Step violated dof resolution. Halve the step size and continue.
+        if (numpy.abs(q_curr - q_prev) > q_resolutions).any():
+            dt = dt / 2.
+        # Yield this configuration. Double the step size and continue.
+        else:
+            yield t_curr, q_curr
+
+            q_prev = q_curr
+            t_prev = min(t_curr, duration)
+            dt = 2. * dt
+
+
+def IsInCollision(traj, robot, selfcoll_only=False):
+    report = openravepy.CollisionReport()
+
+    #get trajectory length
+    NN = traj.GetNumWaypoints()
+    ii = 0
+    total_dist = 0.0
+    for ii in range(NN-1):
+        point1 = traj.GetWaypoint(ii)
+        point2 = traj.GetWaypoint(ii+1)
+        dist = 0.0
+        total_dof = robot.GetActiveDOF()
+        for jj in range(total_dof):
+            dist += pow(point1[jj]-point2[jj],2)
+        total_dist += numpy.sqrt(dist)
+
+    step_dist = 0.04
+
+    if traj.GetDuration()<0.001:
+        openravepy.planningutils.RetimeActiveDOFTrajectory(traj,robot)
+    total_time = traj.GetDuration()
+    step_time = total_time*step_dist/total_dist
+
+    #check
+    for time in numpy.arange(0.0,total_time,step_time):
+        point = traj.Sample(time)
+        collision = False
+        with robot.GetEnv():
+            robot.SetActiveDOFValues(point)
+            if robot.CheckSelfCollision(report):
+                collision = True
+            if not collision:
+                if  (not selfcoll_only) and robot.GetEnv().CheckCollision(robot,report):
+                    collision = True
+        if collision:
+            return True        
+                
+    return False    
+
+
+def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
+    """
+    Helper function to extract the joint position, velocity and acceleration
+    from an OpenRAVE trajectory.
+    @param robot The OpenRAVE robot
+    @param traj An OpenRAVE trajectory
+    @param times List of times in seconds
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return pva_list List of list of derivatives at specified times.
+                     Inserts 'None' for unavailable or undesired fields
+                     The i-th element is the derivatives[i]-th derivative
+                     of position of size |times| x |derivatives|
+
+    """
+    duration = traj.GetDuration()
+
+    times = numpy.array(times)
+    if any(times > duration):
+        raise ValueError('Input times {0:} exceed duration {1:.2f}'
+                         .format(times, duration))
+
+    cspec = traj.GetConfigurationSpecification()
+    num_dofs = robot.GetDOF()
+    dof_indices = range(num_dofs)
+
+    pva_list = []
+    for t in times:
+        pva = [None] * len(derivatives)
+        trajdata = traj.Sample(t)
+    for i, deriv in enumerate(derivatives):
+        pva[i] = cspec.ExtractJointValues(trajdata, robot, dof_indices, deriv)
+    pva_list.append(pva)
+
+    return pva_list
+
+
+def JointStateFromTraj(robot, traj, time, derivatives=[0, 1, 2]):
+    """
+    Helper function to extract the joint position, velocity and acceleration
+    from an OpenRAVE trajectory.
+    @param robot The OpenRAVE robot
+    @param traj An OpenRAVE trajectory
+    @param time time in seconds
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return pva_list List of list of derivatives at specified times.
+                     Inserts 'None' for unavailable or undesired fields
+                     The i-th element is the derivatives[i]-th derivative
+                     of position of size |times| x |derivatives|
+    """
+    return JointStatesFromTraj(robot, traj, (time,), derivatives)[0]
+
+
+def BodyPointsStatesFromJointStates(bodypoints,
+                                    jointstates,
+                                    derivatives=[0, 1, 2]):
+    """
+    Computes the derivatives body points given jointstates.
+    Currently only supports derivatives up to 2.
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
+    @param jointstates List of list of joint derivatives.
+                       Unavailable fields are input as 'None'
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
+    """
+
+    # Convert derivatives to numpy array
+    derivatives = numpy.array(derivatives)
+    maxd = max(derivatives)
+    numd = len(derivatives)
+
+    if any(derivatives > 2):
+        raise ValueError("Can only support derivatives up to 2.")
+
+    # Assume everything belongs to the same robot and env
+    robot = bodypoints[0][0].manipulator.GetRobot()
+    env = robot.GetEnv()
+
+    bpstate_list = []
+
+    with env:
+        with robot:
+            for js in jointstates:
+                # Make all unavailable and undesired derivatives None
+                q, qd, qdd = [js[x] if x < len(js) and x <= maxd
+                              else None for x in range(3)]
+                if q is not None:
+                    robot.SetDOFValues(q)
+                else:
+                    bpstate_list.append([[[None] * numd] * len(bodypoints)])
+                    continue
+                for bp in bodypoints:
+                    bp_state = [None] * numd
+                    link, local_pos = bp
+                    link_index = link.GetIndex()
+                    link_transform = link.GetTransform()
+                    world_pos = (numpy.dot(link_transform[0:3, 0:3],
+                                           local_pos) +
+                                 link_transform[0:3, 3])
+                    bp_state[0] = world_pos
+                    if qd is not None:
+                        Jpos = robot.CalculateJacobian(link_index, world_pos)
+                        Jang = robot.CalculateAngularVelocityJacobian(
+                                    link_index)
+                        vpos = numpy.dot(Jpos, qd)
+                        vang = numpy.dot(Jang, qd)
+                        bp_state[1] = numpy.hstack((vpos, vang))
+                    else:
+                        continue
+                    if qdd is not None:
+                        Hpos = robot.ComputeHessianTranslation(
+                                    link_index, world_pos)
+                        Hang = robot.ComputeHessianAxisAngle(link_index)
+                        apos = (numpy.dot(Jpos, qdd) +
+                                numpy.dot(qd, numpy.dot(Hpos, qd)))
+                        aang = (numpy.dot(Jang, qdd) +
+                                numpy.dot(qd, numpy.dot(Hang, qd)))
+                        bp_state[2] = numpy.hstack((apos, aang))
+                bpstate_list.append(bp_state)
+    return bpstate_list
+
+
+def BodyPointsStatesFromJointState(bodypoints, jointstate,
+                                   derivatives=[0, 1, 2]):
+    """
+    Computes the pos, vel, acc of body points given the
+    pos, vel, acc of jointstates
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
+    @param jointstate List of joint position,
+                      velocity and acceleration.
+                      Unavailable fields are input as 'None'
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
+    """
+    return BodyPointsStatesFromJointStates(bodypoints, (jointstate,),
+                                           derivatives)[0]
+
+
+def BodyPointsStatesFromTraj(bodypoints, traj, times, derivatives=[0, 1, 2]):
+    """
+    Computes the pos, vel, acc of body points from a joint space trajectory
+    at specified times
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
+    @param traj An OpenRAVE trajectory
+    @param time List of times in seconds
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
+    """
+    # Assume everything belongs to the same robot
+    robot = bodypoints[0][0].manipulator.GetRobot()
+    jointstates = JointStatesFromTraj(robot, traj, times,
+                                      range(max(derivatives)))
+
+    return BodyPointsStatesFromJointStates(bodypoints, jointstates,
+                                           derivatives)
+
+
+def BodyPointsStateFromTraj(bodypoints, traj, time, derivatives=[0, 1, 2]):
+    """
+    Computes the pos, vel, acc of body points from a joint space trajectory
+    at a specified time
+    @param bodypoints List of bodypoints where each bodypoint
+                      is a list comprising of:
+                      (1) the OpenRAVE link the bodypoint is on
+                      (2) position of the body point in the link frame
+    @param traj An OpenRAVE trajectory
+    @param derivatives list of desired derivatives defaults to [0, 1, 2]
+    @return bodypoint_list List of list of derivatives at specified times.
+                           Inserts 'None' for unavailable or undesired fields
+                           The i-th element is the derivatives[i]-th derivative
+                           of position of size |times| x |derivatives|
+    """
+    return BodyPointsStatesFromTraj(bodypoints, traj, (time,), derivatives)[0]
+

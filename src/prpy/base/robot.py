@@ -88,6 +88,8 @@ class Robot(openravepy.Robot):
             method_names.update(self.planner.get_planning_method_names())
         if hasattr(self, 'actions') and self.actions is not None:
             method_names.update(self.actions.get_actions())
+        if hasattr(self, 'detector') and self.detector is not None:
+            method_names.update(self.detector.get_perception_method_names())
 
         return list(method_names)
 
@@ -109,6 +111,14 @@ class Robot(openravepy.Robot):
               and self.actions.has_action(name)):
 
             delegate_method = self.actions.get_action(name)
+            @functools.wraps(delegate_method)
+            def wrapper_method(*args, **kw_args):
+                return delegate_method(self, *args, **kw_args)
+            return wrapper_method
+        elif (hasattr(self, 'detector') and self.detector is not None
+              and self.detector.has_perception_method(name)):
+            
+            delegate_method = getattr(self.detector, name)
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return delegate_method(self, *args, **kw_args)
@@ -205,8 +215,8 @@ class Robot(openravepy.Robot):
            curve through the waypoints (not implemented). If this curve is
            not collision free, then we fall back on...
         4. By default, we run a smoother that jointly times and smooths the
-           path via self.smoother. This algorithm can change the geometric path to
-           optimize runtime.
+           path via self.smoother. This algorithm can change the geometric path
+           to optimize runtime.
 
         The behavior in (2) and (3) can be forced by passing constrained=True
         or smooth=True. By default, the case is inferred by the tag(s) attached
@@ -411,8 +421,8 @@ class Robot(openravepy.Robot):
         else:
             raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
 
-
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kwargs):
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01,
+                          **kwargs):
         """ Executes a time trajectory on the robot.
 
         This function directly executes a timed OpenRAVE trajectory on the
@@ -457,7 +467,7 @@ class Robot(openravepy.Robot):
         # Check that the current configuration of the robot matches the
         # initial configuration specified by the trajectory.
         if not util.IsAtTrajectoryStart(self, traj):
-            raise exceptions.TrajectoryAborted(
+            raise exceptions.TrajectoryNotExecutable(
                 'Trajectory started from different configuration than robot.')
 
         # If there was only one waypoint, at this point we are done!
