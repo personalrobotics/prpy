@@ -360,5 +360,12 @@ class VectorFieldPlanner(BasePlanner):
         output_path.Insert(output_path.GetNumWaypoints(),
             path.Sample(t_cache), cspec)
 
+        # Flag this trajectory as constrained.
+        util.SetTrajectoryTags(
+            output_path, {
+                Tags.CONSTRAINED: 'true',
+                Tags.SMOOTH: 'true'
+            }, append=True
+        )
         return output_path
 

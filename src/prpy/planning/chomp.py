@@ -74,7 +74,7 @@ class DistanceFieldManager(object):
                 # existing distance field if there is a key mismatch.
                 cached_state = self.cache.get(body.GetName(), None)
                 if cached_state is not None and cached_state != current_state:
-                    logger.debug('Clearing distance field for "{:s}".', body_name)
+                    logger.debug('Clearing distance field for "%s".', body_name)
                     self.module.removefield(body)
                     cached_state = None
 
