@@ -85,7 +85,7 @@ class ApriltagsModule(PerceptionModule):
 
 
     def _DetectObjects(self, env, marker_topic, marker_data_path, kinbody_path,
-                 detection_frame, destination_frame,**kwargs):
+                 detection_frame, destination_frame,**kw_args):
         """
         Use the apriltags service to detect objects and add them to the
         environment. Params are as in __init__.
