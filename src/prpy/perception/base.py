@@ -2,6 +2,9 @@
 
 import functools
 
+class PerceptionException(Exception):
+    pass
+
 class PerceptionMethod(object):
     
     def __init__(self, func):
