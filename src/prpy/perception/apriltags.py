@@ -58,14 +58,14 @@ class ApriltagsModule(PerceptionModule):
         
         
     def __str__(self):
-        return 'Apriltags'
+        return self.__class__.__name__
 
     def DetectObjects(self, env, object_names, **kw_args):
         """
         This hack detects only the objects in object_names. Updates existing
         objects, but only adds objects in the object_names list.
         """
-        added_kinbodies, updated_kinbodies = self.DetectObjects(robot, **kw_args);
+        added_kinbodies, updated_kinbodies = self._DetectObjects(env, **kw_args);
         detected = [];
         for body in added_kinbodies:
             if not (body.GetName() in object_names):
@@ -81,37 +81,29 @@ class ApriltagsModule(PerceptionModule):
         return (self._DetectObjects( env, object_names=[object_name], **kw_args))[0][0];
 
 
-    def _DetectObjects(self, env, **kw_args):
+    def _DetectObjects(self, env, marker_topic, marker_data_path, kinbody_path,
+                 detection_frame, destination_frame,**kwargs):
         """
         Use the apriltags service to detect objects and add them to the
-        environment
+        environment. Params are as in __init__.
         """
         try:
             # Allow caller to override any of the initial parameters
             # loaded into the module
-            if 'marker_data_path' in kw_args:
-                marker_data_path = kw_args['marker_data_path']
-            else:
-                marker_data_path = self.marker_data_path
-            
-            if 'kinbody_path' in kw_args:
-                kinbody_path = kw_args['kinbody_path']
-            else:
-                kinbody_path = self.kinbody_path
-                
-            if 'marker_topic' in kw_args:
-                marker_topic = kw_args['marker_topic']
-            else:
+            if marker_topic is None:
                 marker_topic = self.marker_topic
+            
+            if marker_data_path is None:
+                marker_data_path = self.marker_data_path
 
-            if 'detection_frame' in kw_args:
-                detection_frame = kw_args['detection_frame']
-            else:
+            if kinbody_path is None:
+                kinbody_path = self.kinbody_path
+            
+
+            if detection_frame is None:
                 detection_frame = self.detection_frame
 
-            if 'destination_frame' in kw_args:
-                destination_frame = kw_args['destination_frame']
-            else:
+            if destination_frame is None:
                 destination_frame = self.destination_frame
 
             # TODO: Creating detector is not instant...might want
