@@ -59,33 +59,11 @@ class ApriltagsModule(PerceptionModule):
         
     def __str__(self):
         return self.__class__.__name__
+    
 
-    def DetectObjects(self, env, object_names, **kw_args):
-        """
-        This hack detects only the objects in object_names. Updates existing
-        objects, but only adds objects in the object_names list.
-
-        @param env: The current OpenRAVE environment
-        @param object_names: The list of names of objects to detect
-        """
-        added_kinbodies, updated_kinbodies = self._DetectObjects(env, **kw_args);
-        detected = [];
-        for body in added_kinbodies:
-            if not (body.GetName() in object_names):
-                env.RemoveKinbody(body);
-            else:
-                detected.append(body);
-        return detected;
-                
-    def DetectObject(self, env, object_name, **kw_args):
-        """
-        Detects a single named object.
-        """
-        return (self._DetectObjects( env, object_names=[object_name], **kw_args))[0][0];
-
-
-    def _DetectObjects(self, env, marker_topic, marker_data_path, kinbody_path,
-                 detection_frame, destination_frame,**kw_args):
+    def _DetectObjects(self, env, marker_topic=None, marker_data_path=None, 
+                       kinbody_path=None, detection_frame=None, 
+                       destination_frame=None, **kw_args):
         """
         Use the apriltags service to detect objects and add them to the
         environment. Params are as in __init__.
@@ -139,5 +117,29 @@ class ApriltagsModule(PerceptionModule):
         """
         Overriden method for detection_frame
         """
-        return self._DetectObjects(robot.GetEnv(),**kwargs)
+        added_kinbodies, updated_kinbodies = self._DetectObjects(robot.GetEnv(), **kw_args)
+        return added_kinbodies + updated_kinbodies
                                           
+    @PerceptionMethod
+    def DetectObject(self, robot, object_name, **kw_args):
+        """
+        Detects a single named object.
+        """
+        added_bodies, updated_bodies = self._DetectObjects(env, **kw_args)
+
+        return_obj = None
+        for obj in added_bodies:
+            if obj.GetName() != object_name:
+                env.Remove(obj)
+            else:
+                return_obj = obj
+        for obj in updated_bodies:
+            if obj.GetName() == object_name:
+                return_obj = obj
+            # TODO: Otherwise we need to put it back
+
+        if return_obj is not None:
+            return return_obj
+
+        from prpy.perception.base import PerceptionException
+        raise PerceptionException('Failed to detect object %s', object_name)
