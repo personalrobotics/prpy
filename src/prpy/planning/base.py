@@ -79,14 +79,18 @@ class PlanningMethod(object):
             joint_values[1] = cloned_robot.GetActiveDOFValues()
 
             # Check for mismatches in the cloning and hackily reset them.
+            # (This is due to a possible bug in OpenRAVE environment cloning where in
+            # certain situations, the Active DOF ordering and values do not match the
+            # parent environment.  It seems to be exacerbated by multirotation joints,
+            # but the exact cause and repeatability is unclear at this point.)
             if not numpy.array_equal(joint_indices[0], joint_indices[1]):
-                logger.info("Cloned Active DOF index mismatch: %s != %s",
+                logger.warn("Cloned Active DOF index mismatch: %s != %s",
                             str(joint_indices[0]),
                             str(joint_indices[1]))
                 cloned_robot.SetActiveDOFs(joint_indices[0])
 
             if not numpy.allclose(joint_values[0], joint_values[1]):
-                logger.info("Cloned Active DOF value mismatch: %s != %s",
+                logger.warn("Cloned Active DOF value mismatch: %s != %s",
                             str(joint_values[0]),
                             str(joint_values[1]))
                 cloned_robot.SetActiveDOFValues(joint_values[0])
