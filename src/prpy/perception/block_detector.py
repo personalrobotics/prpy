@@ -164,17 +164,11 @@ class BlockDetector(PerceptionModule):
                 ay = 0
                 block_in_world_corrected = euler_matrix(ax,ay,az)
                 block_in_world[0:3,0:3] = block_in_world_corrected[0:3,0:3]
-                
-
-                #Set block name - should we change?
                 block.SetTransform(block_in_world)
-                valid = False
-                while not valid:
-                    rand_name = 'block' + `int(numpy.random.randint(1,10000))`
-                    valid = env.GetKinBody(rand_name) is None
                 
-                block.SetName(rand_name)
-                env.Add(block)
+                #Set block name 
+                block.SetName('block')
+                env.Add(block,anonymous=True)
                 blocks.append(block)
 
         return blocks
