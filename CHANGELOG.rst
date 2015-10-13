@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.3.0 (2015-10-12)
+------------------
 * Added a perception pipeline (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_ `#200 <https://github.com/personalrobotics/prpy/issues/200>`_)
 * Added actions (and other functionality) for the block sorting demo (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_, `#194 <https://github.com/personalrobotics/prpy/issues/194>`_)
 * Added unit tests for planners (`#169 <https://github.com/personalrobotics/prpy/issues/169>`_)
