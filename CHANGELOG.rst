@@ -4,7 +4,7 @@ Changelog for package prpy
 
 Forthcoming
 -----------
-* Added a perception pipeline (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_)
+* Added a perception pipeline (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_ `#200 <https://github.com/personalrobotics/prpy/issues/200>`_)
 * Added actions (and other functionality) for the block sorting demo (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_, `#194 <https://github.com/personalrobotics/prpy/issues/194>`_)
 * Added unit tests for planners (`#169 <https://github.com/personalrobotics/prpy/issues/169>`_)
 * Added helper functions for computing body point acceleration twists (`#166 <https://github.com/personalrobotics/prpy/issues/166>`_)
@@ -16,7 +16,7 @@ Forthcoming
 * Added a better error message when or_ompl is missing (`#178 <https://github.com/personalrobotics/prpy/issues/178>`_)
 * Added support for OWD execution options
 * Refactored TSR and TSRChain classes (`#159 <https://github.com/personalrobotics/prpy/issues/159>`_)
-* Refactored MoveUntilTouch and fixed simulation (`#180 <https://github.com/personalrobotics/prpy/issues/180>`, `#173 <https://github.com/personalrobotics/prpy/issues/173>`_)
+* Refactored MoveUntilTouch and fixed simulation (`#180 <https://github.com/personalrobotics/prpy/issues/180>`_ `#173 <https://github.com/personalrobotics/prpy/issues/173>`_)
 * Refactored and cleaned up the Planner and MetaPlanner base classes (`#176 <https://github.com/personalrobotics/prpy/issues/176>`_, `#162 <https://github.com/personalrobotics/prpy/issues/162>`_)
 * Refactored  VectorFieldPlanner to use a numerical integrator (`#184 <https://github.com/personalrobotics/prpy/issues/184>`_)
 * Fixed acceleration limits on ADA for the MICO2 hardware upgrade (`#186 <https://github.com/personalrobotics/prpy/issues/186>`_)
