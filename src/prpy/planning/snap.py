@@ -99,32 +99,27 @@ class SnapPlanner(BasePlanner):
         return self._Snap(robot, ik_solution, **kw_args)
 
     def _Snap(self, robot, goal, **kw_args):
-        Closed = openravepy.Interval.Closed
+        from openravepy import CollisionReport
+        from ..util import GetCollisionCheckPts
+        from .exceptions import (
+            CollisionPlanningError,
+            SelfCollisionPlanningError
+        )
 
+        env = robot.GetEnv()
         start = robot.GetActiveDOFValues()
         active_indices = robot.GetActiveDOFIndices()
-
-        # Use the CheckPathAllConstraints helper function to collision check
-        # the straight-line trajectory. We pass dummy values for dq0, dq1,
-        # and timeelapsed since this is a purely geometric check.
-        params = openravepy.Planner.PlannerParameters()
-        params.SetRobotActiveJoints(robot)
-        params.SetGoalConfig(goal)
-        check = params.CheckPathAllConstraints(start, goal, [], [], 0., Closed)
-
-        # The function returns a bitmask of ConstraintFilterOptions flags,
-        # indicating which constraints are violated. We'll abort if any
-        # constraints are violated.
-        if check != 0:
-            raise PlanningError('Straight line trajectory is not valid.')
 
         # Create a two-point trajectory that starts at our current
         # configuration and takes us to the goal.
         traj = openravepy.RaveCreateTrajectory(self.env, '')
         cspec = robot.GetActiveConfigurationSpecification('linear')
+        cspec.AddDeltaTimeGroup()
+
         active_indices = robot.GetActiveDOFIndices()
 
         start_waypoint = numpy.zeros(cspec.GetDOF())
+        cspec.InsertDeltaTime(start_waypoint, 0.)
         cspec.InsertJointValues(start_waypoint, start, robot,
                                 active_indices, False)
 
@@ -135,9 +130,21 @@ class SnapPlanner(BasePlanner):
         # was not identical to the start configuration.
         if not numpy.allclose(start, goal):
             goal_waypoint = numpy.zeros(cspec.GetDOF())
+            cspec.InsertDeltaTime(goal_waypoint, 1.)
             cspec.InsertJointValues(goal_waypoint, goal, robot,
                                     active_indices, False)
             traj.Insert(1, goal_waypoint.ravel())
+
+        # Collision check the trajectory.
+        report = CollisionReport()
+
+        for _, q in GetCollisionCheckPts(robot, traj):
+            robot.SetActiveDOFValues(q)
+
+            if env.CheckCollision(robot, report=report):
+                raise CollisionPlanningError.FromReport(report)
+            elif robot.CheckSelfCollision(report=report):
+                raise SelfCollisionPlanningError.FromReport(report)
 
         # Tag the return trajectory as smooth (in joint space) and return it.
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
