@@ -762,7 +762,8 @@ def IsTimedTrajectory(trajectory):
     @returns: True if the trajectory is timed, False otherwise
     """
     cspec = trajectory.GetConfigurationSpecification()
-    return cspec.ExtractDeltaTime(trajectory.GetWaypoint(0)) is not None
+    empty_waypoint = numpy.zeros(cspec.GetDOF())
+    return cspec.ExtractDeltaTime(empty_waypoint) is not None
 
 def ComputeEnabledAABB(kinbody):
     """
