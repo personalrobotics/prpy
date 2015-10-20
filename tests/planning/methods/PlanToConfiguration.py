@@ -68,6 +68,11 @@ class PlanToConfigurationTest(object):
 
 
 class PlanToConfigurationStraightLineTest(object):
+    def test_PlanToConfiguration_AlreadyAtGoal_FindsSolution(self):
+        self.PlanFromStartToGoalConfiguration(self.waypoint1, self.waypoint1)
+        self.PlanFromStartToGoalConfiguration(self.waypoint2, self.waypoint2)
+        self.PlanFromStartToGoalConfiguration(self.waypoint3, self.waypoint3)
+
     def test_PlanToConfiguration_StraightLineIsFeasible_FindsSolution(self):
         self.PlanFromStartToGoalConfiguration(self.waypoint1, self.waypoint2)
         self.PlanFromStartToGoalConfiguration(self.waypoint2, self.waypoint3)
