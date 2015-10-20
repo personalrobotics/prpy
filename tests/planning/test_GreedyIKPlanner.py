@@ -6,7 +6,7 @@ from unittest import TestCase
 
 
 class GreedyIKPlannerTest(BasePlannerTest,
-                             PlanToEndEffectorOffsetTest,
-                             PlanToEndEffectorOffsetCollisionTest,
-                             TestCase):
+                          PlanToEndEffectorOffsetTest,
+                          PlanToEndEffectorOffsetCollisionTest,
+                          TestCase):
     planner_factory = GreedyIKPlanner 
