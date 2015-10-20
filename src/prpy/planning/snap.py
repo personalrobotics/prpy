@@ -80,6 +80,10 @@ class SnapPlanner(BasePlanner):
         @param goal_pose desired end-effector pose
         @return traj
         """
+        
+        from .exceptions import CollisionPlanningError,SelfCollisionPlanningError
+        from openravepy import CollisionReport
+        
         ikp = openravepy.IkParameterizationType
         ikfo = openravepy.IkFilterOptions
 
@@ -92,13 +96,33 @@ class SnapPlanner(BasePlanner):
             ik_param, ikfo.CheckEnvCollisions,
             ikreturn=False, releasegil=True
         )
+        
+        if ik_solution is None: 
+            # FindIKSolutions is slower than FindIKSolution, 
+            # so call this only to identify and raise error when there is no solution
+            ik_solutions = manipulator.FindIKSolutions(
+                    ik_param,
+                    ikfo.IgnoreSelfCollisions,
+                    ikreturn=False,
+                    releasegil=True
+                )
 
-        if ik_solution is None:
+            for q in ik_solutions:
+                robot.SetActiveDOFValues(q)
+                report = CollisionReport()
+                if self.env.CheckCollision(robot, report=report):
+                    raise CollisionPlanningError.FromReport(report) 
+                elif robot.CheckSelfCollision(report=report):
+                    raise SelfCollisionPlanningError.FromReport(report)
+            
             raise PlanningError('There is no IK solution at the goal pose.')
 
         return self._Snap(robot, ik_solution, **kw_args)
 
     def _Snap(self, robot, goal, **kw_args):
+        from .exceptions import CollisionPlanningError,SelfCollisionPlanningError,JointLimitError
+        from openravepy import CollisionReport
+
         Closed = openravepy.Interval.Closed
 
         start = robot.GetActiveDOFValues()
@@ -110,13 +134,45 @@ class SnapPlanner(BasePlanner):
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
         params.SetGoalConfig(goal)
-        check = params.CheckPathAllConstraints(start, goal, [], [], 0., Closed)
+        check = params.CheckPathAllConstraints(start, goal, [], [], 0., Closed,
+            options = 15, returnconfigurations = True)
 
-        # The function returns a bitmask of ConstraintFilterOptions flags,
-        # indicating which constraints are violated. We'll abort if any
-        # constraints are violated.
-        if check != 0:
-            raise PlanningError('Straight line trajectory is not valid.')
+        # If valid, above function returns (0,None, None, 0) 
+        # if not, it returns (1, invalid_config ,[], time_when_invalid),
+        # in which case we identify and raise appropriate error. 
+        if check[0] != 0:
+            q = check[1]
+
+            # Check for joint limit violation
+            q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+
+            lower_position_violations = (q < q_limit_min)
+            if lower_position_violations.any():
+                index = lower_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_min[index],
+                    description='position')
+
+            upper_position_violations = (q> q_limit_max)
+            if upper_position_violations.any():
+                index = upper_position_violations.nonzero()[0][0]
+                raise JointLimitError(robot,
+                    dof_index=active_indices[index],
+                    dof_value=q[index],
+                    dof_limit=q_limit_max[index],
+                    description='position')
+
+            # Check for collision
+            robot.SetActiveDOFValues(q)
+            report = CollisionReport()
+            if self.env.CheckCollision(robot, report=report):
+                raise CollisionPlanningError.FromReport(report) 
+            elif robot.CheckSelfCollision(report=report):
+                raise SelfCollisionPlanningError.FromReport(report)
+
+            raise PlanningError('Straight line trajectory is not valid.' )
 
         # Create a two-point trajectory that starts at our current
         # configuration and takes us to the goal.
