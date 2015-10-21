@@ -98,7 +98,9 @@ class Robot(openravepy.Robot):
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
-        if (hasattr(self, 'planner') and self.planner is not None
+        if (name != 'planner'
+            and hasattr(self, 'planner')
+            and self.planner is not None
             and self.planner.has_planning_method(name)):
 
             delegate_method = getattr(self.planner, name)
@@ -107,7 +109,9 @@ class Robot(openravepy.Robot):
                 return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
-        elif (hasattr(self, 'actions') and self.actions is not None
+        elif (name != 'actions'
+              and hasattr(self, 'actions')
+              and self.actions is not None
               and self.actions.has_action(name)):
 
             delegate_method = self.actions.get_action(name)
@@ -115,7 +119,9 @@ class Robot(openravepy.Robot):
             def wrapper_method(*args, **kw_args):
                 return delegate_method(self, *args, **kw_args)
             return wrapper_method
-        elif (hasattr(self, 'detector') and self.detector is not None
+        elif (name != 'detector'
+              and hasattr(self, 'detector')
+              and self.detector is not None
               and self.detector.has_perception_method(name)):
             
             delegate_method = getattr(self.detector, name)
