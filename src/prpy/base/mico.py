@@ -251,7 +251,6 @@ class Mico(Manipulator):
             and at the same time we will check if collision exists or not in each piece
         '''
         with env, robot_saver:
-            # print '3\n'
             # delta_t = 0.01 which was defined before
             for t in numpy.arange(0, traj.GetDuration(), delta_t):
                 # sample a small step in this delta amount of time
