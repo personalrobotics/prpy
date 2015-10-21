@@ -45,6 +45,7 @@ class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
         self.actions = None
         self.planner = None
+        self.detector = None
         self.robot_name = robot_name
 
         try:
