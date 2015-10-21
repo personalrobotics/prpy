@@ -2,10 +2,8 @@ sudo: required
 dist: trusty
 services:
 - docker
-before_install:
-- git clone https://github.com/personalrobotics/pr-cleanroom.git 
-- wget https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
 install:
-- echo 'TODO: checkout the code using wstool'
+- git clone https://github.com/personalrobotics/pr-cleanroom.git .
+- wget https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
 script:
-- echo 'TOOD: run the tests'
+- ./run-distro.sh repositories.yml --repository=prpy
