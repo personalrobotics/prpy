@@ -154,7 +154,14 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return qtraj configuration space path
         """
-        from .exceptions import TimeoutPlanningError
+        from .exceptions import (
+            TimeoutPlanningError, 
+            CollisionPlanningError, 
+            SelfCollisionPlanningError,
+            JointLimitError)
+        from openravepy import CollisionReport
+        from numpy import linalg as LA
+
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -171,17 +178,20 @@ class GreedyIKPlanner(BasePlanner):
 
             # Smallest CSpace step at which to give up
             min_step = min(robot.GetActiveDOFResolutions())/100.
-            ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
-
+            ik_options = openravepy.IkFilterOptions.CheckEnvCollisions 
             start_time = time.time()
             epsilon = 1e-6
 
+
             try:
+                collision_error = None 
                 while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
+                        if collision_error is not None: 
+                            raise collision_error 
                         raise TimeoutPlanningError(timelimit)
 
                     # Hypothesize new configuration as closest IK to current
@@ -193,12 +203,33 @@ class GreedyIKPlanner(BasePlanner):
                         releasegil=True
                     )
 
+                    # FindIKSolutions is slower than FindIKSolution, 
+                    # so call this only to identify error when there is no solution
+                    if qnew is None: 
+                        ik_solutions = manip.FindIKSolutions(
+                            openravepy.matrixFromPose(traj.Sample(t+dt)[0:7]),
+                            openravepy.IkFilterOptions.IgnoreSelfCollisions,
+                            ikreturn=False,
+                            releasegil=True
+                        )
+
+                        # update collision_error to contain collision info.
+                        for q in ik_solutions:
+                            robot.SetActiveDOFValues(q)
+                            report = CollisionReport()
+                            if self.env.CheckCollision(robot, report=report):
+                                collision_error = CollisionPlanningError.FromReport(report) 
+                            elif robot.CheckSelfCollision(report=report):
+                                collision_error = SelfCollisionPlanningError.FromReport(report)
+                            
                     # Check if the step was within joint DOF resolution.
                     infeasible_step = True
                     if qnew is not None:
                         # Found an IK
                         step = abs(qnew - qcurr)
                         if (max(step) < min_step) and qtraj:
+                            if collision_error is not None: 
+                                raise collision_error
                             raise PlanningError('Not making progress.')
                         infeasible_step = any(step > robot.GetActiveDOFResolutions())
                     if infeasible_step:

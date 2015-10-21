@@ -1,5 +1,9 @@
 from prpy.clone import CloneException
 from prpy.planning.base import PlanningError
+from prpy.planning.exceptions import (
+    CollisionPlanningError,
+    SelfCollisionPlanningError,
+    JointLimitError)
 
 class PlanToConfigurationTest(object):
     def test_PlanToConfiguration_StartInCollision_Throws(self):
@@ -85,3 +89,17 @@ class PlanToConfigurationCompleteTest(object):
             self.config_feasible_start, self.config_feasible_goal)
 
 
+class PlanToConfigurationTestCollisionTest(object): 
+    """ Expects collision-specific error"""
+
+    def test_PlanToConfiguration_GoalInCollision_Throws_Collision(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+        # Test/Assert
+        with self.assertRaises((CollisionPlanningError,
+            SelfCollisionPlanningError,
+            JointLimitError)):
+                self.planner.PlanToConfiguration(
+                self.robot, self.config_env_collision)
