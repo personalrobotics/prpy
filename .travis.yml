@@ -1,0 +1,10 @@
+sudo: required
+dist: trusty
+services:
+- docker
+install:
+- git clone https://github.com/personalrobotics/pr-cleanroom.git
+- cd pr-cleanroom
+- wget https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
+script:
+- ./run-distro.sh repositories.yml --repository=prpy
