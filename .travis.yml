@@ -3,6 +3,7 @@ dist: trusty
 services:
 - docker
 install:
+- docker pull personalrobotics/openrave
 - git clone https://github.com/personalrobotics/pr-cleanroom.git
 - cd pr-cleanroom
 - wget https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
