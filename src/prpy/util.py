@@ -806,6 +806,33 @@ def IsAtTrajectoryEnd(robot, trajectory):
     # If all joints match, return True
     return True
 
+def IsAtActiveDOFConfiguration(robot, goal_config, epsilon):
+    """
+    Check if robot's active DOFs (joints) have reached a desired configuration.
+
+    @param robot The robot whose active DOFs will be checked.
+    @param goal_config The goal configuration (an array of joint positions)
+    @param epsilon The allowable joint position error.
+
+    @return boolean Returns True if joints are at goal position, within some epsilon.
+    """
+
+    # Get joint indices based on the active DOF
+    dof_indices = robot.GetActiveDOFIndices()
+
+    # Get current configuration of robot for used indices
+    with robot.GetEnv():
+        joint_values = robot.GetDOFValues(dof_indices)
+
+    # If any joint is not at the goal position, return False
+    for i in xrange(1, len(goal_config)):
+        delta_value = abs( joint_values[i] - goal_config[i] )
+        if delta_value > epsilon:
+            return False
+
+    # If all joints match the goal, return True
+    return True
+
 def IsTimedTrajectory(trajectory):
     """
     Returns True if the trajectory is timed.
