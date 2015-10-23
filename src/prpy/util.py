@@ -751,6 +751,61 @@ def IsAtTrajectoryStart(robot, trajectory):
     # If all joints match, return True.
     return True
 
+def IsAtTrajectoryEnd(robot, trajectory):
+    """
+    Check if robot's DOFs match the end configuration of a trajectory.
+
+    This function examines the current DOF values of the specified robot and
+    compares these values to the last waypoint of the specified trajectory.
+    If every DOF value specified in the trajectory differs by less than the
+    DOF resolution of the specified joint/axis then it will return True.
+    Otherwise, it returns False.
+
+    @param robot: the robot whose active DOFs will be checked
+    @param trajectory: the trajectory whose end configuration will be checked
+    @returns: True if the robot's active DOFs match the given trajectory
+              False if one or more active DOFs differ by DOF resolution
+    """
+    cspec = trajectory.GetConfigurationSpecification()
+    needs_base = HasAffineDOFs(cspec)
+    needs_joints = HasJointDOFs(cspec)
+    
+    if needs_base and needs_joints:
+        raise ValueError('Trajectories with affine and joint DOFs are not supported in IsAtTrajectoryEnd()')
+
+    if trajectory.GetEnv() != robot.GetEnv():
+        raise ValueError('The environment attached to the trajectory does not match the environment attached to the robot in IsAtTrajectoryEnd()')
+
+    if needs_base:
+        raise ValueError('Trajectories with affine DOFs are not supported in IsAtTrajectoryEnd()')
+
+    else:
+        last_waypoint_idx = trajectory.GetNumWaypoints() - 1
+
+        # Get used indices and end configuration from trajectory
+        dof_indices, _ = cspec.ExtractUsedIndices(robot)
+        traj_values = cspec.ExtractJointValues(trajectory.GetWaypoint(last_waypoint_idx), robot, dof_indices)
+
+        # Get current configuration of robot for used indices
+        with robot.GetEnv():
+            robot_values = robot.GetDOFValues(dof_indices)
+            dof_resolutions = robot.GetDOFResolutions(dof_indices)
+            
+        # Check deviation in each DOF, using OpenRAVE's SubtractValue function
+        dof_infos = zip(dof_indices, traj_values, robot_values, dof_resolutions)
+        for dof_index, traj_value, robot_value, dof_resolution in dof_infos:
+            # Look up the Joint and Axis of the DOF from the robot.
+            joint = robot.GetJointFromDOFIndex(dof_index)
+            axis = dof_index - joint.GetDOFIndex()
+            
+            # If any joint deviates too much, return False
+            delta_value = abs(joint.SubtractValue(traj_value, robot_value, axis))
+            if delta_value > dof_resolution:
+                return False
+
+    # If all joints match, return True
+    return True
+
 def IsTimedTrajectory(trajectory):
     """
     Returns True if the trajectory is timed.
