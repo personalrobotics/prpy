@@ -4,7 +4,7 @@ install:
 - export repository='prpy'
 - git clone https://github.com/personalrobotics/pr-cleanroom.git
 - cd pr-cleanroom
-- curl -o https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
+- curl -O https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
 - ./internal-setup.sh
 - ./internal-distro.py --workspace=src --repository ${repository} distribution/distribution.yml
 script:
