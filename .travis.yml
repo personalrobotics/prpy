@@ -3,6 +3,7 @@ sudo: required
 env:
   global:
   - REPOSITORY=prpy
+  - DISTRIBUTION=https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
 # Allow Python to find packages installed by apt.
 # See: http://docs.travis-ci.com/user/languages/python/#Travis-CI-Uses-Isolated-virtualenvs
 language: python
@@ -14,11 +15,11 @@ virtualenv:
 before_install:
 - git clone https://github.com/personalrobotics/pr-cleanroom.git
 - cd pr-cleanroom
-- curl -O https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
+- curl -sSo distribution.yml "${DISTRIBUTION}"
 - ./internal-setup.sh
 # Checkout this repository and all of its dependencies.
 install:
-- ./internal-distro.py --workspace=src --repository "${REPOSITORY}" distribution/distribution.yml
+- ./internal-distro.py --workspace=src distribution.yml --repository "${REPOSITORY}"
 # Build the workspace and run tests.
 script:
-- ./internal-build.sh $(./internal-get-packages.py repositories.yml "${REPOSITORY}")
+- ./internal-build.sh $(./internal-get-packages.py distribution.yml "${REPOSITORY}")
