@@ -1,11 +1,14 @@
 sudo: required
 dist: trusty
+virtualenv:
+  system_site_packages: true
+env:
+- REPOSITORY=prpy
 install:
-- export repository='prpy'
 - git clone https://github.com/personalrobotics/pr-cleanroom.git
 - cd pr-cleanroom
 - curl -O https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
 - ./internal-setup.sh
-- ./internal-distro.py --workspace=src --repository ${repository} distribution/distribution.yml
+- ./internal-distro.py --workspace=src --repository "${REPOSITORY}" distribution/distribution.yml
 script:
-- ./internal-build.sh $(./internal-get-packages.py repositories.yml ${repository})
+- ./internal-build.sh $(./internal-get-packages.py repositories.yml "${REPOSITORY}")
