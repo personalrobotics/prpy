@@ -125,7 +125,7 @@ class ApriltagsModule(PerceptionModule):
         """
         Detects a single named object.
         """
-        added_bodies, updated_bodies = self._DetectObjects(env, **kw_args)
+        added_bodies, updated_bodies = self._DetectObjects(robot.GetEnv(), **kw_args)
 
         return_obj = None
         for obj in added_bodies:
