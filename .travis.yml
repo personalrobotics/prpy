@@ -1,5 +1,7 @@
 dist: trusty
 sudo: required
+cache:
+- apt
 env:
   global:
   - REPOSITORY=prpy
@@ -13,13 +15,15 @@ virtualenv:
   system_site_packages: true
 # Install test fixture dependencies.
 before_install:
-- git clone https://github.com/personalrobotics/pr-cleanroom.git
-- cd pr-cleanroom
+- mkdir -p "${HOME}/workspace/src"
+- cd "${HOME}/workspace"
 - curl -sSo distribution.yml "${DISTRIBUTION}"
-- ./internal-setup.sh
-# Checkout this repository and all of its dependencies.
+- git clone https://github.com/personalrobotics/pr-cleanroom.git scripts
+- ./scripts/internal-setup.sh
 install:
-- ./internal-distro.py --workspace=src distribution.yml --repository "${REPOSITORY}"
-# Build the workspace and run tests.
+- mv "${TRAVIS_BUILD_DIR}" src
+- ./scripts/internal-distro.py --workspace=src distribution.yml --repository "${REPOSITORY}"
 script:
-- ./internal-build.sh $(./internal-get-packages.py distribution.yml "${REPOSITORY}")
+- ./scripts/internal-build.sh $(./internal-get-packages.py distribution.yml "${REPOSITORY}")
+after_script:
+- ./scripts/view-all-results.sh test_results
