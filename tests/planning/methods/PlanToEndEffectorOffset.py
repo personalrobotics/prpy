@@ -90,7 +90,7 @@ class PlanToEndEffectorOffsetTest(object):
             self.planner.PlanToEndEffectorOffset(
                 self.robot, direction=self.direction, distance=self.distance)
 
-    def test_PlanToEndEffectorOffset_GoalInCollision_Throws(self):
+    def test_PlanToEndEffectorOffset_GoalInEnvCollision_Throws(self):
         # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_infeasible_env_movement)
@@ -100,7 +100,7 @@ class PlanToEndEffectorOffsetTest(object):
             self.planner.PlanToEndEffectorOffset(
                 self.robot, direction=self.direction, distance=self.distance)
 
-    def test_PlanToEndEffectorOffset_GoalInCollision_Throws2(self):
+    def test_PlanToEndEffectorOffset_GoalInSelfCollision_Throws(self):
         # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_infeasible_self_movement)

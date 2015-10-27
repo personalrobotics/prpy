@@ -11,10 +11,10 @@ from unittest import TestCase
 from or_trajopt import TrajoptPlanner
 
 class TrajoptPlannerTest(BasePlannerTest,
-					  PlanToConfigurationTest,
-                      PlanToEndEffectorPoseTest,
-                      PlanToEndEffectorOffsetTest,
-                      TestCase):
+			PlanToConfigurationTest,
+			PlanToEndEffectorPoseTest,
+			PlanToEndEffectorOffsetTest,
+			TestCase):
     planner_factory = TrajoptPlanner
 
     def setUp(self):
