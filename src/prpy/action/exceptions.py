@@ -1,3 +1,0 @@
-
-class ActionError(Exception):
-    pass

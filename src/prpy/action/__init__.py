@@ -1,4 +1,3 @@
 #!/usr/bin/env python
 
-from actionlibrary import ActionLibrary, ActionMethod
-from exceptions import ActionError
+from actionlibrary import ActionLibrary, ActionMethod, ActionError
