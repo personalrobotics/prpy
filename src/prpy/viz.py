@@ -8,15 +8,15 @@ class RenderTrajectory:
     @param robot robot executing the trajectory
     @param traj input trajectory
     @param num_samples number of samples to use for interpolation
-    @param radius sphere radius for waypoint indicators
+    @param linewidth The width of the rendered line representing the trajecotry
     @param color interpolated line color
-    @param interpolation flag to enable or disable path rendering
-    @param waypoints flag to enable or disable waypoint rendering
+    @param render If true, perform the render
     """
-    def __init__(self, robot, traj, num_samples=20, linewidth=2, color=[1, 0, 0, 1]):
+    def __init__(self, robot, traj, num_samples=20, linewidth=2, color=[1, 0, 0, 1], render=True):
         self.env = robot.GetEnv()
         self.robot = robot
         self.handles = list()
+        self.render = render
 
         # Rendering options.
         self.num_samples = num_samples
@@ -30,6 +30,9 @@ class RenderTrajectory:
 
     def __enter__(self):
         
+        if not self.render:
+            return
+
         with self.env:
             with self.robot.CreateRobotStateSaver():
                 config_spec = self.traj.GetConfigurationSpecification()
