@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#/usr/bin/env python
 
 # Copyright (c) 2013, Carnegie Mellon University
 # All rights reserved.
@@ -1167,3 +1167,22 @@ def wrap_to_interval(angles, lower=-numpy.pi):
     @type  lower float or numpy.array
     """
     return (angles - lower) % (2*numpy.pi) + lower
+
+def GetManipulatorIndex(robot, manip=None):
+    """
+    Takes a robot and returns the active manipulator and its index
+    @param robot The OpenRAVE robot
+    @param manip The robot manipulator
+    @return (manip, manip_idx) The manipulator and its index
+    """
+
+    with robot.GetEnv():
+        if manip is None:
+            manip = robot.GetActiveManipulator()
+
+        with robot.CreateRobotStateSaver(
+                robot.SaveParameters.ActiveManipulator):
+            robot.SetActiveManipulator(manip)
+            manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+
+    return (manip, manip_idx)
