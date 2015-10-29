@@ -1,18 +1,12 @@
 dist: trusty
 sudo: required
+language: generic
 cache:
 - apt
 env:
   global:
   - REPOSITORY=prpy
   - DISTRIBUTION=https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
-# Allow Python to find packages installed by apt.
-# See: http://docs.travis-ci.com/user/languages/python/#Travis-CI-Uses-Isolated-virtualenvs
-language: python
-python:
-- '2.7'
-virtualenv:
-  system_site_packages: true
 # Install test fixture dependencies.
 before_install:
 - mkdir -p "${HOME}/workspace/src"
