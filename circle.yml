@@ -1,0 +1,21 @@
+machine:
+  environment:
+    REPOSITORY: prpy
+    DISTRIBUTION: https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
+  post:
+  - mkdir -p workspace/src
+  - curl -sSo workspace/distribution.yml "${DISTRIBUTION}"
+  - git clone https://github.com/personalrobotics/pr-cleanroom.git workspace/scripts
+  - ./workspace/scripts/internal-setup.sh
+  - export PACKAGE_NAMES="$(./workspace/scripts/internal-get-packages.py distribution.yml ${REPOSITORY})"
+checkout:
+  post:
+  - mv . "${HOME}/workspace/src"
+dependencies:
+  override:
+    - ${HOME}/workspace/scripts/internal-distro.py --workspace "${HOME}/workspace/src" "${HOME}/workspace/distribution.yml" --repository "${REPOSITORY}"
+test:
+  override:
+  - "${HOME}/workspace/scripts/internal-build.sh" ${PACKAGE_NAMES}
+  - "${HOME}/workspace/scripts/internal-test.sh" ${PACKAGE_NAMES}
+  - "${HOME}/workspace/scripts/view-all-results.sh" test_results
