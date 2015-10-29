@@ -13,7 +13,9 @@ checkout:
   - mv . "${HOME}/workspace/src"
 dependencies:
   override:
+    - sudo apt-get -fy install
     - ${HOME}/workspace/scripts/internal-distro.py --workspace "${HOME}/workspace/src" "${HOME}/workspace/distribution.yml" --repository "${REPOSITORY}"
+    - sudo apt-get -fy install
 test:
   override:
   - ${HOME}/workspace/scripts/internal-build.sh ${PACKAGE_NAMES}
