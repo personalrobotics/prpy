@@ -16,6 +16,6 @@ dependencies:
     - ${HOME}/workspace/scripts/internal-distro.py --workspace "${HOME}/workspace/src" "${HOME}/workspace/distribution.yml" --repository "${REPOSITORY}"
 test:
   override:
-  - "${HOME}/workspace/scripts/internal-build.sh" ${PACKAGE_NAMES}
-  - "${HOME}/workspace/scripts/internal-test.sh" ${PACKAGE_NAMES}
-  - "${HOME}/workspace/scripts/view-all-results.sh" test_results
+  - ${HOME}/workspace/scripts/internal-build.sh ${PACKAGE_NAMES}
+  - ${HOME}/workspace/scripts/internal-test.sh ${PACKAGE_NAMES}
+  - ${HOME}/workspace/scripts/view-all-results.sh test_results
