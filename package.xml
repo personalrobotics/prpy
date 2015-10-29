@@ -38,4 +38,5 @@
   <test_depend>or_cdchomp</test_depend>
   <test_depend>or_ompl</test_depend>
   <test_depend>or_parabolicsmoother</test_depend>
+  <test_depend>or_trajopt</test_depend>
 </package>
