@@ -92,6 +92,7 @@ class OMPLPlanner(BasePlanner):
         if goal is not None:
             params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
+        params.SetInitialConfig(robot.GetActiveDOFValues())
 
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
@@ -223,3 +224,86 @@ class OMPLSimplifier(BasePlanner):
 
         SetTrajectoryTags(output_path, {Tags.SMOOTH: True}, append=True)
         return output_path
+
+class ConstrainedOMPLPlanner(OMPLPlanner):
+    def __init__(self):
+        OMPLPlanner.__init__(self, algorithm='CRRT')
+
+
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
+        """
+        Plan using the given TSR chains with OMPL. 
+        @param robot
+        @param tsrchains A list of TSRChain objects to respect during planning
+        @param ompl_args ompl RRTConnect specific parameters
+        @return traj
+        """
+        return self._TSRPlan(robot, tsrchains, ompl_args=ompl_args, **kw_args)
+
+    @PlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance,
+                                smoothingitrs=100, **kw_args):
+        """
+        Plan to a desired end-effector offset.
+        @param robot
+        @param direction unit vector in the direction of motion
+        @param distance minimum distance in meters
+        @param smoothingitrs number of smoothing iterations to run
+        @return traj output path
+        """
+        direction = numpy.array(direction, dtype=float)
+
+        if direction.shape != (3,):
+            raise ValueError('Direction must be a three-dimensional vector.')
+        if not (distance >= 0):
+            raise ValueError('Distance must be non-negative; got {:f}.'.format(
+                             distance))
+
+        with robot:
+            manip = robot.GetActiveManipulator()
+            H_world_ee = manip.GetEndEffectorTransform()
+
+            # 'object frame w' is at ee, z pointed along direction to move
+            import prpy
+            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
+            H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
+
+            # Serialize TSR string (goal)
+            Hw_end = numpy.eye(4)
+            Hw_end[2,3] = distance
+
+            # Serialize TSR string (whole-trajectory constraint)
+            Bw = numpy.zeros((6,2))
+            epsilon = 0.001
+            Bw = numpy.array([[-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [min(0.0, distance),  max(0.0, distance)],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon]])
+
+            from prpy.tsr.tsr import TSR, TSRChain
+            trajtsr = TSR(T0_w = H_world_w, 
+                          Tw_e = H_w_ee, 
+                          Bw = Bw, 
+                          manip = robot.GetActiveManipulatorIndex())
+            traj_tsr_chain = TSRChain(constrain=True, TSRs=[trajtsr])
+
+            goal_pose = manip.GetEndEffectorTransform()
+            goal_pose[:3,3] += manip.GetEndEffectorTransform()[:3,2]*distance
+            goal_config = manip.FindIKSolution(goal_pose, 0)
+        if goal_config is None:
+            raise PlanningError('Failed to find an IK solution at the goal configuration.')
+
+        self._TSRPlan(robot, [traj_tsr_chain], goal=goal_config, **kw_args)
+
+    def _TSRPlan(self, robot, tsrchains, **kw_args):
+        extra_params = ''
+        for chain in tsrchains:
+            if chain.constrain:
+                extra_params += '<{k:s}>{v:s}</{k:s}>'.format(k = 'tsr_chain_constraint',
+                                                              v=chain.to_json())
+        if len(extra_params) == 0:
+            raise UnsupportedPlanningError('Only constrained TSR chains are supported by ConstrainedOMPLPlanner')
+        return self._Plan(robot, formatted_extra_params=extra_params, **kw_args)
