@@ -4,16 +4,19 @@ from methods import (
     PlanToEndEffectorPoseTest,
 )
 from methods.PlanToConfiguration import PlanToConfigurationTestCollisionTest
+from methods.PlanToEndEffectorOffset import PlanToEndEffectorOffsetCollisionTest
 from planning_helpers import BasePlannerTest
-from prpy.planning.snap import SnapPlanner
 from unittest import TestCase
 from or_trajopt import TrajoptPlanner
 
+
 class TrajoptPlannerTest(BasePlannerTest,
-                         PlanToConfigurationTest,
-                         PlanToConfigurationStraightLineTest,
-                         PlanToEndEffectorPoseTest,
-                         TestCase):
+                        PlanToConfigurationTest,
+                        PlanToEndEffectorPoseTest,
+                        PlanToEndEffectorOffsetTest,
+                        PlanToEndEffectorOffsetCollisionTest,
+                        PlanToConfigurationTestCollisionTest,
+                        TestCase):
     planner_factory = TrajoptPlanner
 
     def setUp(self):

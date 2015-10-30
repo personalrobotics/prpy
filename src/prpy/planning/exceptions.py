@@ -8,6 +8,22 @@ class UnsupportedPlanningError(PlanningError):
 
 
 class ConstraintViolationPlanningError(PlanningError):
+    def __init__(self, 
+                constraint_name, 
+                threshold = None,
+                violation_by = None, 
+                base_message='Violates constraint'):
+        self.constraint_name = constraint_name 
+        self.threshold = threshold
+        self.violation_by = violation_by
+
+        super(ConstraintViolationPlanningError, self).__init__(
+            '{:s}: {:s}'.format(
+                base_message,
+                self.constraint_name
+            )
+        )
+
     pass
 
 
