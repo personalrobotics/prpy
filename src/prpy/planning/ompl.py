@@ -102,6 +102,7 @@ class OMPLPlanner(BasePlanner):
         try:
             if (not continue_planner) or (not self.setup):
                 self.planner.InitPlan(robot, params)
+                raw_input("press enter to begin")
                 self.setup = True
 
             status = self.planner.PlanPath(traj, releasegil=True)
@@ -227,7 +228,7 @@ class OMPLSimplifier(BasePlanner):
 
 class ConstrainedOMPLPlanner(OMPLPlanner):
     def __init__(self):
-        OMPLPlanner.__init__(self, algorithm='CRRT')
+        OMPLPlanner.__init__(self, algorithm='CRRTConnect')
 
 
     @PlanningMethod
@@ -290,13 +291,20 @@ class ConstrainedOMPLPlanner(OMPLPlanner):
                           manip = robot.GetActiveManipulatorIndex())
             traj_tsr_chain = TSRChain(constrain=True, TSRs=[trajtsr])
 
+            # Compute a goal pose
             goal_pose = manip.GetEndEffectorTransform()
-            goal_pose[:3,3] += manip.GetEndEffectorTransform()[:3,2]*distance
-            goal_config = manip.FindIKSolution(goal_pose, 0)
-        if goal_config is None:
+            goal_pose[:3,3] += direction*distance/numpy.linalg.norm(direction)
+
+            # Get all IKs for the goal pose and send them all to the planner
+            goal_configs = manip.FindIKSolutions(goal_pose, 0)
+        if goal_configs is None:
             raise PlanningError('Failed to find an IK solution at the goal configuration.')
 
-        self._TSRPlan(robot, [traj_tsr_chain], goal=goal_config, **kw_args)
+        goal = []
+        for g in goal_configs:
+            goal += g.tolist()
+
+        self._TSRPlan(robot, [traj_tsr_chain], goal=goal, **kw_args)
 
     def _TSRPlan(self, robot, tsrchains, **kw_args):
         extra_params = ''
