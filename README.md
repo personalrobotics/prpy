@@ -1,5 +1,7 @@
 # PrPy
 
+[![Build Status](https://travis-ci.org/personalrobotics/prpy.svg?branch=master)](https://travis-ci.org/personalrobotics/prpy)
+
 PrPy is a Python library used by the Personal Robotics Laboratory at Carnegie
 Mellon University. This library includes robot-agnostic utilities that make
 it easier to use OpenRAVE in Python scripts. This includes a high-level
