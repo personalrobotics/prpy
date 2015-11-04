@@ -991,9 +991,9 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     for t in times:
         pva = [None] * len(derivatives)
         trajdata = traj.Sample(t)
-    for i, deriv in enumerate(derivatives):
-        pva[i] = cspec.ExtractJointValues(trajdata, robot, dof_indices, deriv)
-    pva_list.append(pva)
+        for i, deriv in enumerate(derivatives):
+            pva[i] = cspec.ExtractJointValues(trajdata, robot, dof_indices, deriv)
+        pva_list.append(pva)
 
     return pva_list
 
