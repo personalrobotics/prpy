@@ -10,10 +10,10 @@ from or_trajopt import TrajoptPlanner
 
 
 class TrajoptPlannerTest(BasePlannerTest,
-                        PlanToConfigurationTest,
-                        PlanToEndEffectorPoseTest,
-                        PlanToConfigurationTestCollisionTest,
-                        TestCase):
+                         PlanToConfigurationTest,
+                         PlanToEndEffectorPoseTest,
+                         PlanToConfigurationTestCollisionTest,
+                         TestCase):
     planner_factory = TrajoptPlanner
 
     def setUp(self):
