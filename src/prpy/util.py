@@ -819,41 +819,51 @@ def IsAtTrajectoryEnd(robot, trajectory):
     # If all joints match, return True
     return True
 
-def IsAtActiveDOFConfiguration(robot, goal_config, epsilon):
+
+def IsAtConfiguration(robot, goal_config, dof_indices=None):
     """
-    Check if robot's active DOFs (joints) have reached a desired configuration.
+    Check if robot's joints have reached a desired configuration.
 
-    @param robot The robot whose active DOFs will be checked.
-    @param goal_config The goal configuration (an array of joint positions)
-    @param epsilon The allowable joint position error.
+    If the DOF indices are not specified, the robot's active DOF
+    will be used.
 
-    @return boolean Returns True if joints are at goal position, within some epsilon.
+    @param robot The robot object.
+    @param goal_config The desired configuration, an array of joint
+                       positions.
+    @param dof_indices The joint index numbers.
+
+    @return boolean Returns True if joints are at goal position,
+                    within DOF resolution.
     """
 
-        # Python line length
-    # Limit all lines to a maximum of 79 characters.
-    #
-    #-----------------------------------------------------------------------------#
-    #
-    # Comments limits to 72 characters
-    #----------------------------------------------------------------------#
+    # If DOF indices not specified, use the active DOF by default
+    if dof_indices == None:
+        dof_indices = robot.GetActiveDOFIndices()
 
-
-    # Get joint indices based on the active DOF
-    dof_indices = robot.GetActiveDOFIndices()
-
-    # Get current configuration of robot for used indices
+    # Get current position of joints
     with robot.GetEnv():
         joint_values = robot.GetDOFValues(dof_indices)
+        dof_resolutions = robot.GetDOFResolutions(dof_indices)
 
-    # If any joint is not at the goal position, return False
-    for i in xrange(1, len(goal_config)):
-        delta_value = abs( joint_values[i] - goal_config[i] )
-        if delta_value > epsilon:
+    ## If any joint is not at the goal position, return False
+    for i in xrange(0, len(goal_config)):
+        # Get the axis index for this joint, which is 0
+        # for revolute joints or 0-2 for spherical joints.
+        joint = robot.GetJointFromDOFIndex(dof_indices[i])
+        axis_idx = dof_indices[i] - joint.GetDOFIndex()
+        # Use OpenRAVE method to check the configuration
+        # difference value1-value2 for axis i,
+        # taking into account joint limits and wrapping
+        # of continuous joints.
+        delta_value = abs(joint.SubtractValue(joint_values[i], \
+                                              goal_config[i], \
+                                              axis_idx))
+        if delta_value > dof_resolutions[i]:
             return False
 
     # If all joints match the goal, return True
     return True
+
 
 def IsTimedTrajectory(trajectory):
     """
