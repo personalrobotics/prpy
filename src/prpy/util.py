@@ -682,19 +682,24 @@ def FindCatkinResource(package, relative_path):
 
 def IsAtTrajectoryStart(robot, trajectory):
     """
-    Check if robot's DOFs match the start configuration of a trajectory.
+    Check if robot is at the first waypoint of a trajectory.
 
-    This function examines the current DOF values of the specified robot and
-    compares these values to the first waypoint of the specified trajectory.
-    If every DOF value specified in the trajectory differs by less than the
-    DOF resolution of the specified joint/axis then it will return True.
-    Otherwise, it returns False.
+    This function examines the current DOF values of the specified
+    robot and compares these values to the first waypoint of the
+    specified trajectory. If the DOF values specified in the trajectory
+    differ by less than the DOF resolution of the specified joint/axis
+    then it will return True. Otherwise, it returns False.
 
-    @param robot: the robot whose active DOFs will be checked
-    @param trajectory: the trajectory whose start configuration will be checked
-    @returns: True if the robot's active DOFs match the given trajectory
-              False if one or more active DOFs differ by DOF resolution
+    NOTE: This is used in ExecuteTrajectory()
+
+    @param robot: The robot whose active DOFs will be checked.
+    @param trajectory: The trajectory whose start configuration will
+                       be checked.
+    @returns: True The robot is at the end of the trajectory.
+              False One or more joints differ by DOF resolution.
     """
+    if trajectory.GetNumWaypoints() == 0:
+        raise ValueError('Trajectory has 0 waypoints!')
 
     cspec = trajectory.GetConfigurationSpecification()
     needs_base = HasAffineDOFs(cspec)
@@ -705,57 +710,46 @@ def IsAtTrajectoryStart(robot, trajectory):
                          'not supported')
 
     if trajectory.GetEnv() != robot.GetEnv():
-        raise ValueError('The environment attached to the trajectory does '
-                         'not match the environment attached to the robot.')
-
+        raise ValueError('The environment attached to the trajectory '
+                         'does not match the environment attached to '
+                         'the robot in IsAtTrajectoryStart().')
     if needs_base:
         rtf = robot.GetTransform()
         doft = openravepy.DOFAffine.X | \
                openravepy.DOFAffine.Y | \
                openravepy.DOFAffine.RotationAxis
-        current_pose = openravepy.RaveGetAffineDOFValuesFromTransform(rtf, doft)
+        curr_pose = openravepy.RaveGetAffineDOFValuesFromTransform(rtf, doft)
         start_transform = numpy.eye(4)
         waypoint = trajectory.GetWaypoint(0)
         start_t = cspec.ExtractTransform(start_transform, waypoint, robot)
-        traj_start = openravepy.RaveGetAffineDOFValuesFromTransform(start_t, doft)
-
+        traj_start = openravepy.RaveGetAffineDOFValuesFromTransform(start_t, \
+                                                                    doft)
         # Compare translation distance
-        trans_delta_value = abs(current_pose[:2] - traj_start[:2])
+        trans_delta_value = abs(curr_pose[:2] - traj_start[:2])
         trans_resolution = robot.GetAffineTranslationResolution()[:2]
         if trans_delta_value[0] > trans_resolution[0] or \
            trans_delta_value[1] > trans_resolution[1]:
             return False
         
         # Compare rotation distance
-        rot_delta_value = abs(wrap_to_interval(current_pose[2] - traj_start[2]))
-        rot_resolution = robot.GetAffineRotationAxisResolution()[2] # Rot about z?
-        if rot_delta_value > rot_resolution:
+        rot_delta_value = abs(wrap_to_interval(curr_pose[2] - traj_start[2]))
+        rot_res = robot.GetAffineRotationAxisResolution()[2] # Rot about z?
+        if rot_delta_value > rot_res:
             return False
 
     else:
-        # Get used indices and starting configuration from trajectory.
+        # Get the FIRST waypoint
+        waypoint_idx = 0
+
+        # Get joint indices used in the trajectory,
+        # and the joint positions at this waypoint
+        waypoint = trajectory.GetWaypoint(waypoint_idx)
         dof_indices, _ = cspec.ExtractUsedIndices(robot)
-        traj_values = cspec.ExtractJointValues(
-            trajectory.GetWaypoint(0), robot, dof_indices)
+        goal_config = cspec.ExtractJointValues(waypoint, robot, dof_indices)
 
-        # Get current configuration of robot for used indices.
-        with robot.GetEnv():
-            robot_values = robot.GetDOFValues(dof_indices)
-            dof_resolutions = robot.GetDOFResolutions(dof_indices)
-            
-        # Check deviation in each DOF, using OpenRAVE's SubtractValue function.
-        dof_infos = zip(dof_indices, traj_values, robot_values, dof_resolutions)
-        for dof_index, traj_value, robot_value, dof_resolution in dof_infos:
-            # Look up the Joint and Axis of the DOF from the robot.
-            joint = robot.GetJointFromDOFIndex(dof_index)
-            axis = dof_index - joint.GetDOFIndex()
-            
-            # If any joint deviates too much, return False.
-            delta_value = abs(joint.SubtractValue(traj_value, robot_value, axis))
-            if delta_value > dof_resolution:
-                return False
+        # Return false if any joint deviates too much
+        return IsAtConfiguration(robot, goal_config, dof_indices)
 
-    # If all joints match, return True.
     return True
 
 
