@@ -695,22 +695,29 @@ def IsAtTrajectoryStart(robot, trajectory):
     @returns: True if the robot's active DOFs match the given trajectory
               False if one or more active DOFs differ by DOF resolution
     """
+
     cspec = trajectory.GetConfigurationSpecification()
     needs_base = HasAffineDOFs(cspec)
     needs_joints = HasJointDOFs(cspec)
     
     if needs_base and needs_joints:
-        raise ValueError('Trajectories with affine and joint DOFs are not supported')
+        raise ValueError('Trajectories with affine and joint DOFs are '
+                         'not supported')
 
     if trajectory.GetEnv() != robot.GetEnv():
-        raise ValueError('The environment attached to the trajectory does not match the environment attached to the robot')
+        raise ValueError('The environment attached to the trajectory does '
+                         'not match the environment attached to the robot.')
 
     if needs_base:
-        doft = openravepy.DOFAffine.X | openravepy.DOFAffine.Y | openravepy.DOFAffine.RotationAxis
-        current_pose = openravepy.RaveGetAffineDOFValuesFromTransform(robot.GetTransform(), doft)
+        rtf = robot.GetTransform()
+        doft = openravepy.DOFAffine.X | \
+               openravepy.DOFAffine.Y | \
+               openravepy.DOFAffine.RotationAxis
+        current_pose = openravepy.RaveGetAffineDOFValuesFromTransform(rtf, doft)
         start_transform = numpy.eye(4)
-        start_transform = cspec.ExtractTransform(start_transform, trajectory.GetWaypoint(0), robot)
-        traj_start = openravepy.RaveGetAffineDOFValuesFromTransform(start_transform, doft)
+        waypoint = trajectory.GetWaypoint(0)
+        start_t = cspec.ExtractTransform(start_transform, waypoint, robot)
+        traj_start = openravepy.RaveGetAffineDOFValuesFromTransform(start_t, doft)
 
         # Compare translation distance
         trans_delta_value = abs(current_pose[:2] - traj_start[:2])
@@ -721,7 +728,7 @@ def IsAtTrajectoryStart(robot, trajectory):
         
         # Compare rotation distance
         rot_delta_value = abs(wrap_to_interval(current_pose[2] - traj_start[2]))
-        rot_resolution = robot.GetAffineRotationAxisResolution()[2] # Rotation about z?
+        rot_resolution = robot.GetAffineRotationAxisResolution()[2] # Rot about z?
         if rot_delta_value > rot_resolution:
             return False
 
@@ -766,25 +773,31 @@ def IsAtTrajectoryEnd(robot, trajectory):
     @returns: True if the robot's active DOFs match the given trajectory
               False if one or more active DOFs differ by DOF resolution
     """
+
     cspec = trajectory.GetConfigurationSpecification()
     needs_base = HasAffineDOFs(cspec)
     needs_joints = HasJointDOFs(cspec)
-    
+   
     if needs_base and needs_joints:
-        raise ValueError('Trajectories with affine and joint DOFs are not supported in IsAtTrajectoryEnd()')
+        raise ValueError('Trajectories with affine and joint DOFs are '
+                         'not supported in IsAtTrajectoryEnd()')
 
     if trajectory.GetEnv() != robot.GetEnv():
-        raise ValueError('The environment attached to the trajectory does not match the environment attached to the robot in IsAtTrajectoryEnd()')
+        raise ValueError('The environment attached to the trajectory '
+                         'does not match the environment attached to '
+                         'the robot in IsAtTrajectoryEnd()')
 
     if needs_base:
-        raise ValueError('Trajectories with affine DOFs are not supported in IsAtTrajectoryEnd()')
+        raise ValueError('Trajectories with affine DOFs are not supported '
+                         'in IsAtTrajectoryEnd()')
 
     else:
         last_waypoint_idx = trajectory.GetNumWaypoints() - 1
 
         # Get used indices and end configuration from trajectory
+        waypoint = trajectory.GetWaypoint(last_waypoint_idx)
         dof_indices, _ = cspec.ExtractUsedIndices(robot)
-        traj_values = cspec.ExtractJointValues(trajectory.GetWaypoint(last_waypoint_idx), robot, dof_indices)
+        traj_values = cspec.ExtractJointValues(waypoint, robot, dof_indices)
 
         # Get current configuration of robot for used indices
         with robot.GetEnv():
@@ -816,6 +829,15 @@ def IsAtActiveDOFConfiguration(robot, goal_config, epsilon):
 
     @return boolean Returns True if joints are at goal position, within some epsilon.
     """
+
+        # Python line length
+    # Limit all lines to a maximum of 79 characters.
+    #
+    #-----------------------------------------------------------------------------#
+    #
+    # Comments limits to 72 characters
+    #----------------------------------------------------------------------#
+
 
     # Get joint indices based on the active DOF
     dof_indices = robot.GetActiveDOFIndices()
