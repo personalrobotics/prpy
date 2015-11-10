@@ -680,9 +680,9 @@ def FindCatkinResource(package, relative_path):
                       relative_path))
 
 
-def IsAtTrajectoryStart(robot, trajectory):
+def IsAtTrajectoryWaypoint(robot, trajectory, waypoint_idx):
     """
-    Check if robot is at the first waypoint of a trajectory.
+    Check if robot is at a particular waypoint in a trajectory.
 
     This function examines the current DOF values of the specified
     robot and compares these values to the first waypoint of the
@@ -690,12 +690,14 @@ def IsAtTrajectoryStart(robot, trajectory):
     differ by less than the DOF resolution of the specified joint/axis
     then it will return True. Otherwise, it returns False.
 
-    NOTE: This is used in ExecuteTrajectory()
+    NOTE: This is used in ExecuteTrajectory(),
+                            IsAtTrajectoryStart(), and
+                              IsAtTrajectoryEnd()
 
     @param robot: The robot whose active DOFs will be checked.
-    @param trajectory: The trajectory whose start configuration will
-                       be checked.
-    @returns: True The robot is at the end of the trajectory.
+    @param trajectory: The trajectory containing the waypoint
+                       to be checked.
+    @returns: True The robot is at the desired position.
               False One or more joints differ by DOF resolution.
     """
     if trajectory.GetNumWaypoints() == 0:
@@ -738,9 +740,6 @@ def IsAtTrajectoryStart(robot, trajectory):
             return False
 
     else:
-        # Get the FIRST waypoint
-        waypoint_idx = 0
-
         # Get joint indices used in the trajectory,
         # and the joint positions at this waypoint
         waypoint = trajectory.GetWaypoint(waypoint_idx)
@@ -751,58 +750,24 @@ def IsAtTrajectoryStart(robot, trajectory):
         return IsAtConfiguration(robot, goal_config, dof_indices)
 
     return True
+
+
+def IsAtTrajectoryStart(robot, trajectory):
+    """
+    Check if robot is at the configuration specified by
+    the FIRST waypoint in a trajectory.
+    """
+    waypoint_idx = 0
+    return IsAtTrajectoryWaypoint(robot, trajectory, waypoint_idx)
 
 
 def IsAtTrajectoryEnd(robot, trajectory):
     """
-    Check if robot has reached the last waypoint of a trajectory.
-
-    This function examines the current DOF values of the specified
-    robot and compares these values to the last waypoint of the
-    specified trajectory. If the DOF values specified in the trajectory
-    differ by less than the DOF resolution of the specified joint/axis
-    then it will return True. Otherwise, it returns False.
-
-    @param robot: The robot whose active DOFs will be checked.
-    @param trajectory: The trajectory whose end configuration will
-                       be checked.
-    @returns: True The robot is at the end of the trajectory.
-              False One or more joints differ by DOF resolution.
+    Check if robot is at the configuration specified by
+    the LAST waypoint in a trajectory.
     """
-    if trajectory.GetNumWaypoints() == 0:
-        raise ValueError('Trajectory has 0 waypoints!')
-
-    cspec = trajectory.GetConfigurationSpecification()
-    needs_base = HasAffineDOFs(cspec)
-    needs_joints = HasJointDOFs(cspec)
-   
-    if needs_base and needs_joints:
-        raise ValueError('Trajectories with affine and joint DOFs are '
-                         'not supported in IsAtTrajectoryEnd()')
-
-    if trajectory.GetEnv() != robot.GetEnv():
-        raise ValueError('The environment attached to the trajectory '
-                         'does not match the environment attached to '
-                         'the robot in IsAtTrajectoryEnd()')
-
-    if needs_base:
-        raise ValueError('Trajectories with affine DOFs are not '
-                         'supported in IsAtTrajectoryEnd()')
-
-    else:
-        # Get the LAST waypoint
-        waypoint_idx = trajectory.GetNumWaypoints() - 1
-
-        # Get joint indices used in the trajectory,
-        # and the joint positions at this waypoint
-        waypoint = trajectory.GetWaypoint(waypoint_idx)
-        dof_indices, _ = cspec.ExtractUsedIndices(robot)
-        goal_config = cspec.ExtractJointValues(waypoint, robot, dof_indices)
-
-        # Return false if any joint deviates too much
-        return IsAtConfiguration(robot, goal_config, dof_indices)
-
-    return True
+    waypoint_idx = trajectory.GetNumWaypoints() - 1
+    return IsAtTrajectoryWaypoint(robot, trajectory, waypoint_idx)
 
 
 def IsAtConfiguration(robot, goal_config, dof_indices=None):
