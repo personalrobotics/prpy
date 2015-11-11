@@ -1187,6 +1187,135 @@ def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
             dt = 2. * dt
 
 
+def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_order=None):
+    """
+    For a piece-wise linear trajectory, generate a list
+    of configuration pairs that need to be collision checked.
+
+    This will step along the trajectory from start to end
+    at a resolution that satisifies the specified error metric.
+
+    @param openravepy.Robot      robot: The robot.
+    @param openravepy.Trajectory traj:  The trajectory for which we need
+                                        to generate sample points.
+    @param int      norm_order: 1  ==>  The L1 norm
+                                2  ==>  The L2 norm
+                                inf  ==>  The L_infinity norm
+    @param string   sampling_order:
+                        'linear'         : Sample in a linear sequence
+                        'van_der_corput' : Sample in an optimal sequence
+
+    @returns generator: A tuple (t,q) of float values, being the sample
+                        time and joint configuration.
+    """
+
+    # If trajectory is already timed, strip the deltatime values
+    if IsTimedTrajectory(traj):
+        traj = UntimeTrajectory(traj)
+
+    traj_cspec = traj.GetConfigurationSpecification()
+
+    # Make sure trajectory is linear in joint space
+    try:
+        # type can be 'linear' or 'quadratic'
+        interp_type = traj_cspec.GetGroupFromName('joint_values').interpolation
+    except openravepy.openrave_exception:
+        raise ValueError('Failed calling GetGroupFromName()')
+    if interp_type != 'linear':
+        raise ValueError('Trajectory must be linear in joint space')
+
+    dof_indices, _ = traj_cspec.ExtractUsedIndices(robot)
+
+    # If trajectory only has 1 waypoint then we only need to
+    # do 1 collision check.
+    num_waypoints = traj.GetNumWaypoints()
+    if num_waypoints == 1:
+        t = 0.0
+        waypoint = traj.GetWaypoint(0)
+        q = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        yield t, q
+        return
+
+    env = robot.GetEnv()
+
+    # Create a temporary trajectory that we will use
+    # for sampling the points to collision check,
+    # because there is no method to modify the 'deltatime'
+    # values of waypoints in an OpenRAVE trajectory.
+    temp_traj_cspec = traj.GetConfigurationSpecification()
+    temp_traj_cspec.AddDeltaTimeGroup()
+    temp_traj = openravepy.RaveCreateTrajectory(env, '')
+    temp_traj.Init(temp_traj_cspec)
+
+    # Set timing of first waypoint in temporary trajectory to t=0
+    waypoint = traj.GetWaypoint(0, temp_traj_cspec)
+    q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+    delta_time = 0.0
+    temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
+    temp_traj.Insert(0, waypoint)
+
+    # Get the resolution (in radians) for each joint
+    q_resolutions = robot.GetDOFResolutions()[dof_indices]
+
+    # Iterate over each segment in the trajectory and set
+    # the timing of each waypoint in the temporary trajectory
+    # so that taking steps of t=1 will be within a required error norm.
+    for i in range(1, num_waypoints):
+        # We already have the first waypoint (q0) of this segment,
+        # so get the joint values for the second waypoint.
+        waypoint = traj.GetWaypoint(i)
+        q1 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        dq = numpy.abs(q1 - q0)
+        max_diff_float = numpy.max( numpy.abs(q1 - q0) / q_resolutions)
+
+        # Get the number of steps (as a float) required for
+        # each joint at DOF resolution
+        num_steps = dq / q_resolutions
+
+        # Calculate the norm:
+        #
+        # norm_order = 1  ==>  The L1 norm
+        # Which is like a diamond shape in configuration space
+        # and equivalent to: L1_norm=sum(num_steps)
+        #
+        # norm_order = 2  ==>  The L2 norm
+        # Which is like an ellipse in configuration space
+        # and equivalent to: L2_norm=numpy.linalg.norm(num_steps)
+        #
+        # norm_order = inf  ==>  The L_infinity norm
+        # Which is like a box shape in configuration space
+        # and equivalent to: L_inf_norm=numpy.max(num_steps)
+        norm = numpy.linalg.norm(num_steps, ord=norm_order)
+
+        # Set timing of this waypoint
+        waypoint = traj.GetWaypoint(i, temp_traj_cspec)
+        delta_time = norm
+        temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
+        temp_traj.Insert(i, waypoint)
+
+        # The last waypoint becomes the first in the next segment
+        q0 = q1
+
+    traj_duration = temp_traj.GetDuration()
+
+    # Sample the trajectory using the specified sequence
+    seq = None
+    if sampling_order == 'van_der_corput':
+        # An approximate Van der Corput sequence, between the
+        # start and end points
+        seq = VanDerCorputSampleGenerator(0, traj_duration, step=2)
+    else: # sampling_order='linear'
+        # (default) Linear sequence, from start to end
+        seq = SampleTimeGenerator(0, traj_duration, step=2)
+
+    # Sample the trajectory in time
+    # and return time value and joint positions
+    for t in seq:
+        sample = temp_traj.Sample(t)
+        q = temp_traj_cspec.ExtractJointValues(sample, robot, dof_indices)
+        yield t, q
+
+
 def IsInCollision(traj, robot, selfcoll_only=False):
     report = openravepy.CollisionReport()
 
