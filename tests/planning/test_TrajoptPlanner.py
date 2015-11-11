@@ -5,14 +5,14 @@ from methods import (
 )
 from methods.PlanToConfiguration import PlanToConfigurationTestCollisionTest
 from planning_helpers import BasePlannerTest
-from prpy.planning.snap import SnapPlanner
 from unittest import TestCase
 from or_trajopt import TrajoptPlanner
 
+
 class TrajoptPlannerTest(BasePlannerTest,
                          PlanToConfigurationTest,
-                         PlanToConfigurationStraightLineTest,
                          PlanToEndEffectorPoseTest,
+                         PlanToConfigurationTestCollisionTest,
                          TestCase):
     planner_factory = TrajoptPlanner
 
