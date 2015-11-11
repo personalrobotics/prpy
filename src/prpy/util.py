@@ -936,6 +936,10 @@ def CheckJointLimits(robot, q):
     q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
     active_dof_indices = robot.GetActiveDOFIndices()
 
+    if len(q) != len(active_dof_indices):
+    raise ValueError('The number of joints in the configuration q '
+                     'is not equal to the number of active DOF.')
+
     lower_position_violations = (q < q_limit_min)
     if lower_position_violations.any():
         index = lower_position_violations.nonzero()[0][0]
