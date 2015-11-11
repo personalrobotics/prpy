@@ -1303,14 +1303,19 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_order=None):
     traj_duration = temp_traj.GetDuration()
 
     # Sample the trajectory using the specified sequence
+    if sampling_order == None:
+        sampling_order = 'linear'
     seq = None
     if sampling_order == 'van_der_corput':
         # An approximate Van der Corput sequence, between the
         # start and end points
         seq = VanDerCorputSampleGenerator(0, traj_duration, step=2)
-    else: # sampling_order='linear'
+    elif sampling_order == 'linear':
         # (default) Linear sequence, from start to end
         seq = SampleTimeGenerator(0, traj_duration, step=2)
+    else:
+        error = "Unknown sampling_order '" + sampling_order + "' "
+        raise ValueError(error)
 
     # Sample the trajectory in time
     # and return time value and joint positions
