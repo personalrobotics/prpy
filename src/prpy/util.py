@@ -955,6 +955,27 @@ def CheckJointLimits(robot, q):
             description='position')
 
 
+def ConvertIntToBinaryString(x, reverse=False):
+    """
+    Convert an integer to a binary string.
+
+    Optionally reverse the output string, which is
+    required for producing a Van Der Corput sequence.
+
+    @param int  x:       The number to be converted.
+    @param bool reverse: If True, the output string will be reversed.
+
+    @returns string: A binary number as a string.
+    """
+    if type(x) != int:
+        raise ValueError('Input number must be an integer')
+
+    if reverse == True:
+        return ''.join(reversed(bin(x)[2:]))
+
+    return ''.join(bin(x)[2:])
+
+
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
                          first_step=None, epsilon=1e-6):
     """
