@@ -921,6 +921,40 @@ def ComputeUnitTiming(robot, traj, env=None):
     return new_traj
 
 
+def CheckJointLimits(robot, q):
+    """
+    Check if a configuration is within a robot's joint position limits.
+
+    If outside limits, this procedure throws an exception
+    of type JointLimitError.
+
+    @param openravepy.robot robot: The robot.
+    @param list             q:     List or array of joint positions.
+    """
+    from prpy.planning.exceptions import JointLimitError
+
+    q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+    active_dof_indices = robot.GetActiveDOFIndices()
+
+    lower_position_violations = (q < q_limit_min)
+    if lower_position_violations.any():
+        index = lower_position_violations.nonzero()[0][0]
+        raise JointLimitError(robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_min[index],
+            description='position')
+
+    upper_position_violations = (q > q_limit_max)
+    if upper_position_violations.any():
+        index = upper_position_violations.nonzero()[0][0]
+        raise JointLimitError(robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_max[index],
+            description='position')
+
+
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
                          first_step=None, epsilon=1e-6):
     """
