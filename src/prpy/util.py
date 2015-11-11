@@ -1022,6 +1022,33 @@ def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
     return (scale * val + lower for val in chain(endpoints or [], raw_seq))
 
 
+def SampleTimeGenerator(start, end, step=1):
+    """
+    Generate a linear sequence of values from start to end, with
+    specified step size. Works with int or float values.
+
+    The end value is also returned if it's more than half the
+    distance from the previously returned value.
+
+    For example, on the interval [0.0,5.0], the sequence is:
+    [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+    @param float start: The start value of the sequence.
+    @param float end:   The last value of the sequence.
+    @param float step:  The step-size between values.
+
+    @returns generator: A sequence of float values.
+    """
+    t = start
+    prev_t  = 0.0
+    while t <= numpy.floor(end):
+        yield t
+        prev_t = t
+        t = t + step
+    if (end - float(prev_t)) > (step / 2.0):
+        yield float(end)
+
+
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
                          first_step=None, epsilon=1e-6):
     """
