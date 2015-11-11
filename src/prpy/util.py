@@ -1049,6 +1049,72 @@ def SampleTimeGenerator(start, end, step=1):
         yield float(end)
 
 
+def VanDerCorputSampleGenerator(start, end, step=2):
+    """
+    This wraps VanDerCorputSequence() in a way that's useful for
+    collision-checking.
+
+    Generates a sequence of values from start to end, with specified
+    step size, using an approximate binary Van der Corput sequence.
+
+    The end value is also returned if it's more than half the
+    distance from the closest value.
+
+    For example, on the interval [0.0, 13.7], the sequence is:
+    [0.0, 13.7, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
+
+    @param float start: The start value of the sequence.
+    @param float end:   The last value of the sequence.
+    @param float step:  The step-size between values.
+
+    @returns generator: A sequence of float values.
+    """
+    import itertools
+
+    # The duration, rounded to nearest step-size
+    mod_end = int(end - (end % step))
+    steps_to_take = mod_end / float(step)
+    leftover_time = end - float(mod_end)
+
+    # Keep a list to make sure we return all the sample values
+    times_sampled = [False for i in range(mod_end+1)]
+
+    vdc = VanDerCorputSequence(start, steps_to_take)
+    vdc_seq = itertools.islice(vdc, steps_to_take+1)
+    count = 0
+    for s in vdc_seq:
+        # Snap this sample value to the desired step-size
+        idx = int( step * numpy.round(s) )
+        if (idx % step) != 0:
+            idx = idx + 1
+
+        # If required, return the actual end-point value (a float) as
+        # the 2nd sample point to be returned. Then the next sample
+        # point is the end-point rounded to step-size.
+        if count == 1:
+            if leftover_time > (step / 2.0):
+                yield float(end)
+
+        count = count+1
+        while True:
+            if times_sampled[idx] == False:
+                times_sampled[idx] = True
+                yield float(idx)
+                break
+            else:
+                # We have already sampled at this value of t,
+                # so lets try a different value of t.
+                decimals = (s % 1)
+                if decimals < 0.5:
+                    idx = idx - step
+                    if (idx < 0): # handle wrap past zero
+                        idx = int(end - 1)
+                else:
+                    idx = idx + step
+                    if (idx > end): # handle wrap past end
+                        idx = int(start + 1)
+
+
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
                          first_step=None, epsilon=1e-6):
     """
