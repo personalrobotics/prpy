@@ -3,7 +3,10 @@ from methods import (
     PlanToConfigurationStraightLineTest,
     PlanToEndEffectorPoseTest,
 )
-from methods.PlanToConfiguration import PlanToConfigurationTestCollisionTest
+from methods.PlanToConfiguration import (
+    PlanToConfigurationTestCollisionTest,
+    PlanToConfigurationCompleteTest,
+)
 from planning_helpers import BasePlannerTest
 from unittest import TestCase
 from or_trajopt import TrajoptPlanner
@@ -12,7 +15,9 @@ from or_trajopt import TrajoptPlanner
 class TrajoptPlannerTest(BasePlannerTest,
                          PlanToConfigurationTest,
                          PlanToEndEffectorPoseTest,
+                         PlanToConfigurationCompleteTest,
                          PlanToConfigurationTestCollisionTest,
+                         PlanToConfigurationStraightLineTest,
                          TestCase):
     planner_factory = TrajoptPlanner
 
