@@ -976,6 +976,52 @@ def ConvertIntToBinaryString(x, reverse=False):
     return ''.join(bin(x)[2:])
 
 
+def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
+    """
+    Generate the binary Van der Corput sequence, where each value
+    is a dyadic fraction re-scaled to the desired range.
+
+    For example, on the interval [0,1], the first 5 values of
+    the Van der Corput sequence are:
+    [0.0, 1.0, 0.5, 0.5, 0.75]
+
+    @param float lower: The first value of the range of the sequence.
+    @param float upper: The last value of the range of the sequence.
+
+    @param bool include_endpoints: If True, the output sequence will
+                                   include the value 'lower' and the
+                                   value 'upper'.
+                                   If False, these endpoint values
+                                   will not be returned.
+
+    @returns generator: A sequence of float values.
+    """
+    from itertools import count, chain
+
+    if include_endpoints == True:
+        endpoints = (0.0, 1.0)
+    else:
+        endpoints = None
+
+    # Get a sequence of reversed binary numbers:
+    # '1', '01', '11', '001', '101', '011', '111', '0001', ....
+    #
+    # Note: count(1) is a generator, starting at 1, making steps of 1.
+    reverse_binary_seq = (ConvertIntToBinaryString(x, True) for x in count(1))
+
+    # From the reversed binary sequence, generate the Van der Corput
+    # sequence, for which:  0.0 < x < 1.0  (the end-points are excluded)
+    # 0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875, 0.0625, ....
+    #
+    # Note: int(x,2) converts the binary string (base 2) to an integer.
+    raw_seq = (float(int(x,2)) / (2**len(x)) for x in reverse_binary_seq)
+
+    # Scale the Van der Corput sequence across the desired range
+    # and optionally add the end-points.
+    scale = float(upper - lower)
+    return (scale * val + lower for val in chain(endpoints or [], raw_seq))
+
+
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
                          first_step=None, epsilon=1e-6):
     """
