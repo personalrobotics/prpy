@@ -3,10 +3,6 @@ sudo: required
 language: generic
 cache:
 - apt
-env:
-  global:
-  - REPOSITORY=prpy
-  - DISTRIBUTION=https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
 # Install test fixture dependencies.
 before_install:
 - mkdir -p "${HOME}/workspace/src"
