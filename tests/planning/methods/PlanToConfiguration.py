@@ -86,7 +86,7 @@ class PlanToConfigurationStraightLineTest(object):
 class PlanToConfigurationCompleteTest(object):
     def test_PlanToConfiguration_GoalIsFeasible_FindsSolution(self):
         self.PlanFromStartToGoalConfiguration(
-            self.config_feasible_start, self.config_feasible_goal)
+            self.config_feasible_start2, self.config_feasible_goal)
 
 
 class PlanToConfigurationTestCollisionTest(object): 
