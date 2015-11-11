@@ -10,6 +10,15 @@ class BasePlannerTest(object):
         +2.35061574,  0.61043555,  0.85000000,  1.80684444, -0.08639935,
         -0.69750474,  1.31656172
     ])
+
+    # This configuration is easier for Trajopt (and harder for most other
+    # planners) because teh pole introduces a local minimum (maybe?).
+    config_feasible_start2 = numpy.array([
+        -2.61799387,  0.66440338,  0.19853743,  2.00944286, -0.08639925,
+        -0.69750467,  1.31656153
+    ])
+
+
     config_feasible_goal = numpy.array([
         -0.84085883,  1.44573701,  0.20000000,  1.72620231, -0.81124757,
         -1.39363597,  1.29233111
