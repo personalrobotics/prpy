@@ -250,10 +250,12 @@ class Tests(unittest.TestCase):
         q0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         desired_num_checks = 1
         traj = self.CreateTrajectory(q0, q0) # makes traj with 1 waypoint
+        # Linear sampling
+        linear = prpy.util.SampleTimeGenerator
         checks = prpy.util.GetLinearCollisionCheckPts(self.robot, \
                                                       traj, \
                                                       norm_order=2, \
-                                                      sampling_order='linear')
+                                                      sampling_func=linear)
         num_checks = sum(1 for x in checks)
         if num_checks != desired_num_checks:
             error = str(num_checks) + ' is the wrong number of check pts.'
@@ -270,10 +272,12 @@ class Tests(unittest.TestCase):
         q1 = 0.5 * self.dof_resolutions
         desired_num_checks = 2
         traj = self.CreateTrajectory(q0, q1)
+        # Linear sampling
+        linear = prpy.util.SampleTimeGenerator
         checks = prpy.util.GetLinearCollisionCheckPts(self.robot, \
                                                       traj, \
                                                       norm_order=2, \
-                                                      sampling_order='linear')
+                                                      sampling_func=linear)
         num_checks = 0
         for t, q in checks:
             num_checks = num_checks + 1
@@ -301,10 +305,12 @@ class Tests(unittest.TestCase):
         q1 = 1.0 * self.dof_resolutions
         desired_num_checks = 2
         traj = self.CreateTrajectory(q0, q1)
+        # Linear sampling
+        linear = prpy.util.SampleTimeGenerator
         checks = prpy.util.GetLinearCollisionCheckPts(self.robot, \
                                                       traj, \
                                                       norm_order=2, \
-                                                      sampling_order='linear')
+                                                      sampling_func=linear)
         num_checks = 0
         for t, q in checks:
             num_checks = num_checks + 1
@@ -325,10 +331,12 @@ class Tests(unittest.TestCase):
         q1 = 1.2 * self.dof_resolutions
         desired_num_checks = 3
         traj = self.CreateTrajectory(q0, q1)
+        # Linear sampling
+        linear = prpy.util.SampleTimeGenerator
         checks = prpy.util.GetLinearCollisionCheckPts(self.robot, \
                                                       traj, \
                                                       norm_order=2, \
-                                                      sampling_order='linear')
+                                                      sampling_func=linear)
         num_checks = 0
         for t, q in checks:
             num_checks = num_checks + 1
@@ -349,17 +357,17 @@ class Tests(unittest.TestCase):
         q1 = [0.01, 0.02, 0.03, 0.04, 0.03, 0.02, 0.01]
         traj = self.CreateTrajectory(q0, q1)
 
-        # Linear
-        method = 'linear'
+        # Linear sampling
+        linear = prpy.util.SampleTimeGenerator
         checks = prpy.util.GetLinearCollisionCheckPts(self.robot, \
                                                       traj, \
                                                       norm_order=2, \
-                                                      sampling_order=method)
+                                                      sampling_func=linear)
         try:
             # Exception can be thrown only when we try to use the generator
             num_checks = sum(1 for x in checks)
         except ValueError:
-            error = "Unknown sampling_order method: '" + method + "' "
+            error = "Unknown sampling_func: '" + method + "' "
             self.fail(error)
         except Exception, e:
             error = 'Unexpected exception thrown: ' + str(e.message)
@@ -367,41 +375,24 @@ class Tests(unittest.TestCase):
         else:
             pass # test passed
 
-        # Van der Corput
-        method = 'van_der_corput'
+        # An approximate Van der Corput sequence, between the
+        # start and end points
+        vdc = prpy.util.VanDerCorputSampleGenerator
         checks = prpy.util.GetLinearCollisionCheckPts(self.robot, \
                                                       traj, \
                                                       norm_order=2, \
-                                                      sampling_order=method)
+                                                      sampling_func=vdc)
         try:
             # Exception can be thrown only when we try to use the generator
             num_checks = sum(1 for x in checks)
         except ValueError:
-            error = "Unknown sampling_order method: '" + method + "' "
+            error = "Unknown sampling_func: '" + method + "' "
             self.fail(error)
         except Exception, e:
             error = 'Unexpected exception thrown: ' + str(e.message)
             self.fail(error)
         else:
             pass # test passed
-
-        # unknown method
-        method = 'garbage'
-        checks = prpy.util.GetLinearCollisionCheckPts(self.robot, \
-                                                      traj, \
-                                                      norm_order=2, \
-                                                      sampling_order=method)
-        try:
-            # Exception can be thrown only when we try to use the generator
-            num_checks = sum(1 for x in checks)
-        except ValueError:
-            pass # test passed, an exception was thrown
-
-        except Exception, e:
-            error = 'Unexpected exception thrown: ' + str(e.message)
-            self.fail(error)
-        else:
-            self.fail('Expected exception not thrown')
 
 
     # ConvertIntToBinaryString()
@@ -501,7 +492,7 @@ class Tests(unittest.TestCase):
                                                 verbose=True)
 
     def test_VanDerCorputSampleGenerator_ExcessEqualToHalfStep(self):
-        # Check that the end-point is NOT included when it's distance
+        # Check that the end-point is NOT included when it's distance 
         # is EQUAL too (or less than) the step-size.
         expected_sequence = [0.0, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
         traj_dur = 13.0

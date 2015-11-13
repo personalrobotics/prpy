@@ -1191,7 +1191,7 @@ def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
             dt = 2. * dt
 
 
-def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_order=None):
+def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
     """
     For a piece-wise linear trajectory, generate a list
     of configuration pairs that need to be collision checked.
@@ -1205,9 +1205,11 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_order=None):
     @param int      norm_order: 1  ==>  The L1 norm
                                 2  ==>  The L2 norm
                                 inf  ==>  The L_infinity norm
-    @param string   sampling_order:
-                        'linear'         : Sample in a linear sequence
-                        'van_der_corput' : Sample in an optimal sequence
+    @param generator sampling_func A function that returns a sequence of
+                                   sample times.
+                                   e.g. SampleTimeGenerator() 
+                                         or
+                                        VanDerCorputSampleGenerator()
 
     @returns generator: A tuple (t,q) of float values, being the sample
                         time and joint configuration.
@@ -1271,7 +1273,7 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_order=None):
         q1 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
         dq = numpy.abs(q1 - q0)
         max_diff_float = numpy.max( numpy.abs(q1 - q0) / q_resolutions)
-
+        
         # Get the number of steps (as a float) required for
         # each joint at DOF resolution
         num_steps = dq / q_resolutions
@@ -1302,20 +1304,13 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_order=None):
 
     traj_duration = temp_traj.GetDuration()
 
-    # Sample the trajectory using the specified sequence
-    if sampling_order == None:
-        sampling_order = 'linear'
+    # Sample the trajectory using the specified sample generator
     seq = None
-    if sampling_order == 'van_der_corput':
-        # An approximate Van der Corput sequence, between the
-        # start and end points
-        seq = VanDerCorputSampleGenerator(0, traj_duration, step=2)
-    elif sampling_order == 'linear':
+    if sampling_func == None:
         # (default) Linear sequence, from start to end
         seq = SampleTimeGenerator(0, traj_duration, step=2)
     else:
-        error = "Unknown sampling_order '" + sampling_order + "' "
-        raise ValueError(error)
+        seq = sampling_func(0, traj_duration, step=2)
 
     # Sample the trajectory in time
     # and return time value and joint positions
