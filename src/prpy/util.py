@@ -974,7 +974,7 @@ def ConvertIntToBinaryString(x, reverse=False):
     if type(x) != int:
         raise ValueError('Input number must be an integer')
 
-    if reverse == True:
+    if reverse:
         return ''.join(reversed(bin(x)[2:]))
 
     return ''.join(bin(x)[2:])
