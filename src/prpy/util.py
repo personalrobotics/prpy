@@ -1043,6 +1043,11 @@ def SampleTimeGenerator(start, end, step=1):
 
     @returns generator: A sequence of float values.
     """
+    if end <= start:
+        raise ValueError("The 'end' value must be greater than "\
+                         "the 'start' value.")
+    if not (step > 0):
+        raise ValueError("The 'step' value must be positive.")
     t = start
     prev_t  = 0.0
     while t <= numpy.floor(end):
