@@ -1005,7 +1005,7 @@ def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
     if include_endpoints == True:
         endpoints = (0.0, 1.0)
     else:
-        endpoints = None
+        endpoints = []
 
     # Get a sequence of reversed binary numbers:
     # '1', '01', '11', '001', '101', '011', '111', '0001', ....
@@ -1023,7 +1023,7 @@ def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
     # Scale the Van der Corput sequence across the desired range
     # and optionally add the end-points.
     scale = float(upper - lower)
-    return (scale * val + lower for val in chain(endpoints or [], raw_seq))
+    return (scale * val + lower for val in chain(endpoints, raw_seq))
 
 
 def SampleTimeGenerator(start, end, step=1):
