@@ -1080,6 +1080,14 @@ def VanDerCorputSampleGenerator(start, end, step=2):
     """
     import itertools
 
+    # 'start' and 'end' must be positive because
+    # itertools.islice() only accepts a positive integer
+    if end <= start:
+        raise ValueError("The 'end' value must be greater than "\
+                         "the 'start' value.")
+    if not (step > 0):
+        raise ValueError("The 'step' value must be positive.")
+
     # The duration, rounded to nearest step-size
     mod_end = int(end - (end % step))
     steps_to_take = mod_end / float(step)
