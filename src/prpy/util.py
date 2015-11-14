@@ -1236,7 +1236,8 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
 
     # Make sure trajectory is linear in joint space
     try:
-        # type can be 'linear' or 'quadratic'
+        # OpenRAVE trajectory type can be 'linear', 'quadratic', or
+        # other values including 'cubic', 'quadric' or 'quintic'
         interp_type = traj_cspec.GetGroupFromName('joint_values').interpolation
     except openravepy.openrave_exception:
         raise ValueError('Failed calling GetGroupFromName()')
