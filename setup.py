@@ -8,6 +8,7 @@ d = generate_distutils_setup(
         'prpy.base',
         'prpy.planning',
         'prpy.simulation',
+        'prpy.perception',
         'prpy.tsr',
     ],
     package_dir={'': 'src'},
