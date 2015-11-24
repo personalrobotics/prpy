@@ -29,18 +29,21 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+import numbers
 import numpy
 import openravepy
 import warnings
 from manipulator import Manipulator
 from prpy.clone import Clone
+from prpy.controllers import RewdOrGravityCompensationController, RewdOrTrajectoryController
+from ros_control_client_py import ControllerManagerClient, SwitchError
 from .. import util
 from .. import exceptions
 
 logger = logging.getLogger('wam')
 
 class WAM(Manipulator):
-    def __init__(self, sim, owd_namespace,
+    def __init__(self, sim, namespace='',
                  iktype=openravepy.IkParameterization.Type.Transform6D):
         Manipulator.__init__(self)
 
@@ -51,15 +54,29 @@ class WAM(Manipulator):
             self._SetupIK(iktype)
 
         # Enable servo motions in simulation mode.
-        self.controller = self.GetRobot().AttachController(name=self.GetName(),
-            args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
-            dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim
-        )
+        # self.controller = self.GetRobot().AttachController(name=self.GetName(),
+        #     args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
+        #     dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim
+        # )
 
         if sim:
             from prpy.simulation import ServoSimulator
             self.servo_simulator = ServoSimulator(
                 self, rate=20, watchdog_timeout=0.1)
+
+            self.controller = self.GetRobot().AttachController(name=self.GetName(),
+                                                               args='IdealController',
+                                                               dof_indices=self.GetArmIndices(),
+                                                               affine_dofs=0,
+                                                               simulated=sim)
+        else:
+            # TODO what is control manager namespace?
+            self.controller_switcher = ControllerManagerClient()
+            wam_joints = ['j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7']
+            self.controller = RewdOrGravityCompensationController(self.GetRobot(),
+                                                                  [namespace + '/' + j for j in wam_joints],
+                                                                  self.simulated)
+
 
     def CloneBindings(self, parent):
         Manipulator.CloneBindings(self, parent)
@@ -82,17 +99,25 @@ class WAM(Manipulator):
                                   freeindices=[ self.GetIndices()[2] ])
             self.ikmodel.save()
 
-    def SetStiffness(manipulator, stiffness):
+    def SetStiffness(self, stiffness):
         """Set the WAM's stiffness.
-        Stiffness 0 is gravity compensation and stiffness 1 is position
+        Stiffness False/0 is gravity compensation and stiffness True/1 is position
         control. Values between 0 and 1 are experimental.
-        @param stiffness value between 0.0 and 1.0
+        @param stiffness boolean or decimal value between 0.0 and 1.0
         """
-        if not (0 <= stiffness <= 1):
-            raise Exception('Stiffness must in the range [0, 1]; got %f.' % stiffness)
+        if isinstance(stiffness, numbers.Number) and not (0 <= stiffness <= 1):
+            raise Exception('Stiffness must be boolean or decimal in the range [0, 1]; got %f.' % stiffness)
+        elif not self.simulated:
+            # TODO toggle grav comp/trajectory
+            if stiffness:
+                stiff_controllers =     [self.controller.GetNamespace() + "/joint_state_controller",
+                                         self.controller.GetNamespace() + "/rewd_trajectory_controller"]
+                self.controller_manager.request(stiff_controllers).switch()
+            else:
+                grav_comp_controllers = [self.controller.GetNamespace() + "/joint_state_controller",
+                                         self.controller.GetNamespace() + "/rewd_gravity_compensation_controller"]
+                self.controller_manager.request(grav_comp_controllers).switch()
 
-        if not manipulator.simulated:
-            manipulator.controller.SendCommand('SetStiffness {0:f}'.format(stiffness))
 
     def SetTrajectoryExecutionOptions(self, traj, stop_on_stall=False,
             stop_on_ft=False, force_magnitude=None, force_direction=None,
@@ -118,23 +143,23 @@ class WAM(Manipulator):
                 'torque': list(torque),
         }}, append=True)
 
-    def Servo(manipulator, velocities):
+    def Servo(self, velocities):
         """Servo with a vector of instantaneous joint velocities.
         @param velocities joint velocities, in radians per second
         """
-        num_dof = len(manipulator.GetArmIndices())
+        num_dof = len(self.GetArmIndices())
         if len(velocities) != num_dof:
             raise ValueError('Incorrect number of joint velocities. '
                              'Expected {0:d}; got {0:d}.'.format(
                              num_dof, len(velocities)))
 
-        if not manipulator.simulated:
-            manipulator.controller.SendCommand('Servo ' + ' '.join([ str(qdot) for qdot in velocities ]))
+        if not self.simulated:
+            self.controller.SendCommand('Servo ' + ' '.join([ str(qdot) for qdot in velocities ]))
         else:
-            manipulator.controller.Reset(0)
-            manipulator.servo_simulator.SetVelocity(velocities)
+            self.controller.Reset(0)
+            self.servo_simulator.SetVelocity(velocities)
 
-    def ServoTo(manipulator, target, duration, timeStep=0.05, collisionChecking=True):
+    def ServoTo(self, target, duration, timeStep=0.05, collisionChecking=True):
         """Servo the arm towards a target configuration over some duration.
         Servos the arm towards a target configuration with a constant joint
         velocity. This function uses the \ref Servo command to control the arm
@@ -148,20 +173,20 @@ class WAM(Manipulator):
         @return whether the servo was successful
         """
         steps = int(math.ceil(duration/timeStep))
-        original_dofs = manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices())
+        original_dofs = self.GetRobot().GetDOFValues(manipulator.GetArmIndices())
         velocity = numpy.array(target-manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices()))
         velocities = v/steps#[v/steps for v in velocity]
         inCollision = False 
         if collisionChecking:
-            inCollision = manipulator.CollisionCheck(target)
+            inCollision = self.CollisionCheck(target)
 
         if not inCollision:
             for i in range(1,steps):
                 import time
-                manipulator.Servo(velocities)
+                self.Servo(velocities)
                 time.sleep(timeStep)
-            manipulator.Servo([0] * len(manipulator.GetArmIndices()))
-            new_dofs = manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices())
+            self.Servo([0] * len(self.GetArmIndices()))
+            new_dofs = self.GetRobot().GetDOFValues(self.GetArmIndices())
             return True
         else:
             return False
