@@ -147,3 +147,18 @@ class TrajectoryTests(unittest.TestCase):
         q1 = goal_config
         traj = self.CreateTrajectory(q0, q1)
         self.assertFalse(prpy.util.IsAtTrajectoryEnd(self.robot, traj))
+    
+    def test_ComputeUnitTiming(self):
+        cspec = self.robot.GetActiveConfigurationSpecification()
+        traj = openravepy.RaveCreateTrajectory(self.env, '')
+        traj.Init(cspec)
+        traj.Insert(0, [0,0,0,0,0,0,0])
+        traj.Insert(1, [1,0,0,0,0,0,0])
+        openravepy.planningutils.RetimeActiveDOFTrajectory(traj,
+            self.robot, False, 100.0, 100.0, 'LinearTrajectoryRetimer', '')
+        traj_arclen = prpy.util.ComputeUnitTiming(self.robot, traj)
+        dofvals = traj_arclen.Sample(0.99, cspec)
+        self.assertAlmostEqual(dofvals[0], 0.99)
+
+if __name__ == '__main__':
+    unittest.main()
