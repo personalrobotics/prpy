@@ -890,16 +890,20 @@ def ComputeUnitTiming(robot, traj, env=None):
     if env is None:
         env = traj.GetEnv()
 
-    cspec = traj.GetConfigurationSpecification()
-    cspec.AddDeltaTimeGroup()
-    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+    old_cspec = traj.GetConfigurationSpecification()
+    dof_indices, _ = old_cspec.ExtractUsedIndices(robot)
+
+    with robot.CreateRobotStateSaver(robot):
+        robot.SetActiveDOFs(dof_indices)
+        new_cspec = robot.GetActiveConfigurationSpecification('linear')
+    new_cspec.AddDeltaTimeGroup()
 
     new_traj = RaveCreateTrajectory(env, '')
-    new_traj.Init(cspec)
+    new_traj.Init(new_cspec)
 
     for i in range(traj.GetNumWaypoints()):
-        waypoint = traj.GetWaypoint(i, cspec)
-        dof_values = cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        old_waypoint = traj.GetWaypoint(i)
+        dof_values = old_cspec.ExtractJointValues(old_waypoint, robot, dof_indices)
 
         if i == 0:
             deltatime = 0.
@@ -908,8 +912,11 @@ def ComputeUnitTiming(robot, traj, env=None):
 
         dof_values_prev = dof_values
 
-        cspec.InsertDeltaTime(waypoint, deltatime)
-        new_traj.Insert(i, waypoint)
+        new_waypoint = numpy.zeros(new_cspec.GetDOF())
+        
+        new_cspec.InsertJointValues(new_waypoint, dof_values, robot, dof_indices, 0)
+        new_cspec.InsertDeltaTime(new_waypoint, deltatime)
+        new_traj.Insert(i, new_waypoint)
 
     return new_traj
 
