@@ -19,7 +19,7 @@ class SimtrackModule(PerceptionModule):
         @param kinbody_path The path to the folder where kinbodies are stored
         @param detection_frame The TF frame of the camera
         @param world_frame The desired world TF frame
-        @param service_namespace The namespace for the VNCC service (default: /vncc)
+        @param service_namespace The namespace for the simtrack service (default: /simtrack)
         """
 
         # Initialize a new ros node if one has not already been created
