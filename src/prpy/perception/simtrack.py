@@ -1,7 +1,4 @@
-import rospy
 import math
-import tf
-import tf.transformations as transformations
 import numpy
 import os.path
 
@@ -20,7 +17,9 @@ class SimtrackModule(PerceptionModule):
         @param world_frame The desired world TF frame
         @param service_namespace The namespace for the simtrack service (default: /simtrack)
         """
-
+        import rospy
+        import tf
+        import tf.transformations as transformations
         # Initialize a new ros node if one has not already been created
         try:
             rospy.init_node('simtrack_detector', anonymous=True)
@@ -56,6 +55,7 @@ class SimtrackModule(PerceptionModule):
         @return A 4x4 transformation matrix containing the pose
         as read from the message
         """
+        import tf.transformations as transformations
         #Get translation and rotation (from Euler angles)
         pose = transformations.quaternion_matrix(numpy.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w]))
     
@@ -71,6 +71,7 @@ class SimtrackModule(PerceptionModule):
         @param pose The 4x4 transformation matrix containing the pose to transform
         @return The 4x4 transformation matrix describing the pose in world frame
         """
+        import rospy
         #Get pose w.r.t world frame
         self.listener.waitForTransform(self.world_frame,self.detection_frame,
                                        rospy.Time(),rospy.Duration(10))
