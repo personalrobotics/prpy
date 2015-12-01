@@ -1,5 +1,4 @@
 import rospy
-import simtrack_msgs.srv
 import math
 import tf
 import tf.transformations as transformations
@@ -91,13 +90,13 @@ class SimtrackModule(PerceptionModule):
         
 
     def _GetDetections(self, obj_names):
+        import simtrack_msgs.srv
         """
         Calls the service to get a detection of a particular object.
         @param obj_name The name of the object to detect
         @return A 4x4 transformation matrix describing the pose of the object
         in world frame, None if the object is not detected
         """
-        print self.service_namespace+'/detect_objects'
         #Call detection service for a particular object
         detect_simtrack = rospy.ServiceProxy(self.service_namespace+'/detect_objects',
                                          simtrack_msgs.srv.DetectObjects)
