@@ -161,7 +161,7 @@ class GreedyIKPlanner(BasePlanner):
             JointLimitError)
         from openravepy import CollisionReport
         from numpy import linalg as LA
-
+        p = openravepy.KinBody.SaveParameters
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -214,14 +214,15 @@ class GreedyIKPlanner(BasePlanner):
                         )
 
                         # update collision_error to contain collision info.
-                        for q in ik_solutions:
-                            robot.SetActiveDOFValues(q)
-                            report = CollisionReport()
-                            if self.env.CheckCollision(robot, report=report):
-                                collision_error = CollisionPlanningError.FromReport(report) 
-                            elif robot.CheckSelfCollision(report=report):
-                                collision_error = SelfCollisionPlanningError.FromReport(report)
-                            
+                        with robot.CreateRobotStateSaver(p.LinkTransformation):
+                            for q in ik_solutions:
+                                robot.SetActiveDOFValues(q)
+                                report = CollisionReport()
+                                if self.env.CheckCollision(robot, report=report):
+                                    collision_error = CollisionPlanningError.FromReport(report)
+                                elif robot.CheckSelfCollision(report=report):
+                                    collision_error = SelfCollisionPlanningError.FromReport(report)
+
                     # Check if the step was within joint DOF resolution.
                     infeasible_step = True
                     if qnew is not None:
