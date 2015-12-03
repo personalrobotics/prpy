@@ -893,7 +893,7 @@ def ComputeUnitTiming(robot, traj, env=None):
     old_cspec = traj.GetConfigurationSpecification()
     dof_indices, _ = old_cspec.ExtractUsedIndices(robot)
 
-    with robot.CreateRobotStateSaver(robot):
+    with robot.CreateRobotStateSaver():
         robot.SetActiveDOFs(dof_indices)
         new_cspec = robot.GetActiveConfigurationSpecification('linear')
     new_cspec.AddDeltaTimeGroup()
