@@ -209,6 +209,14 @@ class Tests(unittest.TestCase):
         else:
             self.fail('Expected exception not thrown')
 
+    def test_CheckJointLimits_MaxLimitOneJoint(self):
+        # Individually check for when one joint is beyond the max limit
+        for i in xrange(0,7):
+            q = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            q[i] = +4.5
+            with self.assertRaises(JointLimitError):
+                prpy.util.CheckJointLimits(self.robot, q)
+
     def test_CheckJointLimits_MaxLimitAll(self):
         # This configuration is beyond the max limits
         q0 = [2.7, 2.0, 2.8, 0.9, 4.9, 1.6, 3.1]
