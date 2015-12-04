@@ -216,7 +216,7 @@ class Tests(unittest.TestCase):
         with self.assertRaises(JointLimitError):
             prpy.util.CheckJointLimits(self.robot, q0)
 
-    def test_CheckJointLimits_ZeroPosition(self):
+    def test_CheckJointLimits_WithinLimits_DoesNotThrow(self):
         # Check the zero position, which should succeed
         q0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         try:
