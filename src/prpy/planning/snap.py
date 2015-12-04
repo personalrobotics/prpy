@@ -161,11 +161,15 @@ class SnapPlanner(BasePlanner):
         # trajectory only has one waypoint then only the
         # start configuration will be collisioned checked.
         #
-        # sampling_order: 'linear' or 'van_der_corput'
+        # Sampling function:
+        # 'linear'
+        #linear = prpy.util.SampleTimeGenerator
+        # 'Van der Corput'
+        vdc = prpy.util.VanDerCorputSampleGenerator
         checks = GetLinearCollisionCheckPts(robot, \
                                             traj, \
                                             norm_order=2, \
-                                            sampling_order='van_der_corput')
+                                            sampling_order=vdc)
 
         # Run constraint checks at DOF resolution:
         for t, q in checks:
