@@ -124,6 +124,8 @@ class SnapPlanner(BasePlanner):
     def _Snap(self, robot, goal, **kw_args):
         from prpy.util import CheckJointLimits
         from prpy.util import GetLinearCollisionCheckPts
+        #from prpy.util import SampleTimeGenerator
+        from prpy.util import VanDerCorputSampleGenerator
         from prpy.planning.exceptions import CollisionPlanningError
         from prpy.planning.exceptions import SelfCollisionPlanningError
 
@@ -163,13 +165,13 @@ class SnapPlanner(BasePlanner):
         #
         # Sampling function:
         # 'linear'
-        #linear = prpy.util.SampleTimeGenerator
+        #linear = SampleTimeGenerator
         # 'Van der Corput'
-        vdc = prpy.util.VanDerCorputSampleGenerator
+        vdc = VanDerCorputSampleGenerator
         checks = GetLinearCollisionCheckPts(robot, \
                                             traj, \
                                             norm_order=2, \
-                                            sampling_order=vdc)
+                                            sampling_func=vdc)
 
         # Run constraint checks at DOF resolution:
         for t, q in checks:
