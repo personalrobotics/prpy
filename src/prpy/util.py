@@ -921,6 +921,217 @@ def ComputeUnitTiming(robot, traj, env=None):
     return new_traj
 
 
+def CheckJointLimits(robot, q):
+    """
+    Check if a configuration is within a robot's joint position limits.
+
+    If outside limits, this procedure throws an exception
+    of type JointLimitError.
+
+    @param openravepy.robot robot: The robot.
+    @param list             q:     List or array of joint positions.
+    """
+    from prpy.planning.exceptions import JointLimitError
+
+    q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+    active_dof_indices = robot.GetActiveDOFIndices()
+
+    if len(q) != len(active_dof_indices):
+        raise ValueError('The number of joints in the configuration q '
+                         'is not equal to the number of active DOF.')
+
+    lower_position_violations = (q < q_limit_min)
+    if lower_position_violations.any():
+        index = lower_position_violations.nonzero()[0][0]
+        raise JointLimitError(robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_min[index],
+            description='position')
+
+    upper_position_violations = (q > q_limit_max)
+    if upper_position_violations.any():
+        index = upper_position_violations.nonzero()[0][0]
+        raise JointLimitError(robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_max[index],
+            description='position')
+
+
+def ConvertIntToBinaryString(x, reverse=False):
+    """
+    Convert an integer to a binary string.
+
+    Optionally reverse the output string, which is
+    required for producing a Van Der Corput sequence.
+
+    @param int  x:       The number to be converted.
+    @param bool reverse: If True, the output string will be reversed.
+
+    @returns string: A binary number as a string.
+    """
+    if type(x) != int:
+        raise ValueError('Input number must be an integer')
+
+    if reverse:
+        return ''.join(reversed(bin(x)[2:]))
+
+    return ''.join(bin(x)[2:])
+
+
+def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
+    """
+    Generate the binary Van der Corput sequence, where each value
+    is a dyadic fraction re-scaled to the desired range.
+
+    For example, on the interval [0,1], the first 5 values of
+    the Van der Corput sequence are:
+    [0.0, 1.0, 0.5, 0.5, 0.75]
+
+    @param float lower: The first value of the range of the sequence.
+    @param float upper: The last value of the range of the sequence.
+
+    @param bool include_endpoints: If True, the output sequence will
+                                   include the value 'lower' and the
+                                   value 'upper'.
+                                   If False, these endpoint values
+                                   will not be returned.
+
+    @returns generator: A sequence of float values.
+    """
+    from itertools import count, chain
+
+    if include_endpoints == True:
+        endpoints = (0.0, 1.0)
+    else:
+        endpoints = []
+
+    # Get a sequence of reversed binary numbers:
+    # '1', '01', '11', '001', '101', '011', '111', '0001', ....
+    #
+    # Note: count(1) is a generator, starting at 1, making steps of 1.
+    reverse_binary_seq = (ConvertIntToBinaryString(x, True) for x in count(1))
+
+    # From the reversed binary sequence, generate the Van der Corput
+    # sequence, for which:  0.0 < x < 1.0  (the end-points are excluded)
+    # 0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875, 0.0625, ....
+    #
+    # Note: int(x,2) converts the binary string (base 2) to an integer.
+    raw_seq = (float(int(x,2)) / (2**len(x)) for x in reverse_binary_seq)
+
+    # Scale the Van der Corput sequence across the desired range
+    # and optionally add the end-points.
+    scale = float(upper - lower)
+    return (scale * val + lower for val in chain(endpoints, raw_seq))
+
+
+def SampleTimeGenerator(start, end, step=1):
+    """
+    Generate a linear sequence of values from start to end, with
+    specified step size. Works with int or float values.
+
+    The end value is also returned if it's more than half the
+    distance from the previously returned value.
+
+    For example, on the interval [0.0,5.0], the sequence is:
+    [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+    @param float start: The start value of the sequence.
+    @param float end:   The last value of the sequence.
+    @param float step:  The step-size between values.
+
+    @returns generator: A sequence of float values.
+    """
+    if end <= start:
+        raise ValueError("The 'end' value must be greater than "\
+                         "the 'start' value.")
+    if not (step > 0):
+        raise ValueError("The 'step' value must be positive.")
+    t = start
+    prev_t  = 0.0
+    while t <= numpy.floor(end):
+        yield t
+        prev_t = t
+        t = t + step
+    if (end - float(prev_t)) > (step / 2.0):
+        yield float(end)
+
+
+def VanDerCorputSampleGenerator(start, end, step=2):
+    """
+    This wraps VanDerCorputSequence() in a way that's useful for
+    collision-checking.
+
+    Generates a sequence of values from start to end, with specified
+    step size, using an approximate binary Van der Corput sequence.
+
+    The end value is also returned if it's more than half the
+    distance from the closest value.
+
+    For example, on the interval [0.0, 13.7], the sequence is:
+    [0.0, 13.7, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
+
+    @param float start: The start value of the sequence.
+    @param float end:   The last value of the sequence.
+    @param float step:  The step-size between values.
+
+    @returns generator: A sequence of float values.
+    """
+    import itertools
+
+    # 'start' and 'end' must be positive because
+    # itertools.islice() only accepts a positive integer
+    if end <= start:
+        raise ValueError("The 'end' value must be greater than "\
+                         "the 'start' value.")
+    if not (step > 0):
+        raise ValueError("The 'step' value must be positive.")
+
+    # The duration, rounded to nearest step-size
+    mod_end = int(end - (end % step))
+    steps_to_take = mod_end / float(step)
+    leftover_time = end - float(mod_end)
+
+    # Keep a list to make sure we return all the sample values
+    times_sampled = [False for i in range(mod_end+1)]
+
+    vdc = VanDerCorputSequence(start, steps_to_take)
+    vdc_seq = itertools.islice(vdc, steps_to_take+1)
+    count = 0
+    for s in vdc_seq:
+        # Snap this sample value to the desired step-size
+        idx = int( step * numpy.round(s) )
+        if (idx % step) != 0:
+            idx = idx + 1
+
+        # If required, return the actual end-point value (a float) as
+        # the 2nd sample point to be returned. Then the next sample
+        # point is the end-point rounded to step-size.
+        if count == 1:
+            if leftover_time > (step / 2.0):
+                yield float(end)
+
+        count = count+1
+        while True:
+            if times_sampled[idx] == False:
+                times_sampled[idx] = True
+                yield float(idx)
+                break
+            else:
+                # We have already sampled at this value of t,
+                # so lets try a different value of t.
+                decimals = (s % 1)
+                if decimals < 0.5:
+                    idx = idx - step
+                    if (idx < 0): # handle wrap past zero
+                        idx = int(end - 1)
+                else:
+                    idx = idx + step
+                    if (idx > end): # handle wrap past end
+                        idx = int(start + 1)
+
+
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
                          first_step=None, epsilon=1e-6):
     """
@@ -991,6 +1202,136 @@ def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
             q_prev = q_curr
             t_prev = min(t_curr, duration)
             dt = 2. * dt
+
+
+def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
+    """
+    For a piece-wise linear trajectory, generate a list
+    of configuration pairs that need to be collision checked.
+
+    This will step along the trajectory from start to end
+    at a resolution that satisifies the specified error metric.
+
+    @param openravepy.Robot      robot: The robot.
+    @param openravepy.Trajectory traj:  The trajectory for which we need
+                                        to generate sample points.
+    @param int      norm_order: 1  ==>  The L1 norm
+                                2  ==>  The L2 norm
+                                inf  ==>  The L_infinity norm
+    @param generator sampling_func A function that returns a sequence of
+                                   sample times.
+                                   e.g. SampleTimeGenerator() 
+                                         or
+                                        VanDerCorputSampleGenerator()
+
+    @returns generator: A tuple (t,q) of float values, being the sample
+                        time and joint configuration.
+    """
+
+    # If trajectory is already timed, strip the deltatime values
+    if IsTimedTrajectory(traj):
+        traj = UntimeTrajectory(traj)
+
+    traj_cspec = traj.GetConfigurationSpecification()
+
+    # Make sure trajectory is linear in joint space
+    try:
+        # OpenRAVE trajectory type can be 'linear', 'quadratic', or
+        # other values including 'cubic', 'quadric' or 'quintic'
+        interp_type = traj_cspec.GetGroupFromName('joint_values').interpolation
+    except openravepy.openrave_exception:
+        raise ValueError('Trajectory does not have a joint_values group')
+    if interp_type != 'linear':
+        raise ValueError('Trajectory must be linear in joint space')
+
+    dof_indices, _ = traj_cspec.ExtractUsedIndices(robot)
+
+    # If trajectory only has 1 waypoint then we only need to
+    # do 1 collision check.
+    num_waypoints = traj.GetNumWaypoints()
+    if num_waypoints == 1:
+        t = 0.0
+        waypoint = traj.GetWaypoint(0)
+        q = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        yield t, q
+        return
+
+    env = robot.GetEnv()
+
+    # Create a temporary trajectory that we will use
+    # for sampling the points to collision check,
+    # because there is no method to modify the 'deltatime'
+    # values of waypoints in an OpenRAVE trajectory.
+    temp_traj_cspec = traj.GetConfigurationSpecification()
+    temp_traj_cspec.AddDeltaTimeGroup()
+    temp_traj = openravepy.RaveCreateTrajectory(env, '')
+    temp_traj.Init(temp_traj_cspec)
+
+    # Set timing of first waypoint in temporary trajectory to t=0
+    waypoint = traj.GetWaypoint(0, temp_traj_cspec)
+    q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+    delta_time = 0.0
+    temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
+    temp_traj.Insert(0, waypoint)
+
+    # Get the resolution (in radians) for each joint
+    q_resolutions = robot.GetDOFResolutions()[dof_indices]
+
+    # Iterate over each segment in the trajectory and set
+    # the timing of each waypoint in the temporary trajectory
+    # so that taking steps of t=1 will be within a required error norm.
+    for i in range(1, num_waypoints):
+        # We already have the first waypoint (q0) of this segment,
+        # so get the joint values for the second waypoint.
+        waypoint = traj.GetWaypoint(i)
+        q1 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        dq = numpy.abs(q1 - q0)
+        max_diff_float = numpy.max( numpy.abs(q1 - q0) / q_resolutions)
+        
+        # Get the number of steps (as a float) required for
+        # each joint at DOF resolution
+        num_steps = dq / q_resolutions
+
+        # Calculate the norm:
+        #
+        # norm_order = 1  ==>  The L1 norm
+        # Which is like a diamond shape in configuration space
+        # and equivalent to: L1_norm=sum(num_steps)
+        #
+        # norm_order = 2  ==>  The L2 norm
+        # Which is like an ellipse in configuration space
+        # and equivalent to: L2_norm=numpy.linalg.norm(num_steps)
+        #
+        # norm_order = inf  ==>  The L_infinity norm
+        # Which is like a box shape in configuration space
+        # and equivalent to: L_inf_norm=numpy.max(num_steps)
+        norm = numpy.linalg.norm(num_steps, ord=norm_order)
+
+        # Set timing of this waypoint
+        waypoint = traj.GetWaypoint(i, temp_traj_cspec)
+        delta_time = norm
+        temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
+        temp_traj.Insert(i, waypoint)
+
+        # The last waypoint becomes the first in the next segment
+        q0 = q1
+
+    traj_duration = temp_traj.GetDuration()
+
+    # Sample the trajectory using the specified sample generator
+    seq = None
+    if sampling_func == None:
+        # (default) Linear sequence, from start to end
+        seq = SampleTimeGenerator(0, traj_duration, step=2)
+    else:
+        seq = sampling_func(0, traj_duration, step=2)
+
+    # Sample the trajectory in time
+    # and return time value and joint positions
+    for t in seq:
+        sample = temp_traj.Sample(t)
+        q = temp_traj_cspec.ExtractJointValues(sample, robot, dof_indices)
+        yield t, q
 
 
 def IsInCollision(traj, robot, selfcoll_only=False):
