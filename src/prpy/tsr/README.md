@@ -83,6 +83,28 @@ Finally, we compose these into a chain
 ipython> tsrchain = prpy.tsr.TSRChain(sample_start=False, sample_goal=False, constrain=True, 
                                       TSRs = [constraint1, constraint2])
 ```
-Similar to the TSRs, we can sample and compute distance to chains using the ```sample``` and ```distance``` functions respectively.
+Similar to the TSRs, we can sample and compute distance to chains using the ```sample``` and ```distance``` functions respectively. The ```sample_start```, ```sample_goal``` and ```constrain``` flags will be explained in the next section. 
 
 ## Prpy Planning support for TSRs
+Several of the planners in the prpy [planning pipeline](https://github.com/personalrobotics/prpy/tree/master/src/prpy/planning) have some support for using TSRs for defining constriants through the ```PlanToTSR``` method. The method accepts as a list of ```TSRChain``` objects. The ```sample_start```, ```sample_goal``` and ```constrain``` flags on the each ```TSRChain``` indicate to the planner how the chain should be used.
+
+### Example: Planning to a single TSR
+Consider the example of grasping a bottle. Given our ```grasp_tsr``` we would now like to generate a plan that moves the robot to any configuration such that the end-effector meets the constraint defined by the tsr.  The following code can be used to do this:
+```python
+ipython> tsrchain = prpy.tsr.TSRChain(sample_goal=True, sample_start=False, constrain=False,
+                                       TSR = grasp_tsr)
+```
+Defining ```sample_goal=True``` tells the planner to apply the constraint only to the last point in the plan. Now we can call the planner:
+```python
+ipython> traj = robot.PlanToTSR([tsrchain])
+```
+
+### Example: Planning to a set of TSRs
+Now imagine we had to TSRs, ```grasp1_tsr``` and ```grasp2_tsr``` the each defined a set of valid configurations for grasping.  We can ask the planner to generate a plan to any configuration that meets either the ```grasp1_tsr``` or the ```grasp2_tsr``` constraint in the following way:
+```python
+ipython> tsrchain1 = prpy.tsr.TSRChain(sample_goal=True, sample_start=False, constrain=False,
+                                       TSR = grasp1_tsr)
+ipython> tsrchain2 = prpy.tsr.TSRChain(sample_goal=True, sample_start=False, constrain=False,
+                                       TSR = grasp2_tsr)
+ipython> traj = robot.PlanToTSR([tsrchain1, tsrchain2])
+```
