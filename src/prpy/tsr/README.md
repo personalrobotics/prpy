@@ -13,7 +13,7 @@ A TSR is defined by three components:
 
 The first three rows of Bw bound the allowable translation along the x,y and z axes (in meters).  The last three rows bound the allowable rotation about those axes (in radians), all in w frame.  Note that this asumed Roll-Pitch-Yaw (RPY) Euler angle convention.
 
-### Example definition
+### Example: Defining a TSR
 Lets return to our previous example of selecting a pose for the end-effector to allow a manipulator to grasp a bottle. The following code shows the python commands that allow the TSR to be defined:
 ```python
 ipython> bottle = env.GetKinBody('fuze')
@@ -29,4 +29,13 @@ ipython> robot.right_arm.SetActive()  # We want to grasp with the right arm
 ipython> manip_idx = robot.GetActiveManipulatorIndex()
 ipython> grasp_tsr = prpy.tsr.TSR(T0_w = T0_w, Tw_e = Tw_e, Bw = Bw, manip = manip_idx)
 ```
-
+## Example: Using a TSR
+The following code shows an example of how to use a TSR to find a collision-free configuration for the manipulator that allows for a valid grasp:
+```python
+ipython> ee_sample = grasp_tsr.sample() # Compute a sample pose of the end-effector
+ipython> ik = robot.right_arm.FindIKSolution(ee_sample, openravepy.IkFilterOptions.CheckEnvCollisions)  
+```
+```ik``` will now contain a configuration for the arm.  This configuration could be given as a goal to a planner to move the robot into place for the grasp:
+```python
+ipython> robot.right_arm.PlanToConfiguration(ik, execute=True)
+```
