@@ -13,6 +13,11 @@ A TSR is defined by three components:
 
 The first three rows of Bw bound the allowable translation along the x,y and z axes (in meters).  The last three rows bound the allowable rotation about those axes (in radians), all in w frame.  Note that this asumed Roll-Pitch-Yaw (RPY) Euler angle convention.
 
+Note that the end-effector frame is a robot-specific frame. In OpenRAVE, you can obtain the pose of the end-effector using ```GetEndEffectorTransform()``` on the manipulator.  The following code snippet visualizes the end-effector frame of the robot's right arm:
+```python
+ipython> import openravepy
+ipython> h = openravepy.misc.DrawAxes(env, robot.right_arm.GetEndEffectorTransform())
+```
 ### Example: Defining a TSR
 Lets return to our previous example of selecting a pose for the end-effector to allow a manipulator to grasp a glass. The following code shows the python commands that allow the TSR to be defined:
 ```python
