@@ -49,3 +49,40 @@ ipython> meets_constraint = (dist_to_tsr == 0.0)
 ```
 
 ## TSR Chains
+A single TSR, or finite set of TSRs, is sometimes insufficient to capture pose ocnstraints of a given task. To describe more complex constraints, such as closed-chain kinematics, we can use a TSR Chain.  Consider the example of opening a refrigerator door while allowing the manipulator to rotate around the handle. Here, the constraint on the motion of the hand is defined by the product of two constraints.  The first constraint describes valid locations of the handle, which all lie on the arc defined by the position of the handle relative to the door hinge.  The second constraint defines the position of the robot end-effector relative to the handle. Each of these constraints can be defined by a single TSR. In order to specify the full constraint on the hand motion, we link the TSRs in a TSR Chain.  
+
+### Example: Defining a TSR Chain
+In the following code snippet, we show how to define a TSR Chain for the example of opening the refrigerator door, allowing the robot's hand to rotate around the door handle.
+
+First we define the TSR that constrains the pose of the handle
+```python
+ipython> T0_w = hinge_pose  # hinge_pose is a 4x4 matrix defining the pose of the hinge in world frame
+# Now define Tw_e as the pose of the handle relative to the hinge
+ipython> Tw_e = numpy.eye() # Same orientation as the hinge frame
+ipython> Tw_e[0,3] = 0.4 # The handle is offset 40cm from the hinge along the x-axis of the hinge-frame
+ipython> Bw = numpy.zeros((6,2)) # Assume the handle is fixed
+ipython> fridge = env.GetKinBody('refridgerator')
+ipython> fridge.SetActiveManipulator('door')
+ipython> door_idx = fridge.GetActiveManipulatorIndex()
+ipython> constraint1 = prpy.tsr.TSR(T0_w = T0_w, Tw_e = Tw_e, Bw = Bw, manip = door_idx)
+```
+
+Next we define the TSR that constraints the pose of the hand relative to the handle
+```python
+ipython> T0_w = numpy.eye(4) # This will be ignored once we compose the chain
+ipython> Tw_e = ee_in_handle # A 4x4 defining the desire pose of the end-effector relative to handle
+ipython> Bw = numpy.zeros((6,2))
+ipython> Bw(5,:) = [-0.25*numpy.pi, 0.25*numpy.pi]
+ipython> robot.right_arm.SetActive() # use the right arm to grab the door
+ipython> manip_idx = robot.GetActiveManipulatorIndex()
+ipython> constraint2 = prpy.tsr.TSR(T0_w = T0_w, Tw_e = Tw_e, Bw = Bw, manip = manip_idx)
+```
+
+Finally, we compose these into a chain
+```python
+ipython> tsrchain = prpy.tsr.TSRChain(sample_start=False, sample_goal=False, constrain=True, 
+                                      TSRs = [constraint1, constraint2])
+```
+Similar to the TSRs, we can sample and compute distance to chains using the ```sample``` and ```distance``` functions respectively.
+
+## Prpy Planning support for TSRs
