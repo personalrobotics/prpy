@@ -19,7 +19,7 @@ Lets return to our previous example of selecting a pose for the end-effector to 
 ipython> glass = env.GetKinBody('plastic_glass')
 ipython> T0_w = glass.GetTransform()  # We use the glass's coordinate frame as the w frame
 # Now define Tw_e to represent the pose of the end-effector relative to the glass
-ipython> Tw_e =  numpy.array([[ 0., 0., 1., -total_offset], 
+ipython> Tw_e =  numpy.array([[ 0., 0., 1., -0.20],  # desired offset between end-effector and object along x-axis 
                               [1., 0., 0., 0.], 
                               [0., 1., 0., 0.08], # glass height
                               [0., 0., 0., 1.]])  
