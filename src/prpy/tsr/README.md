@@ -7,9 +7,9 @@ Manipulation Planning" by Dmitry Berenson, Siddhartha Srinivasa, and James Kuffn
 A TSR is typically used to defined a constraint on the pose of the end-effector of a manipulator. For example consider a manipulator tasked with grabbing a glass. The end-effector (hand) must be near the glass, and oriented in a way that allows the fingers to grab around the glass when closed. This set of workspace constraints on valid poses of the end-effector can be expressed as a TSR.
 
 A TSR is defined by three components:
-* T0_w - A transform from the world origin to the TSR frame w
-* Tw_e - A transform from the TSR frame w to the end-effector
-* Bw - A 6x2 matrix of bounds in the coordinates of w
+* ```T0_w``` - A transform from the world origin to the TSR frame w
+* ```Tw_e``` - A transform from the TSR frame w to the end-effector
+* ```Bw``` - A 6x2 matrix of bounds in the coordinates of w
 
 The first three rows of Bw bound the allowable translation along the x,y and z axes (in meters).  The last three rows bound the allowable rotation about those axes (in radians), all in w frame.  Note that this asumed Roll-Pitch-Yaw (RPY) Euler angle convention.
 
