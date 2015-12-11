@@ -30,7 +30,7 @@ ipython> robot.right_arm.SetActive()  # We want to grasp with the right arm
 ipython> manip_idx = robot.GetActiveManipulatorIndex()
 ipython> grasp_tsr = prpy.tsr.TSR(T0_w = T0_w, Tw_e = Tw_e, Bw = Bw, manip = manip_idx)
 ```
-## Example: Using a TSR
+### Example: Using a TSR
 The following code shows an example of how to use a TSR to find a collision-free configuration for the manipulator that allows for a valid grasp:
 ```python
 ipython> ee_sample = grasp_tsr.sample() # Compute a sample pose of the end-effector
@@ -40,3 +40,12 @@ ipython> ik = robot.right_arm.FindIKSolution(ee_sample, openravepy.IkFilterOptio
 ```python
 ipython> robot.right_arm.PlanToConfiguration(ik, execute=True)
 ```
+### Example: Determining if a configuration is within a TSR
+In the following code snippet, we show a method for determining whether or not the current pose of the manipulator meets the constraint by using the ```distance``` function defined on the TSR.
+```python
+ipython> current_ee_pose = robot.right_arm.GetEndEffectorTransform()
+ipython> dist_to_tsr = grasp_tsr.distance(current_ee_pose)
+ipython> meets_constraint = (dist_to_tsr == 0.0)
+```
+
+## TSR Chains
