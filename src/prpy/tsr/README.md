@@ -18,10 +18,11 @@ Lets return to our previous example of selecting a pose for the end-effector to 
 ```python
 ipython> bottle = env.GetKinBody('fuze')
 ipython> T0_w = bottle.GetTransform()  # We use the bottle's coordinate frame as the w frame
+# Now define Tw_e to represent the pose of the end-effector relative to the glass
 ipython> Tw_e =  numpy.array([[ 0., 0., 1., -total_offset], 
                               [1., 0., 0., 0.], 
                               [0., 1., 0., 0.08], # glass height
-                              [0., 0., 0., 1.]])  # This represents the pose of the end-effector relative to the glass
+                              [0., 0., 0., 1.]])  
 ipython> Bw = numpy.zeros((6,2))
 ipython> Bw[2,:] = [0.0, 0.02]  # Allow a little vertical movement
 ipython> Bw[5,:] = [-numpy.pi, numpy.pi]  # Allow any orientation about the z-axis of the bottle
