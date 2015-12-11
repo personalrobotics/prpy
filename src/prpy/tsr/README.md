@@ -98,6 +98,27 @@ Defining ```sample_goal=True``` tells the planner to apply the constraint only t
 ```python
 ipython> traj = robot.PlanToTSR([tsrchain])
 ```
+### Example: Planning from a single TSR
+Now imagine we wish to generate a plan that starts from any point in the grasp TSR and plans to a defined configuration, ```config```. The following code can be used to do this:
+```python
+ipython> tsrchain = prpy.tsr.TSRChain(sample_goal=False, sample_start=True, constrain=False,
+                                       TSR = grasp_tsr)
+```
+Defining ```sample_start=True``` tells the planner to apply the constraint only to the first point in the plan. Now we can call the planner:
+```python
+ipython> traj = robot.PlanToTSR([tsrchain], jointgoals=[config])
+```
+### Example: Apply a TSR constraint across a full trajectory
+In the refrigerator opening example, the TSR Chain defined a constraint on the motion of the end-effector that should be applied over the whole trajectory.  We defined:
+```python
+ipython> tsrchain = prpy.tsr.TSRChain(sample_start=False, sample_goal=False, constrain=True, 
+                                      TSRs = [constraint1, constraint2])
+```
+Here ```constrain=True``` tells the planner to apply the constraint to every point in the plan.  Again, we can call the planner:
+```python
+ipython> traj = robot.PlanToTSR([tsrchain], jointgoals=[config])
+```
+Here, the caller must be careful to ensure that ```config``` meets the constraint defined by the TSR. 
 
 ### Example: Planning to a set of TSRs
 Now imagine we had to TSRs, ```grasp1_tsr``` and ```grasp2_tsr``` the each defined a set of valid configurations for grasping.  We can ask the planner to generate a plan to any configuration that meets either the ```grasp1_tsr``` or the ```grasp2_tsr``` constraint in the following way:
@@ -115,3 +136,4 @@ ipython> glass = env.GetKinBody('plastic_glass')
 ipython> tsrlist = robot.tsrlibrary(glass, 'grasp')
 ipython> traj = robot.PlanToTSR(tsrlist)
 ```
+
