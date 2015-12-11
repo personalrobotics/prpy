@@ -14,10 +14,10 @@ A TSR is defined by three components:
 The first three rows of Bw bound the allowable translation along the x,y and z axes (in meters).  The last three rows bound the allowable rotation about those axes (in radians), all in w frame.  Note that this asumed Roll-Pitch-Yaw (RPY) Euler angle convention.
 
 ### Example: Defining a TSR
-Lets return to our previous example of selecting a pose for the end-effector to allow a manipulator to grasp a bottle. The following code shows the python commands that allow the TSR to be defined:
+Lets return to our previous example of selecting a pose for the end-effector to allow a manipulator to grasp a glass. The following code shows the python commands that allow the TSR to be defined:
 ```python
-ipython> bottle = env.GetKinBody('fuze')
-ipython> T0_w = bottle.GetTransform()  # We use the bottle's coordinate frame as the w frame
+ipython> glass = env.GetKinBody('plastic_glass')
+ipython> T0_w = glass.GetTransform()  # We use the glass's coordinate frame as the w frame
 # Now define Tw_e to represent the pose of the end-effector relative to the glass
 ipython> Tw_e =  numpy.array([[ 0., 0., 1., -total_offset], 
                               [1., 0., 0., 0.], 
@@ -25,7 +25,7 @@ ipython> Tw_e =  numpy.array([[ 0., 0., 1., -total_offset],
                               [0., 0., 0., 1.]])  
 ipython> Bw = numpy.zeros((6,2))
 ipython> Bw[2,:] = [0.0, 0.02]  # Allow a little vertical movement
-ipython> Bw[5,:] = [-numpy.pi, numpy.pi]  # Allow any orientation about the z-axis of the bottle
+ipython> Bw[5,:] = [-numpy.pi, numpy.pi]  # Allow any orientation about the z-axis of the glass
 ipython> robot.right_arm.SetActive()  # We want to grasp with the right arm
 ipython> manip_idx = robot.GetActiveManipulatorIndex()
 ipython> grasp_tsr = prpy.tsr.TSR(T0_w = T0_w, Tw_e = Tw_e, Bw = Bw, manip = manip_idx)
@@ -89,7 +89,7 @@ Similar to the TSRs, we can sample and compute distance to chains using the ```s
 Several of the planners in the prpy [planning pipeline](https://github.com/personalrobotics/prpy/tree/master/src/prpy/planning) have some support for using TSRs for defining constriants through the ```PlanToTSR``` method. The method accepts as a list of ```TSRChain``` objects. The ```sample_start```, ```sample_goal``` and ```constrain``` flags on the each ```TSRChain``` indicate to the planner how the chain should be used.
 
 ### Example: Planning to a single TSR
-Consider the example of grasping a bottle. Given our ```grasp_tsr``` we would now like to generate a plan that moves the robot to any configuration such that the end-effector meets the constraint defined by the tsr.  The following code can be used to do this:
+Consider the example of grasping a glass. Given our ```grasp_tsr``` we would now like to generate a plan that moves the robot to any configuration such that the end-effector meets the constraint defined by the tsr.  The following code can be used to do this:
 ```python
 ipython> tsrchain = prpy.tsr.TSRChain(sample_goal=True, sample_start=False, constrain=False,
                                        TSR = grasp_tsr)
@@ -107,4 +107,11 @@ ipython> tsrchain1 = prpy.tsr.TSRChain(sample_goal=True, sample_start=False, con
 ipython> tsrchain2 = prpy.tsr.TSRChain(sample_goal=True, sample_start=False, constrain=False,
                                        TSR = grasp2_tsr)
 ipython> traj = robot.PlanToTSR([tsrchain1, tsrchain2])
+```
+## TSR Library
+The prpy framework contains the ability to define and cache TSRChains that are commonly used by the robot. These pre-defined TSRChains can be accessed via the ```tsrlibrary``` defined on the robot. The following shows an example for how the TSR Library might be used:
+```python
+ipython> glass = env.GetKinBody('plastic_glass')
+ipython> tsrlist = robot.tsrlibrary(glass, 'grasp')
+ipython> traj = robot.PlanToTSR(tsrlist)
 ```
