@@ -198,7 +198,7 @@ adetector = ApriltagsModule(marker_topic='/apriltags_kinect2/marker_array',
 detected_objects = adetector.DetectObjects(robot)
 ```
 
-### Perception Methods
+### Perception Modules
 
 Currently, the following perception routines are supported:
 
@@ -207,8 +207,23 @@ Currently, the following perception routines are supported:
 - `SimTrack`
 - `BlockDetector`
 - `ROCK`: Robust Object Constellation and Kinematic Pose
- 
 
+
+### Common Perception Methods
+
+At this point, two methods are common to all perception routines. However, some 
+routine-specific knowledge may be required to make them work.
+
+- `DetectObjects(self, robot, **kw_args)`: This runs the perception method for all
+objects that the particular routine knows about. Typically, this information is specified
+either as a config file (in the case of AprilTags) or in the constructor of the respective
+module.
+- `DetectObject(self,robot,obj_name)`: This runs the perception routine to detect a particular object,
+based on the known names in the database.
+
+The return type for both is typically one or more OpenRAVE kinbodies, with the correct
+transformation relative to the current environment, if the input `tf`s have been 
+correctly provided.
 
 ## Environment Cloning
 
