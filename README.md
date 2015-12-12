@@ -197,6 +197,8 @@ adetector = ApriltagsModule(marker_topic='/apriltags_kinect2/marker_array',
                            detection_frame='/head/kinect2_rgb_optical_frame')
 detected_objects = adetector.DetectObjects(robot)
 ```
+IMPORTANT - Most of these methods require some underlying CPP server to be running, before calls can be
+made to the PrPy detector. 
 
 ### Perception Modules
 
@@ -208,11 +210,16 @@ Currently, the following perception routines are supported:
 - `BlockDetector`
 - `ROCK`: Robust Object Constellation and Kinematic Pose
 
+### Underlying Servers
+
+To fill once we have come to a consensus on whether to launch all at start, etc.
+
 
 ### Common Perception Methods
 
 At this point, two methods are common to all perception routines. However, some 
-routine-specific knowledge may be required to make them work.
+routine-specific knowledge may be required to make them work. This is particularly reflected
+in the constructor for the perception module.
 
 - `DetectObjects(self, robot, **kw_args)`: This runs the perception method for all
 objects that the particular routine knows about. Typically, this information is specified
@@ -224,6 +231,23 @@ based on the known names in the database.
 The return type for both is typically one or more OpenRAVE kinbodies, with the correct
 transformation relative to the current environment, if the input `tf`s have been 
 correctly provided.
+
+
+### Caveats
+
+As mentioned above, running the perception routines require a bit of routine-specific knowledge,
+because of differences in the way some of them operate. Some of those caveats, for each routine
+are mentioned here.
+
+- `AprilTags`: This method involves detection of visual fiducial markers. There is a database that maps
+april tag IDs to the objects to which they are attached, along with the relative transform
+of the tag with respect to the object kinbody, in `pr_ordata/data/objects/tag_data.json`.
+- `VNCC`: This is a single-query method and so currently does not support `DetectObjects`, but just
+`DetectObject`, where the object names are obtained from the map in the module's constructor.
+- `SimTrack`: Ask Matt to fill in or do later
+- `BlockDetector`: This is specifically for detecting blocks on a table in front of the camera. Therefore,
+it only has a `DetectBlocks` method.
+- `ROCK`: This is still under development and so does not exactly conform to the underlying API.
 
 ## Environment Cloning
 
