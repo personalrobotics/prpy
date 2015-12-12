@@ -177,6 +177,38 @@ path1 = planner.PlanToConfiguration(robot, goal)
 path2 = planner.PlanToBasePose(robot, goal_pose)
 ```
 
+## Perception Pipeline
+
+Recently, support has been added for a few perception routines. The general structure is intended
+to mirror that of the planning pipeline, but it is somewhat less encapsulated than 
+planning, from the user's perspective.
+
+There is a `prpy.perception.base.PerceptionModule` class which is extended by every perception
+routine. Every routine has some common methods for perception, which are annotated with 
+`@PerceptionMethod`. Here is an example call (should happen in a typical herbpy console):
+
+```python
+from prpy.perception.apriltags import ApriltagsModule
+
+adetector = ApriltagsModule(marker_topic='/apriltags_kinect2/marker_array',
+                           marker_data_path=FindCatkinResource('pr_ordata','data/objects/tag_data.json'), 
+                           kinbody_path=FindCatkinResource('pr_ordata','data/objects'), 
+                           destination_frame='/map', 
+                           detection_frame='/head/kinect2_rgb_optical_frame')
+detected_objects = adetector.DetectObjects(robot)
+```
+
+### Perception Methods
+
+Currently, the following perception routines are supported:
+
+- `AprilTags`
+- `VNCC`: Vectorized Normalized Cross Correlation
+- `SimTrack`
+- `BlockDetector`
+- `ROCK`: Robust Object Constellation and Kinematic Pose
+ 
+
 
 ## Environment Cloning
 
