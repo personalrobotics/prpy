@@ -244,7 +244,7 @@ april tag IDs to the objects to which they are attached, along with the relative
 of the tag with respect to the object kinbody, in `pr_ordata/data/objects/tag_data.json`.
 - `VNCC`: This is a single-query method and so currently does not support `DetectObjects`, but just
 `DetectObject`, where the object names are obtained from the map in the module's constructor.
-- `SimTrack`: Ask Matt to fill in or do later
+- `SimTrack`: See https://github.com/personalrobotics/simtrack for more details. You will need the `personalrobotics` fork. This can track/detect any kind of textured object stored as an `.obj` file. The perception module only calls the detector, but the tracker can also be integrated pretty easily. It supports `DetectObjects`, and requires the simtrack `multi_rigid_node` to be running on the robot to work. Inside the module, there is a map of `simtrack` objects to kinbodies.
 - `BlockDetector`: This is specifically for detecting blocks on a table in front of the camera. Therefore,
 it only has a `DetectBlocks` method.
 - `ROCK`: This is still under development and so does not exactly conform to the underlying API.
