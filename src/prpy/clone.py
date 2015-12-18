@@ -186,6 +186,13 @@ def Cloned(*instances, **kwargs):
     clone_instances = list()
 
     for instance in instances:
+        # Check if an instance is `NoneType`.
+        # If it is, it remains NoneType in the cloned environment.
+        if instance is None:
+            clone_instances.append(None)
+            continue
+        
+        # Clone each instance based on its type.
         if isinstance(instance, openravepy.Robot):
             clone_instance = clone_env.GetRobot(instance.GetName())
         elif isinstance(instance, openravepy.KinBody):
