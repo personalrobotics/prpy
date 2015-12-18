@@ -1,11 +1,11 @@
 import unittest
-from prpy.planning.IKSampler import IKSampler
+from prpy.planning.IKGenerator import IKGenerator
 from prpy.planning.base import PlanningError
 import openravepy
 import numpy
 from numpy.testing import assert_allclose
 
-class IKSamplerTest(unittest.TestCase):
+class IKGeneratorTest(unittest.TestCase):
     def setUp(self): 
         self.active_dof_indices = range(7)
 
@@ -30,7 +30,6 @@ class IKSamplerTest(unittest.TestCase):
             self.robot.SetActiveManipulator(self.manipulator)
             self.robot.SetActiveDOFs(self.active_dof_indices)
 
-        raw_input('loaded')
         # Feasible start/goal pair.
         self.config_feasible_start = numpy.array([
             +2.35061574,  0.61043555,  0.85000000,  1.80684444, -0.08639935,
@@ -69,28 +68,28 @@ class IKSamplerTest(unittest.TestCase):
         self.direction = numpy.array([ 0., 0., 1. ])
         self.distance = 0.1
 
-        self.ik_sampler = IKSampler(self.env, self.robot, self.manipulator)
+        self.ik_generator = IKGenerator(self.env, self.robot, self.manipulator)
 
 
-    def test_FindIKSamplesForConfigurationNoCollision(self):
+    def test_FindIKSolutionsForConfigurationNoCollision(self):
         # Setup 
         with self.env:
-            ik_solutions = self.ik_sampler.FindIKSamplesForConfiguration(
+            ik_solutions = self.ik_generator.FindIKSolutionsForConfiguration(
                                             self.active_dof_indices,
                                             self.config_feasible_goal)
 
             self.assertEquals(1, len(ik_solutions))
             assert_allclose(self.config_feasible_goal, ik_solutions[0])
 
-    def test_FindIKSamplesForConfigurationInCollision(self): 
+    def test_FindIKSolutionsForConfigurationInCollision(self): 
         # Test
         with self.assertRaises(PlanningError):
             with self.env: 
-                ik_solutions = self.ik_sampler.FindIKSamplesForConfiguration(
+                ik_solutions = self.ik_generator.FindIKSolutionsForConfiguration(
                                                 self.active_dof_indices,
                                                 self.config_env_collision)
 
-    def test_FindIKSamplesForEndEffectorOffset(self): 
+    def test_FindIKSolutionsorEndEffectorOffset(self): 
 
         p = openravepy.KinBody.SaveParameters 
 
@@ -99,7 +98,7 @@ class IKSamplerTest(unittest.TestCase):
             self.robot.SetActiveDOFValues(self.config_feasible_start)
             start_pose = self.manipulator.GetEndEffectorTransform()
 
-        ik_solutions = self.ik_sampler.FindIKSamplesForEndEffectorOffset(self.direction, 
+        ik_solutions = self.ik_generator.FindIKSolutionsForEndEffectorOffset(self.direction, 
                                                                         self.distance)
 
         expected_pose = start_pose.copy()
@@ -112,7 +111,7 @@ class IKSamplerTest(unittest.TestCase):
                     actual_pose = self.manipulator.GetEndEffectorTransform()    
                 assert_allclose(expected_pose, actual_pose)
 
-    def test_FindIKSamplesForEndEffectorPoseNoCollision(self):
+    def test_FindIKSolutionsForEndEffectorPoseNoCollision(self):
 
         p = openravepy.KinBody.SaveParameters 
 
@@ -122,7 +121,7 @@ class IKSamplerTest(unittest.TestCase):
             goal_pose = self.manipulator.GetEndEffectorTransform()
 
         with self.env: 
-            ik_solutions = self.ik_sampler.FindIKSamplesForEndEffectorPose(goal_pose)
+            ik_solutions = self.ik_generator.FindIKSolutionsForEndEffectorPose(goal_pose)
 
         for q in ik_solutions: 
             with self.robot.CreateRobotStateSaver(p.LinkTransformation):
@@ -131,7 +130,7 @@ class IKSamplerTest(unittest.TestCase):
                     actual_pose = self.manipulator.GetEndEffectorTransform()    
                 assert_allclose(goal_pose, actual_pose)
 
-    def test_FindIKSamplesForEndEffectorPoseInCollision(self): 
+    def test_FindIKSolutionsForEndEffectorPoseInCollision(self): 
         # Setup 
         with self.env: 
             self.robot.SetActiveDOFValues(self.config_env_collision)
@@ -140,7 +139,7 @@ class IKSamplerTest(unittest.TestCase):
         # Test
         with self.assertRaises(PlanningError):
             with self.env: 
-                self.ik_sampler.FindIKSamplesForEndEffectorPose(goal_pose)
+                self.ik_generator.FindIKSolutionsForEndEffectorPose(goal_pose)
 
 
 if __name__ == '__main__':

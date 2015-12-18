@@ -3,39 +3,37 @@ import openravepy
 from prpy.planning.base import PlanningError
 import numpy
 
-class IKSampler(object): 
+class IKGenerator(object): 
 
     def __init__(self, env, robot, manipulator): 
         self.env = env
         self.robot = robot 
         self.manipulator = manipulator 
 
-    def FindIKSamples(self, method, num_samples=5, collision_check=True, **kw_args): 
+    def FindIKSolutions(self, method, collision_check=True, **kw_args): 
 
         if method == 'PlanToEndEffectorPose':
             goal_pose = kw_args['goal_pose']
-            return self.FindIKSamplesForEndEffectorPose(goal_pose, num_samples, collision_check) 
+            return self.FindIKSolutionsForEndEffectorPose(goal_pose, collision_check) 
 
         elif method == 'PlanToEndEffectorOffset':
             direction = kw_args['direction']
             distance = kw_args['distance']
-            return self.FindIKSamplesForEndEffectorOffset(direction, distance, num_samples, collision_check)
+            return self.FindIKSolutionsForEndEffectorOffset(direction, distance, collision_check)
 
         elif method == 'PlanToConfiguration':
             active_dof_indices = kw_args['active_dof_indices']
-            return self.FindIKSamplesForConfiguration(active_dof_indices, goal_config, collision_check)
+            return self.FindIKSolutionsForConfiguration(active_dof_indices, goal_config, collision_check)
 
         elif method == 'PlanToTSR':
-            raise Exception('Call FindIKSamplesForTSR directly.')
+            raise Exception('Call FindIKSolutionsForTSR directly.')
 
         else: 
             raise Exception('Cannot find method %s.' % method)
 
 
-    def FindIKSamplesForEndEffectorPose(self, goal_pose, 
-                                        num_samples=5, collision_check=True):
+    def FindIKSolutionsForEndEffectorPose(self, goal_pose, collision_check=True):
         """ Returns IK solutions satisfying EndEffector pose constraint
-        @param num_samples Maximum number of samples it would return 
         @throws PlanningError if no solution can be found 
         """
 
@@ -56,11 +54,9 @@ class IKSampler(object):
             if len(ik_solutions) == 0: 
                 raise PlanningError('Cannot find solution.')
 
-            return ik_solutions[0:min(len(ik_solutions), num_samples)]
+            return ik_solutions
 
-
-    def FindIKSamplesForEndEffectorOffset(self, direction, distance,
-                                          num_samples=5, collision_check=True): 
+    def FindIKSolutionsForEndEffectorOffset(self, direction, distance, collision_check=True): 
         # It sets goal pose to be current+distance*direction, but shouldn't we 
         # move until we hit something? ... 
 
@@ -77,10 +73,10 @@ class IKSampler(object):
         goal_pose = numpy.copy(start_pose)
         goal_pose[0:3, 3] += distance*direction
 
-        return self.FindIKSamplesForEndEffectorPose(goal_pose, num_samples, collision_check)
+        return self.FindIKSolutionsForEndEffectorPose(goal_pose, collision_check)
 
 
-    def FindIKSamplesForConfiguration(self, active_indices, goal_config, collision_check=True): 
+    def FindIKSolutionsForConfiguration(self, active_indices, goal_config, collision_check=True): 
         """ Returns goal_config is there is no collision """ 
 
         p = openravepy.KinBody.SaveParameters 
@@ -99,7 +95,7 @@ class IKSampler(object):
         return [goal_config]
 
 
-    def FindIKSamplesForTSR(self, obj, tsrchains, num_samples=5, collision_check=True, **kw_args): 
+    def FindIKSolutionsForTSR(self, obj, tsrchains, collision_check=True, **kw_args): 
         # Mostly from prpy.planning.TSRPlanner
 
         import itertools
@@ -161,4 +157,4 @@ class IKSampler(object):
             ranked_indices = numpy.argsort(valid_scores)
             ranked_ik_solutions = valid_solutions[ranked_indices, :]
 
-            return ranked_ik_solutions[0:min(len(ranked_ik_solutions), num_samples)]
+            return ranked_ik_solutions
