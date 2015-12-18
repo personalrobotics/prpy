@@ -212,7 +212,11 @@ Currently, the following perception routines are supported:
 
 ### Underlying Servers
 
-To fill once we have come to a consensus on whether to launch all at start, etc.
+- `AprilTags`: Started via `apriltags.launch` in [herb_launch](https://github.com/personalrobotics/herb_launch). Publishes to `/apriltags_kinect2/detections` and `/apriltags_kinect2/marker_array`.
+- `VNCC`: Have [vncc_msgs](https://github.com/personalrobotics/vncc_msgs) and [vncc](https://github.com/personalrobotics/vncc) in your workspace. Run `roslaunch vncc vncc_estimator.launch`. This provides the `/vncc/get_vncc_detections` service.
+- `SimTrack` - See Caveats section below
+- `BlockDetector` - Have [tabletop_perception_tools](https://github.com/personalrobotics/tabletop_perception_tools) in your workspace. Run `rosrun tabletop_perception_tools tools_server`. This provides the `/tools_server/find_blocks` service.
+- `ROCK` - To be updated later.
 
 
 ### Common Perception Methods
