@@ -345,12 +345,17 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
         ]
         sensor_infos = []
 
-        kinbody = RaveCreateRobot(env, '')
-        kinbody.Init(
-            link_infos, joint_infos,
-            manipulator_infos, sensor_infos,
-            data['uri']
-        )
+        from openravepy import RaveCreateModule
+        urdf_module = RaveCreateModule(env, 'urdf')
+        args = 'Load {:s}'.format(data['uri'])
+        kinbody_name = urdf_module.SendCommand(args)
+        kinbody = env.GetRobot(kinbody_name)
+#        kinbody = RaveCreateRobot(env, '')
+#        kinbody.Init(
+#            link_infos, joint_infos,
+#            manipulator_infos, sensor_infos,
+#            data['uri']
+#        )
     else:
         kinbody = RaveCreateKinBody(env, '')
         kinbody.Init(link_infos, joint_infos, data['uri'])
@@ -380,9 +385,9 @@ def deserialize_kinbody_state(body, data):
                 body.GetName(), key, e.message
             )
             raise
-
+        
     body.SetLinkTransformations(
-        map(deserialize_transform, data['link_transforms']),
+        map(deserialize_transform, data['link_transforms']),        
         data['dof_branches']
     )
 
@@ -526,9 +531,9 @@ ROBOT_STATE_MAP = {
         lambda x, value: x.SetActiveDOFs(value)
     ),
     'active_manipulator': (
-        lambda x: x.GetActiveManipulator().GetName(),
-        lambda x, value: x.SetActiveManipulator(value),
-    ),
+        lambda x: x.GetActiveManipulator().GetName() if x.GetActiveManipulator() else "",
+        lambda x, value: x.SetActiveManipulator(value)
+    )
 }
 LINK_INFO_MAP = {
     '_bIsEnabled': both_identity,
@@ -558,7 +563,7 @@ JOINT_INFO_MAP = {
     '_name': str_identity,
     '_type': (
         lambda x: x.name,
-        lambda x: openravepy.KinBody.JointType.names[x].encode()
+        lambda x: openravepy.KinBody.JointType.names[x]#.encode()
     ),
     '_vanchor': numpy_identity,
     '_vaxes': (
