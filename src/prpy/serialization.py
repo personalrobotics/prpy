@@ -446,6 +446,13 @@ def deserialize_geometry_info(data):
         geom_info._meshcollision = mesh_environment.ReadTrimeshURI(
             geom_info._filenamecollision)
 
+        # Need to manually scale the vertices
+        for v in geom_info._meshcollision.vertices:
+            v[0] *= geom_info._vCollisionScale[0]
+            v[1] *= geom_info._vCollisionScale[1]
+            v[2] *= geom_info._vCollisionScale[2]
+
+
     return geom_info
 
 def deserialize_grabbed_info(data):
