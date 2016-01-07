@@ -1027,6 +1027,27 @@ def CheckJointLimits(robot, q):
             description='position')
 
 
+def GetForwardKinematics(robot, q):
+    """
+    Get the forward kinematics for a specific joint configuration.
+
+    @param openravepy.robot robot: The robot object.
+    @param list             q:     List or array of joint positions.
+
+    @returns T_ee: The pose of the end effector (or last link in the
+                   serial chain) as a 4x4 matrix.
+    """
+    T_ee = None
+
+    # Save the robot state
+    sp = openravepy.Robot.SaveParameters
+    with robot.CreateRobotStateSaver():
+        robot.SetActiveDOFValues(q)
+        T_ee = robot.GetActiveManipulator().GetTransform()
+    # Robot state is restored
+    return T_ee
+
+
 def ConvertIntToBinaryString(x, reverse=False):
     """
     Convert an integer to a binary string.
