@@ -291,7 +291,7 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
         reuse_bodies_set = set(reuse_bodies)
 
     # Release anything that's grabbed.
-    for body in reuse_bodies:
+    for body in reuse_bodies_set:
         body.ReleaseAllGrabbed()
 
     # Remove any extra bodies from the environment.
@@ -558,7 +558,7 @@ JOINT_INFO_MAP = {
     '_name': str_identity,
     '_type': (
         lambda x: x.name,
-        lambda x: openravepy.KinBody.JointType.names[x].encode()
+        lambda x: openravepy.KinBody.JointType.names[x]
     ),
     '_vanchor': numpy_identity,
     '_vaxes': (
