@@ -5,6 +5,9 @@ import openravepy
 import prpy.serialization
 import logging
 
+def ok(b):
+  return 'OK' if b else 'FAILED'
+
 env1, robot1 = herbpy.initialize(sim=True)
 
 logging.getLogger('prpy.deserialization').setLevel(logging.DEBUG)
@@ -31,3 +34,22 @@ for manip1 in robot1.GetManipulators():
         manip1.GetKinematicsStructureHash(), '?=',
         manip2.GetKinematicsStructureHash())
 
+print('robot.GetJoints()\n', 
+    [joint.GetName() for joint in robot1.GetJoints()],
+    '?=\n',
+    [joint.GetName() for joint in robot2.GetJoints()])
+print('  ', ok(
+    [joint.GetName() for joint in robot1.GetJoints()]
+    == [joint.GetName() for joint in robot2.GetJoints()]))
+
+print('robot.GetLinks()\n', 
+    [link.GetName() for link in robot1.GetLinks()],
+    '?=\n',
+    [link.GetName() for link in robot2.GetLinks()])
+print('  ', ok(
+    [link.GetName() for link in robot1.GetLinks()]
+    == [link.GetName() for link in robot2.GetLinks()]))
+
+
+print(robot1.GetDOFValues())
+print(robot2.GetDOFValues())

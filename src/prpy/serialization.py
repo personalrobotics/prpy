@@ -100,17 +100,25 @@ def serialize_environment_file(env, path, writer=None):
     return data
 
 def serialize_kinbody(body):
-    all_joints = []
-    all_joints.extend(body.GetJoints())
-    all_joints.extend(body.GetPassiveJoints())
+    LinkTransformation = openravepy.KinBody.SaveParameters.LinkTransformation
 
-    data = {
-        'is_robot': body.IsRobot(),
-        'name': body.GetName(),
-        'uri': body.GetXMLFilename(),
-        'links': map(serialize_link, body.GetLinks()),
-        'joints': map(serialize_joint, all_joints),
-    }
+    with body.CreateKinBodyStateSaver(LinkTransformation):
+        body.SetDOFValues(
+            numpy.zeros(body.GetDOF()), numpy.arange(body.GetDOF()),
+            openravepy.KinBody.CheckLimitsAction.Nothing)
+
+        all_joints = []
+        all_joints.extend(body.GetJoints())
+        all_joints.extend(body.GetPassiveJoints())
+
+        data = {
+            'is_robot': body.IsRobot(),
+            'name': body.GetName(),
+            'uri': body.GetXMLFilename(),
+            'links': map(serialize_link, body.GetLinks()),
+            'joints': map(serialize_joint, all_joints),
+        }
+
     data['kinbody_state'] = serialize_kinbody_state(body)
 
     if body.IsRobot():
