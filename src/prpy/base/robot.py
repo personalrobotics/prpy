@@ -45,6 +45,7 @@ class Robot(openravepy.Robot):
     def __init__(self, robot_name=None):
         self.actions = None
         self.planner = None
+        self.detector = None
         self.robot_name = robot_name
 
         try:
@@ -88,6 +89,8 @@ class Robot(openravepy.Robot):
             method_names.update(self.planner.get_planning_method_names())
         if hasattr(self, 'actions') and self.actions is not None:
             method_names.update(self.actions.get_actions())
+        if hasattr(self, 'detector') and self.detector is not None:
+            method_names.update(self.detector.get_perception_method_names())
 
         return list(method_names)
 
@@ -96,7 +99,9 @@ class Robot(openravepy.Robot):
         # __methods__ bypass __getattribute__.
         self = bind.InstanceDeduplicator.get_canonical(self)
 
-        if (hasattr(self, 'planner') and self.planner is not None
+        if (name != 'planner'
+            and hasattr(self, 'planner')
+            and self.planner is not None
             and self.planner.has_planning_method(name)):
 
             delegate_method = getattr(self.planner, name)
@@ -105,10 +110,22 @@ class Robot(openravepy.Robot):
                 return self._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
-        elif (hasattr(self, 'actions') and self.actions is not None
+        elif (name != 'actions'
+              and hasattr(self, 'actions')
+              and self.actions is not None
               and self.actions.has_action(name)):
 
             delegate_method = self.actions.get_action(name)
+            @functools.wraps(delegate_method)
+            def wrapper_method(*args, **kw_args):
+                return delegate_method(self, *args, **kw_args)
+            return wrapper_method
+        elif (name != 'detector'
+              and hasattr(self, 'detector')
+              and self.detector is not None
+              and self.detector.has_perception_method(name)):
+            
+            delegate_method = getattr(self.detector, name)
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
                 return delegate_method(self, *args, **kw_args)
@@ -205,8 +222,8 @@ class Robot(openravepy.Robot):
            curve through the waypoints (not implemented). If this curve is
            not collision free, then we fall back on...
         4. By default, we run a smoother that jointly times and smooths the
-           path via self.smoother. This algorithm can change the geometric path to
-           optimize runtime.
+           path via self.smoother. This algorithm can change the geometric path
+           to optimize runtime.
 
         The behavior in (2) and (3) can be forced by passing constrained=True
         or smooth=True. By default, the case is inferred by the tag(s) attached
@@ -340,7 +357,13 @@ class Robot(openravepy.Robot):
                             cloned_robot, shortcut_path, defer=False,
                             **smoothing_options)
 
-                return CopyTrajectory(traj, env=self.GetEnv())
+                # Copy the trajectory into the output environment.
+                output_traj = CopyTrajectory(traj, env=self.GetEnv()) 
+
+                # Copy meta-data from the path to the output trajectory.
+                output_traj.SetDescription(path.GetDescription())
+
+                return output_traj
 
         if defer is True:
             from trollius.executor import get_default_executor
@@ -405,8 +428,8 @@ class Robot(openravepy.Robot):
         else:
             raise ValueError('Received unexpected value "{:s}" for defer.'.format(str(defer)))
 
-
-    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01, **kwargs):
+    def ExecuteTrajectory(self, traj, defer=False, timeout=None, period=0.01,
+                          **kwargs):
         """ Executes a time trajectory on the robot.
 
         This function directly executes a timed OpenRAVE trajectory on the
@@ -441,10 +464,17 @@ class Robot(openravepy.Robot):
         if traj.GetNumWaypoints() <= 0:
             raise ValueError('Trajectory must contain at least one waypoint.')
 
+        # Check if this trajectory contains both affine and joint DOFs
+        cspec = traj.GetConfigurationSpecification()
+        needs_base = util.HasAffineDOFs(cspec)
+        needs_joints = util.HasJointDOFs(cspec)
+        if needs_base and needs_joints:
+            raise ValueError('Trajectories with affine and joint DOFs are not supported')
+
         # Check that the current configuration of the robot matches the
         # initial configuration specified by the trajectory.
         if not util.IsAtTrajectoryStart(self, traj):
-            raise exceptions.TrajectoryAborted(
+            raise exceptions.TrajectoryNotExecutable(
                 'Trajectory started from different configuration than robot.')
 
         # If there was only one waypoint, at this point we are done!
@@ -468,9 +498,6 @@ class Robot(openravepy.Robot):
             warnings.warn('Executing zero-length trajectory. Please update the'
                           ' function that produced this trajectory to return a'
                           ' single-waypoint trajectory.', FutureWarning)
-
-        # TODO: Check if this trajectory contains the base.
-        needs_base = util.HasAffineDOFs(traj.GetConfigurationSpecification())
 
         self.GetController().SetPath(traj)
 

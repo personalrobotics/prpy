@@ -239,8 +239,6 @@ class BarrettHand(EndEffector):
         """
         if not hand.ft_simulated:
             hand.ft_sensor.SendCommand('Tare')
-            # TODO: Do we still need to wait this long?
-            time.sleep(2)
 
     def _GetJointFromName(self, name):
         robot = self.manipulator.GetRobot()

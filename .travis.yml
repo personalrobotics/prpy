@@ -1,0 +1,21 @@
+dist: trusty
+sudo: required
+language: generic
+cache:
+- apt
+# Install test fixture dependencies.
+before_install:
+- mkdir -p "${HOME}/workspace/src"
+- cd "${HOME}/workspace"
+- curl -sSo distribution.yml "${DISTRIBUTION}"
+- git clone https://github.com/personalrobotics/pr-cleanroom.git scripts
+- ./scripts/internal-setup.sh
+- export PACKAGE_NAMES="$(./scripts/internal-get-packages.py distribution.yml ${REPOSITORY})"
+install:
+- mv "${TRAVIS_BUILD_DIR}" src
+- ./scripts/internal-distro.py --workspace=src distribution.yml --repository "${REPOSITORY}"
+script:
+- ./scripts/internal-build.sh ${PACKAGE_NAMES}
+- travis_wait ./scripts/internal-test.sh ${PACKAGE_NAMES}
+after_script:
+- ./scripts/view-all-results.sh test_results

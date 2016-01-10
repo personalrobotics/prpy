@@ -56,7 +56,8 @@ class CBiRRTPlanner(BasePlanner):
         @param goals list of goal configurations
         @return traj output path
         """
-        return self.Plan(robot, jointgoals=goals, smoothingitrs=0, **kw_args)
+        kw_args.setdefault('smoothingitrs', 0)
+        return self.Plan(robot, jointgoals=goals, **kw_args)
 
     @PlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
@@ -66,7 +67,8 @@ class CBiRRTPlanner(BasePlanner):
         @param goal goal configuration
         @return traj output path
         """
-        return self.Plan(robot, jointgoals=[goal], smoothingitrs=0, **kw_args)
+        kw_args.setdefault('smoothingitrs', 0)
+        return self.Plan(robot, jointgoals=[goal], **kw_args)
 
     @PlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
@@ -81,8 +83,10 @@ class CBiRRTPlanner(BasePlanner):
         goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
 
-        return self.Plan(robot, tsr_chains=[tsr_chain], psample=0.1,
-                         smoothingitrs=0, **kw_args)
+        kw_args.setdefault('psample', 0.1)
+        kw_args.setdefault('smoothingitrs', 0)
+
+        return self.Plan(robot, tsr_chains=[tsr_chain], **kw_args)
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
@@ -137,8 +141,9 @@ class CBiRRTPlanner(BasePlanner):
                                    manip = robot.GetActiveManipulatorIndex())
             traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True, TSRs=[trajtsr])
 
+        kw_args.setdefault('psample', 0.1)
+
         return self.Plan(robot,
-            psample=0.1,
             tsr_chains=[goal_tsr_chain, traj_tsr_chain],
             # Smooth since this is a constrained trajectory.
             smoothingitrs=smoothingitrs,
@@ -162,7 +167,7 @@ class CBiRRTPlanner(BasePlanner):
 
         for chain in tsr_chains:
             if chain.sample_start or chain.sample_goal:
-                psample = 0.1
+                kw_args.setdefault('psample', 0.1)
 
             if chain.constrain:
                 is_constrained = True
@@ -172,7 +177,6 @@ class CBiRRTPlanner(BasePlanner):
             smoothingitrs = 0
 
         return self.Plan(robot,
-            psample=psample,
             smoothingitrs=smoothingitrs,
             tsr_chains=tsr_chains,
             **kw_args

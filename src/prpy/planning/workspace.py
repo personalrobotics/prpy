@@ -105,6 +105,8 @@ class GreedyIKPlanner(BasePlanner):
             raise ValueError('Direction must be non-zero')
         elif max_distance is not None and max_distance < distance:
             raise ValueError('Max distance is less than minimum distance.')
+        elif max_distance is not None and not numpy.isfinite(max_distance):
+            raise ValueError('Max distance must be finite.')
 
         # Normalize the direction vector.
         direction = numpy.array(direction, dtype='float')
@@ -152,7 +154,14 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return qtraj configuration space path
         """
-        from .exceptions import TimeoutPlanningError
+        from .exceptions import (
+            TimeoutPlanningError, 
+            CollisionPlanningError, 
+            SelfCollisionPlanningError,
+            JointLimitError)
+        from openravepy import CollisionReport
+        from numpy import linalg as LA
+        p = openravepy.KinBody.SaveParameters
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -160,7 +169,7 @@ class GreedyIKPlanner(BasePlanner):
 
             # Create a new trajectory starting at current robot location.
             qtraj = openravepy.RaveCreateTrajectory(self.env, '')
-            qtraj.Init(manip.GetArmConfigurationSpecification())
+            qtraj.Init(manip.GetArmConfigurationSpecification('linear'))
             qtraj.Insert(0, robot.GetActiveDOFValues())
 
             # Initial search for workspace path timing: one huge step.
@@ -169,10 +178,10 @@ class GreedyIKPlanner(BasePlanner):
 
             # Smallest CSpace step at which to give up
             min_step = min(robot.GetActiveDOFResolutions())/100.
-            ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
-
+            ik_options = openravepy.IkFilterOptions.CheckEnvCollisions 
             start_time = time.time()
             epsilon = 1e-6
+
 
             try:
                 while t < traj.GetDuration() + epsilon:
@@ -220,11 +229,35 @@ class GreedyIKPlanner(BasePlanner):
 
                 # Throw an error if we haven't reached the minimum waypoint.
                 if t < min_time:
-                    raise
+                    # FindIKSolutions is slower than FindIKSolution, 
+                    # so call this only to identify error when there is no solution
+                    ik_solutions = manip.FindIKSolutions(
+                        openravepy.matrixFromPose(traj.Sample(t+dt*2.0)[0:7]),
+                        openravepy.IkFilterOptions.IgnoreSelfCollisions,
+                        ikreturn=False, releasegil=True
+                    )
+
+                    collision_error = None
+                    # update collision_error to contain collision info.
+                    with robot.CreateRobotStateSaver(p.LinkTransformation):
+                        for q in ik_solutions:
+                            robot.SetActiveDOFValues(q)
+                            report = CollisionReport()
+                            if self.env.CheckCollision(robot, report=report):
+                                collision_error = CollisionPlanningError.FromReport(report)
+                            elif robot.CheckSelfCollision(report=report):
+                                collision_error = SelfCollisionPlanningError.FromReport(report)
+                            else: 
+                                collision_error = None 
+                    if collision_error is not None: 
+                        raise collision_error
+                    else:
+                        raise 
+
                 # Otherwise we'll gracefully terminate.
                 else:
                     logger.warning('Terminated early at time %f < %f: %s',
-                                   t, traj.GetDuration(), e.message)
+                                   t, traj.GetDuration(), str(e))
 
         # Return as much of the trajectory as we have solved.
         SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: True}, append=True)

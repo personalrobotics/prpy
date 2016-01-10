@@ -74,7 +74,7 @@ class DistanceFieldManager(object):
                 # existing distance field if there is a key mismatch.
                 cached_state = self.cache.get(body.GetName(), None)
                 if cached_state is not None and cached_state != current_state:
-                    logger.debug('Clearing distance field for "{:s}".', body_name)
+                    logger.debug('Clearing distance field for "%s".', body_name)
                     self.module.removefield(body)
                     cached_state = None
 
@@ -207,9 +207,8 @@ class CHOMPPlanner(BasePlanner):
             traj.Insert(i, waypoint, True)
         
         try:
-            run = self.module.create(robot=robot, starttraj=traj, lambda_=lambda_)
-            self.module.iterate(n_iter=n_iter, run=run)
-            self.module.destroy(run=run)
+            traj = self.module.runchomp(robot=robot, starttraj=traj,
+                lambda_=lambda_, n_iter=n_iter, **kw_args)
         except Exception as e:
             raise PlanningError(str(e))
 

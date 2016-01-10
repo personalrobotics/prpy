@@ -31,6 +31,7 @@
 import abc
 import functools
 import logging
+import numpy
 import openravepy
 from ..clone import Clone
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
@@ -41,12 +42,44 @@ logger = logging.getLogger(__name__)
 
 class Tags(object):
     SMOOTH = 'smooth'
+    """
+    The `SMOOTH` tag means waypoints are close enough together that we can
+    approximate derivatives at the waypoints using divided differences. i.e.
+    we can safely fit a spline without collision checking.
+    """
+
     CONSTRAINED = 'constrained'
+    """
+    The `CONSTRAINED` tag means that the geometric path described by these
+    waypoints respects a constraint.  This means that the path cannot be
+    geometrically altered arbitrarily, at the risk of violating the original
+    constraint, it should only be changed in timing.
+    """
+
     PLANNER = 'planner'
+    """
+    The name of the planner used to generate a trajectory.
+    """
+
     METHOD = 'planning_method'
+    """
+    The type of planning call used to generate a trajectory.
+    """
+
     PLAN_TIME = 'planning_time'
+    """
+    The amount of time that was spent by a planner finding a solution.
+    """
+
     POSTPROCESS_TIME = 'postprocess_time'
+    """
+    The amount of time that was spent modifying the trajectory for execution.
+    """
+
     EXECUTION_TIME = 'execution_time'
+    """
+    The amount of time that was spent actually running a trajectory.
+    """
 
 
 class MetaPlanningError(PlanningError):
@@ -65,9 +98,34 @@ class PlanningMethod(object):
         env = robot.GetEnv()
         defer = kw_args.get('defer')
 
+        # Store the original joint values and indices.
+        joint_indices = [robot.GetActiveDOFIndices(), None]
+        joint_values = [robot.GetActiveDOFValues(), None]
+
         with Clone(env, clone_env=instance.env,
                    lock=True, unlock=False) as cloned_env:
             cloned_robot = cloned_env.Cloned(robot)
+
+            # Store the cloned joint values and indices.
+            joint_indices[1] = cloned_robot.GetActiveDOFIndices()
+            joint_values[1] = cloned_robot.GetActiveDOFValues()
+
+            # Check for mismatches in the cloning and hackily reset them.
+            # (This is due to a possible bug in OpenRAVE environment cloning where in
+            # certain situations, the Active DOF ordering and values do not match the
+            # parent environment.  It seems to be exacerbated by multirotation joints,
+            # but the exact cause and repeatability is unclear at this point.)
+            if not numpy.array_equal(joint_indices[0], joint_indices[1]):
+                logger.warning("Cloned Active DOF index mismatch: %s != %s",
+                               str(joint_indices[0]),
+                               str(joint_indices[1]))
+                cloned_robot.SetActiveDOFs(joint_indices[0])
+
+            if not numpy.allclose(joint_values[0], joint_values[1]):
+                logger.warning("Cloned Active DOF value mismatch: %s != %s",
+                               str(joint_values[0]),
+                               str(joint_values[1]))
+                cloned_robot.SetActiveDOFValues(joint_values[0])
 
             def call_planner():
                 try:
@@ -119,12 +177,14 @@ class Planner(object):
 
 class BasePlanner(Planner):
     def __init__(self):
+        super(BasePlanner, self).__init__()
         self.env = openravepy.Environment()
 
 class MetaPlanner(Planner):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self):
+        super(MetaPlanner, self).__init__()
         self._planners = list()
 
     def has_planning_method(self, method_name):
@@ -216,6 +276,7 @@ class MetaPlanner(Planner):
 
 class Sequence(MetaPlanner):
     def __init__(self, *planners):
+        super(Sequence, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -259,6 +320,7 @@ class Sequence(MetaPlanner):
 
 class Ranked(MetaPlanner):
     def __init__(self, *planners):
+        super(Ranked, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -328,6 +390,7 @@ class Ranked(MetaPlanner):
 
 class FirstSupported(MetaPlanner):
     def __init__(self, *planners):
+        super(FirstSupported, self).__init__()
         self._planners = planners
 
     def __str__(self):
@@ -352,6 +415,7 @@ class FirstSupported(MetaPlanner):
 
 class MethodMask(MetaPlanner):
     def __init__(self, planner, methods):
+        super(MethodMask, self).__init__()
         self._methods = set(methods)
         self._planner = planner
         self._planners = [planner]

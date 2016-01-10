@@ -44,7 +44,6 @@ class Mico(Manipulator):
 
         with env:
             accel_limits = robot.GetDOFAccelerationLimits()
-            dof_indices = self.GetIndices()
             accel_limits[dof_indices[0]] = 1.45
             accel_limits[dof_indices[1]] = 1.56
             accel_limits[dof_indices[2]] = 1.56

@@ -2,6 +2,63 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.3.0 (2015-10-12)
+------------------
+* Added a perception pipeline (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_ `#200 <https://github.com/personalrobotics/prpy/issues/200>`_)
+* Added actions (and other functionality) for the block sorting demo (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_, `#194 <https://github.com/personalrobotics/prpy/issues/194>`_)
+* Added unit tests for planners (`#169 <https://github.com/personalrobotics/prpy/issues/169>`_)
+* Added helper functions for computing body point acceleration twists (`#166 <https://github.com/personalrobotics/prpy/issues/166>`_)
+* Added a common base class for trajectory exceptions and an exception for precondition violation (`#196 <https://github.com/personalrobotics/prpy/issues/196>`_)
+* Added documentation for `prpy.base.Tags` (`#193 <https://github.com/personalrobotics/prpy/issues/193>`_)
+* Added missing trajectory flags to VectorFieldPlanner (`#191 <https://github.com/personalrobotics/prpy/issues/191>`_)
+* Added UntimeTrajectory() to strip timing from trajectories (`#187 <https://github.com/personalrobotics/prpy/issues/187>`_)
+* Added ComputeEnabledAABB function
+* Added a better error message when or_ompl is missing (`#178 <https://github.com/personalrobotics/prpy/issues/178>`_)
+* Added support for OWD execution options
+* Refactored TSR and TSRChain classes (`#159 <https://github.com/personalrobotics/prpy/issues/159>`_)
+* Refactored MoveUntilTouch and fixed simulation (`#180 <https://github.com/personalrobotics/prpy/issues/180>`_ `#173 <https://github.com/personalrobotics/prpy/issues/173>`_)
+* Refactored and cleaned up the Planner and MetaPlanner base classes (`#176 <https://github.com/personalrobotics/prpy/issues/176>`_, `#162 <https://github.com/personalrobotics/prpy/issues/162>`_)
+* Refactored  VectorFieldPlanner to use a numerical integrator (`#184 <https://github.com/personalrobotics/prpy/issues/184>`_)
+* Fixed acceleration limits on ADA for the MICO2 hardware upgrade (`#186 <https://github.com/personalrobotics/prpy/issues/186>`_)
+* Fixed _PlanWrapper on Manipulator to default to execute=False (`#183 <https://github.com/personalrobotics/prpy/issues/183>`_)
+* Fixed sign on tolerance in ComputeJointVelocityFromTwist (`#177 <https://github.com/personalrobotics/prpy/issues/177>`_) 
+* Fixed GreedyIK planner in MoveUntilTouch (`#174 <https://github.com/personalrobotics/prpy/issues/174>`_)
+* Fixed the name of the timelimit argument in HauserParabolicSmoother
+* Fixed PostProcessPath to preserve trajectory tags
+* Removed unnecessary sleep in WAM tare command
+* Deprecated the GetVelocityLimits override on WAM (`#175 <https://github.com/personalrobotics/prpy/issues/175>`_)
+* Contributors: Anton Kuznetsov, Chris Dellin, Jennifer King, Michael Koval, Pras Velagapudi, Rachel Holladay, Shervin Javdani, Shushman, Shushman Choudhury, Siddhartha Srinivasa, Stefanos Nikolaidis, Aaron Johnson, Matt Klingsmith
+
+1.2.0 (2015-08-06)
+------------------
+* Add support for numpy <1.8 which don't support norm(axis=1)
+* Moved CBiRRT TSR serialization into cbirrt.py.
+* Added TSR conversion methods for JSON and YAML.
+* Added generic-object TSRs.
+* Added termcolor dependency.
+* Changed retimers to only Simplify untimed trajectories.
+* Refactored trajectory timing check into utility function.
+* Added check for deltatime without hardcoded any strings.
+* Added proper checking for trajectory timing and length.
+* Added a check within snap planner for one-waypoint trajectories.
+* Added forwarding of kwargs to TSRPlanner's delegate planner.
+* Changed default 'execute' behavior to False.
+* Added support for environment (de)serialization.
+* Added missing environment locks.
+* Added `defer` handling to the checks in ExecuteTrajectory.
+* Added several checks to the ExecuteTrajectory.
+* Jen's uncommited tweaks to the mobile base in simulation vs reality
+* Updating error handling to more correct syntax
+* Use all trajectory DOFs instead of active.
+* Changed loggers to use '__name__' instead of explicit paths.
+* Added a check within snap planner for one-waypoint trajectories.
+* Changed InstanceDeduplicator to use module-logger.
+* Changed defaults in the HauserParabolicSmoother.
+* Added HauserParabolicSmoother timelimit parameter.
+* Added more fine-grained planning exceptions.
+* Moved planning exceptions to a separate file.
+* Contributors: Aaron Johnson, Chris Dellin, Jennifer King, Michael Koval, Pras Velagapudi, Rachel Holladay
+
 1.1.0 (2015-06-01)
 ------------------
 * Adding tags for capturing trajectory timing data

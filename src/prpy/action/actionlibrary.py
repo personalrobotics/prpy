@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+class ActionError(Exception):
+    pass
+
 class ActionMethod(object):
 
     def __init__(self, func):
