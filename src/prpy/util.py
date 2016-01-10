@@ -1599,16 +1599,21 @@ def GetManipulatorIndex(robot, manip=None):
 
     return (manip, manip_idx)
 
-def GetPointFrom(env, focus):
+def GetPointFrom(focus):
     """
     Given a kinbody, array or transform, returns the xyz
     location. 
-    param env The environment where the item exists
-    param focus THe area to be referred to
+    param focus The area to be referred to
     """
-    #Pointing at an object
-    if isinstance(focus, (openravepy.KinBody, openravepy.KinBody.Link)):
-        with env:
+    #Pointing at a kinbody
+    if isinstance(focus, openravepy.KinBody):
+        with focus.GetEnv():
+            focus_trans = focus.GetTransform()
+        coord = list(focus_trans[0:3, 3])
+
+    #Pointing at a kinbody link
+    elif isinstance(focus, openravepy.KinBody.Link):
+        with focus.GetParent().GetEnv():
             focus_trans = focus.GetTransform()
         coord = list(focus_trans[0:3, 3])
 
@@ -1626,7 +1631,6 @@ def GetPointFrom(env, focus):
         coord = focus
 
     else:
-        raise prpy.exceptions.PrPyException(
-                'Focus of the point is an unknown object')
+        raise ValueError('Focus of the point is an unknown object')
 
     return coord
