@@ -127,24 +127,30 @@ def serialize_environment_file(env, path, writer=None):
 
     return data
 
-def serialize_kinbody(body, include_state=True):
-    all_joints = []
-    all_joints.extend(body.GetJoints())
-    all_joints.extend(body.GetPassiveJoints())
+def serialize_kinbody(body):
+    LinkTransformation = openravepy.KinBody.SaveParameters.LinkTransformation
 
-    data = {
-        'is_robot': body.IsRobot(),
-        'name': body.GetName(),
-        'uri': body.GetXMLFilename(),
-        'links': map(serialize_link, body.GetLinks()),
-        'joints': map(serialize_joint, all_joints),
-    }
+    with body.CreateKinBodyStateSaver(LinkTransformation):
+        body.SetDOFValues([0] * body.GetDOF(), numpy.arange(body.GetDOF()),
+            openravepy.KinBody.CheckLimitsAction.Nothing)
 
-    if include_state:
-        data['kinbody_state'] = serialize_kinbody_state(body)
+        all_joints = []
+        all_joints.extend(body.GetJoints())
+        all_joints.extend(body.GetPassiveJoints())
 
-    if body.IsRobot():
-        data.update(serialize_robot(body))
+        data = {
+            'is_robot': body.IsRobot(),
+            'name': body.GetName(),
+            'uri': body.GetXMLFilename(),
+            'links': map(serialize_link, body.GetLinks()),
+            'joints': map(serialize_joint, all_joints),
+        }
+
+
+        if body.IsRobot():
+            data.update(serialize_robot(body))
+
+    data['kinbody_state'] = serialize_kinbody_state(body)
 
     return data
 
@@ -177,7 +183,6 @@ def serialize_robot_state(body):
     return data
 
 def serialize_link(link):
-    # TODO: Should we use UpdateAndGetInfo here?
     data = { 'info': serialize_link_info(link.UpdateAndGetInfo()) }
 
     # Bodies loaded from ".kinbody.xml" do not have GeometryInfo's listed in
@@ -190,8 +195,9 @@ def serialize_link(link):
     return data
 
 def serialize_joint(joint):
-    # TODO: Should we use UpdateAndGetInfo here?
-    return { 'info': serialize_joint_info(joint.UpdateAndGetInfo()) }
+    # joint.UpdateInfo() applies an incorrect offset to the joint. This seems
+    # to be a bug - DO NOT call it.
+    return { 'info': serialize_joint_info(joint.GetInfo()) }
 
 def serialize_manipulator(manipulator):
     return { 'info': serialize_manipulator_info(manipulator.GetInfo()) }
@@ -330,6 +336,7 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
         deserialization_logger.debug('Deserialized body "%s".', body.GetName())
         deserialized_bodies.append((body, body_data))
 
+    """
     # Restore state. We do this in a second pass to insure that any bodies that
     # are grabbed already exist.
     for body, body_data in deserialized_bodies:
@@ -337,6 +344,7 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
 
         if body.IsRobot():
             deserialize_robot_state(body, body_data['robot_state'])
+    """
 
     return env
 
@@ -376,10 +384,12 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
     kinbody.SetName(name or data['name'])
     env.Add(kinbody, anonymous)
 
+    """
     if state:
         deserialize_kinbody_state(kinbody, data['kinbody_state'])
         if kinbody.IsRobot():
             deserialize_robot_state(kinbody, data['robot_state'])
+    """
 
     return kinbody
 
