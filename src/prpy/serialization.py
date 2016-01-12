@@ -1,18 +1,47 @@
+import json
+import logging
 import numpy
 import openravepy
-import logging
-from .exceptions import UnsupportedTypeSerializationException
+from numpy import array, ndarray
+from .exceptions import (
+    UnsupportedTypeSerializationException,
+    UnsupportedTypeDeserializationException,
+)
+from .tsr import (
+    TSR,
+    TSRChain,
+)
+from openravepy import (
+    Environment,
+    KinBody,
+    GeometryType,
+    RaveCreateKinBody,
+    RaveCreateRobot,
+    RaveCreateTrajectory,
+    Robot,
+    Trajectory,
+)
 
 TYPE_KEY = '__type__'
 
 serialization_logger = logging.getLogger('prpy.serialization')
 deserialization_logger = logging.getLogger('prpy.deserialization')
 
+
+class ReturnTransformQuaternionStateSaver(object):
+    def __init__(self, value):
+        self.desired_value = value
+
+    def __enter__(self):
+        self.original_value = openravepy.options.returnTransformQuaternion
+        openravepy.options.returnTransformQuaternion = self.desired_value
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        openravepy.options.returnTransformQuaternion = self.original_value
+
+
 # Serialization.
 def serialize(obj):
-    from numpy import ndarray
-    from openravepy import Environment, KinBody, Robot, Trajectory
-    from prpy.tsr import TSR, TSRChain
 
     NoneType = type(None)
 
@@ -87,7 +116,6 @@ def serialize_environment(env):
 
 def serialize_environment_file(env, path, writer=None):
     if writer is None:
-        import json
         writer = json.dump
 
     data = serialize_environment(env)
@@ -99,27 +127,21 @@ def serialize_environment_file(env, path, writer=None):
 
     return data
 
-def serialize_kinbody(body):
-    LinkTransformation = openravepy.KinBody.SaveParameters.LinkTransformation
+def serialize_kinbody(body, include_state=True):
+    all_joints = []
+    all_joints.extend(body.GetJoints())
+    all_joints.extend(body.GetPassiveJoints())
 
-    with body.CreateKinBodyStateSaver(LinkTransformation):
-        body.SetDOFValues(
-            numpy.zeros(body.GetDOF()), numpy.arange(body.GetDOF()),
-            openravepy.KinBody.CheckLimitsAction.Nothing)
+    data = {
+        'is_robot': body.IsRobot(),
+        'name': body.GetName(),
+        'uri': body.GetXMLFilename(),
+        'links': map(serialize_link, body.GetLinks()),
+        'joints': map(serialize_joint, all_joints),
+    }
 
-        all_joints = []
-        all_joints.extend(body.GetJoints())
-        all_joints.extend(body.GetPassiveJoints())
-
-        data = {
-            'is_robot': body.IsRobot(),
-            'name': body.GetName(),
-            'uri': body.GetXMLFilename(),
-            'links': map(serialize_link, body.GetLinks()),
-            'joints': map(serialize_joint, all_joints),
-        }
-
-    data['kinbody_state'] = serialize_kinbody_state(body)
+    if include_state:
+        data['kinbody_state'] = serialize_kinbody_state(body)
 
     if body.IsRobot():
         data.update(serialize_robot(body))
@@ -142,7 +164,6 @@ def serialize_kinbody_state(body):
     data.update({
         'link_transforms': map(serialize_transform, link_transforms),
         'dof_branches': dof_branches.tolist(),
-        'dof_values': body.GetDOFValues().tolist(),
     })
 
     return data
@@ -156,7 +177,8 @@ def serialize_robot_state(body):
     return data
 
 def serialize_link(link):
-    data = { 'info': serialize_link_info(link.GetInfo()) }
+    # TODO: Should we use UpdateAndGetInfo here?
+    data = { 'info': serialize_link_info(link.UpdateAndGetInfo()) }
 
     # Bodies loaded from ".kinbody.xml" do not have GeometryInfo's listed in
     # their LinkInfo class. We manually read them from GetGeometries().
@@ -168,7 +190,8 @@ def serialize_link(link):
     return data
 
 def serialize_joint(joint):
-    return { 'info': serialize_joint_info(joint.GetInfo()) }
+    # TODO: Should we use UpdateAndGetInfo here?
+    return { 'info': serialize_joint_info(joint.UpdateAndGetInfo()) }
 
 def serialize_manipulator(manipulator):
     return { 'info': serialize_manipulator_info(manipulator.GetInfo()) }
@@ -195,20 +218,11 @@ def serialize_grabbed_info(grabbed_info):
     return serialize_with_map(grabbed_info, GRABBED_INFO_MAP)
 
 def serialize_transform(t):
-    from openravepy import quatFromRotationMatrix
-
-    return {
-        'position': list(map(float,t[0:3, 3])),
-        'orientation': list(map(float,quatFromRotationMatrix(t[0:3, 0:3]))),
-    }
+    with ReturnTransformQuaternionStateSaver(True):
+        return t.tolist()
 
 # Deserialization.
 def _deserialize_internal(env, data, data_type):
-    from numpy import array, ndarray
-    from openravepy import (Environment, KinBody, Robot, Trajectory,
-                            RaveCreateTrajectory)
-    from prpy.tsr import TSR, TSRChain
-    from .exceptions import UnsupportedTypeDeserializationException
 
     if data_type == dict.__name__:
         return {
@@ -286,10 +300,8 @@ def deserialize(env, data):
         return data
 
 def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
-    import openravepy
-
     if env is None:
-        env = openravepy.Environment()
+        env = Environment()
 
     if reuse_bodies is None:
         reuse_bodies_dict = dict()
@@ -329,8 +341,6 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
     return env
 
 def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
-    from openravepy import RaveCreateKinBody, RaveCreateRobot
-
     deserialization_logger.debug('Deserializing %s "%s".',
         'Robot' if data['is_robot'] else 'KinBody',
         data['name']
@@ -374,8 +384,6 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
     return kinbody
 
 def deserialize_kinbody_state(body, data):
-    from openravepy import KinBody
-
     deserialization_logger.debug('Deserializing "%s" KinBody state.',
         body.GetName())
 
@@ -423,23 +431,15 @@ def deserialize_with_map(obj, data, attribute_map):
     return obj
 
 def deserialize_link_info(data):
-    from openravepy import KinBody
-
     return deserialize_with_map(KinBody.LinkInfo(), data, LINK_INFO_MAP)
     
 def deserialize_joint_info(data):
-    from openravepy import KinBody
-
     return deserialize_with_map(KinBody.JointInfo(), data, JOINT_INFO_MAP)
 
 def deserialize_manipulator_info(data):
-    from openravepy import Robot
-
     return deserialize_with_map(Robot.ManipulatorInfo(), data, MANIPULATOR_INFO_MAP)
 
 def deserialize_geometry_info(data):
-    from openravepy import KinBody 
-
     geom_info = deserialize_with_map(
         KinBody.GeometryInfo(), data, GEOMETRY_INFO_MAP)
 
@@ -452,19 +452,13 @@ def deserialize_geometry_info(data):
     return geom_info
 
 def deserialize_grabbed_info(data):
-    from openravepy import Robot
-
     return deserialize_with_map(Robot.GrabbedInfo(), data, GRABBED_INFO_MAP)
 
 def deserialize_transform(data):
-    from openravepy import matrixFromQuat
-
-    t = matrixFromQuat(data['orientation'])
-    t[0:3, 3] = data['position']
-    return t
+    return numpy.array(data)
 
 # Schema.
-mesh_environment = openravepy.Environment()
+mesh_environment = Environment()
 identity = lambda x: x
 str_identity = (
     lambda x: x,
@@ -566,7 +560,7 @@ JOINT_INFO_MAP = {
     '_name': str_identity,
     '_type': (
         lambda x: x.name,
-        lambda x: openravepy.KinBody.JointType.names[x]
+        lambda x: KinBody.JointType.names[x]
     ),
     '_vanchor': numpy_identity,
     '_vaxes': (
@@ -595,7 +589,7 @@ GEOMETRY_INFO_MAP = {
     '_t': transform_identity,
     '_type': (
         lambda x: x.name,
-        lambda x: openravepy.GeometryType.names[x]
+        lambda x: GeometryType.names[x]
     ),
     '_vAmbientColor': numpy_identity,
     '_vCollisionScale': numpy_identity,
