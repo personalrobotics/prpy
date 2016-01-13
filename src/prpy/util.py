@@ -1027,7 +1027,7 @@ def CheckJointLimits(robot, q):
             description='position')
 
 
-def GetForwardKinematics(robot, q):
+def GetForwardKinematics(robot, q, manipulator=None):
     """
     Get the forward kinematics for a specific joint configuration.
 
@@ -1037,14 +1037,20 @@ def GetForwardKinematics(robot, q):
     @returns T_ee: The pose of the end effector (or last link in the
                    serial chain) as a 4x4 matrix.
     """
+    if manipulator == None:
+        manipulator = GetActiveManipulator()
+
     T_ee = None
 
     # Save the robot state
     sp = openravepy.Robot.SaveParameters
-    with robot.CreateRobotStateSaver():
+    robot_saver = robot.CreateRobotStateSaver(sp.LinkTransformation)
+
+    with robot_saver:
         robot.SetActiveDOFValues(q)
-        T_ee = robot.GetActiveManipulator().GetTransform()
+        T_ee = robot.manipulator.GetEndEffectorTransform()
     # Robot state is restored
+
     return T_ee
 
 
