@@ -1038,7 +1038,7 @@ def GetForwardKinematics(robot, q, manipulator=None):
                    serial chain) as a 4x4 matrix.
     """
     if manipulator == None:
-        manipulator = GetActiveManipulator()
+        manipulator = robot.GetActiveManipulator()
 
     T_ee = None
 
@@ -1048,7 +1048,7 @@ def GetForwardKinematics(robot, q, manipulator=None):
 
     with robot_saver:
         robot.SetActiveDOFValues(q)
-        T_ee = robot.manipulator.GetEndEffectorTransform()
+        T_ee = manipulator.GetEndEffectorTransform()
     # Robot state is restored
 
     return T_ee
