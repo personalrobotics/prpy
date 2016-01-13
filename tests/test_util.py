@@ -641,5 +641,38 @@ class Test_GetPointFrom(unittest.TestCase):
         list_result = prpy.util.GetPointFrom(list_coord)
         numpy.testing.assert_array_almost_equal(list_result, expected_coord)
 
+    # GetForwardKinematics()
+
+    def test_GetForwardKinematics(self):
+        # Zero configuration, use thes the active manipulator by default
+        q0 = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        T_ee = prpy.util.GetForwardKinematics(self.robot, q0)
+
+        expected_T_ee0 = numpy.array([[1.0, 0.0, 0.0, 0.07 ],
+                                      [0.0, 1.0, 0.0, 0.0  ],
+                                      [0.0, 0.0, 1.0, 2.168],
+                                      [0.0, 0.0, 0.0, 1.0  ]])
+        error = 'The end-effector transform ' + str(T_ee) + \
+                ' does not equal the expected end-effector' + \
+                ' transform ' + str(expected_T_ee0)
+        numpy.testing.assert_array_almost_equal(T_ee, expected_T_ee0, decimal=7, \
+                                                err_msg=error, verbose=True)
+
+        # A different configuration, specifying the manipulator to use
+        q1 = numpy.array([-1.8, 0.0, -0.7, 2.0, 0.5, 0.2, 0.0])
+        manip = self.robot.GetActiveManipulator()
+        T_ee = prpy.util.GetForwardKinematics(self.robot, q1, manip)
+
+        expected_T_ee1 = numpy.array([[ 0.7126777,  0.3653714, -0.5988272, -0.3313395],
+                                      [-0.0541115, -0.8224716, -0.5662263, -0.3259651],
+                                      [-0.6994014,  0.4359404, -0.5663864,  1.4394693],
+                                      [ 0.0,        0.0,        0.0,        1.0      ]])
+        error = 'The end-effector transform ' + str(T_ee) + \
+                ' does not equal the expected end-effector' + \
+                ' transform ' + str(expected_T_ee1)
+        numpy.testing.assert_array_almost_equal(T_ee, expected_T_ee1, decimal=7, \
+                                                err_msg=error, verbose=True)
+
+
 if __name__ == '__main__':
     unittest.main()
