@@ -565,7 +565,7 @@ class Tests(unittest.TestCase):
                                                 decimal=7, err_msg=error, \
                                                 verbose=True)
 
-    def test_SampleTimeGenerator_(self):
+    def test_SampleTimeGenerator_EndPointMoreThanHalfStepSize(self):
         # Check that the sequence includes the end-point when it's
         # distance from the previous point is more than half the
         # step-size. This is required for collision-checking
@@ -581,7 +581,7 @@ class Tests(unittest.TestCase):
                                                 decimal=7, err_msg=error, \
                                                 verbose=True)
 
-    def test_SampleTimeGenerator_(self):
+    def test_SampleTimeGenerator_EndPointLessThanHalfStepSize(self):
         # Check that the end-point is excluded when it's less than
         # half the step-size from the previous value.
         expected_sequence = [0.0, 2.0, 4.0]
