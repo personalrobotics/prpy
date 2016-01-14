@@ -1598,3 +1598,39 @@ def GetManipulatorIndex(robot, manip=None):
             manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
 
     return (manip, manip_idx)
+
+def GetPointFrom(focus):
+    """
+    Given a kinbody, array or transform, returns the xyz
+    location. 
+    param focus The area to be referred to
+    """
+    #Pointing at a kinbody
+    if isinstance(focus, openravepy.KinBody):
+        with focus.GetEnv():
+            focus_trans = focus.GetTransform()
+        coord = list(focus_trans[0:3, 3])
+
+    #Pointing at a kinbody link
+    elif isinstance(focus, openravepy.KinBody.Link):
+        with focus.GetParent().GetEnv():
+            focus_trans = focus.GetTransform()
+        coord = list(focus_trans[0:3, 3])
+
+    #Pointing at a point in space as numpy array
+    elif (isinstance(focus, numpy.ndarray) and (focus.ndim == 1)
+           and (len(focus) == 3)):
+        coord = list(focus)
+
+    #Pointing at point in space as 4x4 transform
+    elif isinstance(focus, numpy.ndarray) and (focus.shape == (4, 4)):
+        coord = list(focus[0:3, 3])
+
+    #Pointing at a point in space as list or tuple
+    elif (isinstance(focus, (tuple, list)) and len(focus) == 3):
+        coord = focus
+
+    else:
+        raise ValueError('Focus of the point is an unknown object')
+
+    return coord
