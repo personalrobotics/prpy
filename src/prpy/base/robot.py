@@ -412,8 +412,11 @@ class Robot(openravepy.Robot):
 
             with Timer() as timer:
                 exec_traj = self.ExecuteTrajectory(traj, defer=False, **kwargs)
-            SetTrajectoryTags(exec_traj, {Tags.EXECUTION_TIME: timer.get_duration()}, append=True)
-            return exec_traj
+            print exec_traj.__class__
+            print traj.__class__
+            #SetTrajectoryTags(exec_traj, {Tags.EXECUTION_TIME: timer.get_duration()}, append=True)
+            #return exec_traj
+            return traj
 
         if defer is True:
             from trollius.executor import get_default_executor
