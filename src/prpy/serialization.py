@@ -291,7 +291,7 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
         reuse_bodies_set = set(reuse_bodies)
 
     # Release anything that's grabbed.
-    for body in reuse_bodies:
+    for body in reuse_bodies_set:
         body.ReleaseAllGrabbed()
 
     # Remove any extra bodies from the environment.
@@ -360,8 +360,8 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
         kinbody = RaveCreateKinBody(env, '')
         kinbody.Init(link_infos, joint_infos, data['uri'])
 
-    kinbody.SetName(name or data['name'])
-    env.Add(kinbody, anonymous)
+        kinbody.SetName(name or data['name'])
+        env.Add(kinbody, anonymous)
 
     if state:
         deserialize_kinbody_state(kinbody, data['kinbody_state'])
