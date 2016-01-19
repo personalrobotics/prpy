@@ -33,7 +33,6 @@ from manipulator import Manipulator
 from std_msgs.msg import Float64
 import rospy
 from ..util import Watchdog
-from functools import partial
 
 class Mico(Manipulator):
     def __init__(self, sim,
@@ -77,7 +76,7 @@ class Mico(Manipulator):
             self.velocity_publishers = [rospy.Publisher(topic_name, Float64, queue_size=1) for topic_name in self.velocity_topic_names]
             
             #create watchdog to send zero velocity
-            self.servo_watchdog = Watchdog(timeout_duration=0.3, handler=lambda: self.SendVelocitiesToMico([0.,0.,0.,0.,0.,0.,]))
+            self.servo_watchdog = Watchdog(timeout_duration=0.25, handler=lambda: self.SendVelocitiesToMico([0.,0.,0.,0.,0.,0.,]))
 
     def CloneBindings(self, parent):
         super(Mico, self).CloneBindings(parent)
