@@ -1027,16 +1027,21 @@ def CheckJointLimits(robot, q):
             description='position')
 
 
-def GetForwardKinematics(robot, q, manipulator=None):
+def GetForwardKinematics(robot, q, manipulator=None, frame=None):
     """
-    Get the forward kinematics for a specific joint configuration.
+    Get the forward kinematics for a specific joint configuration,
+    relative to the OpenRAVE world frame.
 
     @param openravepy.robot robot: The robot object.
     @param list             q:     List or array of joint positions.
-
+    @param manipulator
+    @param string frame: Get the end effector transform relative to a
+                         specific frame e.g. '/right/wam_base'
     @returns T_ee: The pose of the end effector (or last link in the
                    serial chain) as a 4x4 matrix.
     """
+    from tf import transformations
+
     if manipulator == None:
         manipulator = robot.GetActiveManipulator()
 
@@ -1050,6 +1055,10 @@ def GetForwardKinematics(robot, q, manipulator=None):
         robot.SetActiveDOFValues(q)
         T_ee = manipulator.GetEndEffectorTransform()
     # Robot state is restored
+
+    if frame != None:
+        T_ref_frame = robot.GetLink(frame).GetTransform()
+        T_ee = transformations.concatenate_matrices(numpy.linalg.inv(T_ref_frame), T_ee)
 
     return T_ee
 
