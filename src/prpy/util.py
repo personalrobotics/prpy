@@ -497,6 +497,21 @@ class Timer(object):
     def get_duration(self):
         return self.end - self.start
 
+class Watchdog(object):
+    def __init__(self, timeout_duration, handler):
+        self.timeout_duration = timeout_duration
+        self.handler = handler
+        self.timer = threading.Timer(self.timeout_duration, self.handler)
+        self.timer.start()
+
+    def reset(self):
+        self.timer.cancel()
+        self.timer = threading.Timer(self.timeout_duration, self.handler)
+        self.timer.start()
+        
+    def stop(self):
+        self.timer.cancel()
+
 
 def quadraticPlusJointLimitObjective(dq, J, dx, q, q_min, q_max, delta_joint_penalty=5e-1, lambda_dqdist=0.01, *args):
     '''
