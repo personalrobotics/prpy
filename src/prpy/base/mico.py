@@ -32,6 +32,7 @@ import openravepy
 from manipulator import Manipulator
 from std_msgs.msg import Float64
 import rospy
+import threading
 from ..util import Watchdog
 
 class Mico(Manipulator):
@@ -74,9 +75,10 @@ class Mico(Manipulator):
             #if not simulation, create publishers for each joint
             self.velocity_topic_names = ['vel_j'+str(i)+'_controller/command' for i in range(1,7)]
             self.velocity_publishers = [rospy.Publisher(topic_name, Float64, queue_size=1) for topic_name in self.velocity_topic_names]
+            self.velocity_publisher_lock = threading.Lock()
             
             #create watchdog to send zero velocity
-            self.servo_watchdog = Watchdog(timeout_duration=0.25, handler=lambda: self.SendVelocitiesToMico([0.,0.,0.,0.,0.,0.,]))
+            self.servo_watchdog = Watchdog(timeout_duration=0.25, handler=self.SendVelocitiesToMico, args=[[0.,0.,0.,0.,0.,0.,]])
 
     def CloneBindings(self, parent):
         super(Mico, self).CloneBindings(parent)
@@ -115,5 +117,6 @@ class Mico(Manipulator):
 
 
     def SendVelocitiesToMico(self, velocities):
-        for velocity_publisher,velocity in zip(self.velocity_publishers, velocities):
-            velocity_publisher.publish(velocity)
+        with self.velocity_publisher_lock:
+            for velocity_publisher,velocity in zip(self.velocity_publishers, velocities):
+                velocity_publisher.publish(velocity)
