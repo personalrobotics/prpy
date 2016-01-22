@@ -161,7 +161,7 @@ class GreedyIKPlanner(BasePlanner):
             JointLimitError)
         from openravepy import CollisionReport
         from numpy import linalg as LA
-
+        p = openravepy.KinBody.SaveParameters
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -184,14 +184,11 @@ class GreedyIKPlanner(BasePlanner):
 
 
             try:
-                collision_error = None 
                 while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        if collision_error is not None: 
-                            raise collision_error 
                         raise TimeoutPlanningError(timelimit)
 
                     # Hypothesize new configuration as closest IK to current
@@ -203,33 +200,12 @@ class GreedyIKPlanner(BasePlanner):
                         releasegil=True
                     )
 
-                    # FindIKSolutions is slower than FindIKSolution, 
-                    # so call this only to identify error when there is no solution
-                    if qnew is None: 
-                        ik_solutions = manip.FindIKSolutions(
-                            openravepy.matrixFromPose(traj.Sample(t+dt)[0:7]),
-                            openravepy.IkFilterOptions.IgnoreSelfCollisions,
-                            ikreturn=False,
-                            releasegil=True
-                        )
-
-                        # update collision_error to contain collision info.
-                        for q in ik_solutions:
-                            robot.SetActiveDOFValues(q)
-                            report = CollisionReport()
-                            if self.env.CheckCollision(robot, report=report):
-                                collision_error = CollisionPlanningError.FromReport(report) 
-                            elif robot.CheckSelfCollision(report=report):
-                                collision_error = SelfCollisionPlanningError.FromReport(report)
-                            
                     # Check if the step was within joint DOF resolution.
                     infeasible_step = True
                     if qnew is not None:
                         # Found an IK
                         step = abs(qnew - qcurr)
                         if (max(step) < min_step) and qtraj:
-                            if collision_error is not None: 
-                                raise collision_error
                             raise PlanningError('Not making progress.')
                         infeasible_step = any(step > robot.GetActiveDOFResolutions())
                     if infeasible_step:
@@ -253,7 +229,31 @@ class GreedyIKPlanner(BasePlanner):
 
                 # Throw an error if we haven't reached the minimum waypoint.
                 if t < min_time:
-                    raise
+                    # FindIKSolutions is slower than FindIKSolution, 
+                    # so call this only to identify error when there is no solution
+                    ik_solutions = manip.FindIKSolutions(
+                        openravepy.matrixFromPose(traj.Sample(t+dt*2.0)[0:7]),
+                        openravepy.IkFilterOptions.IgnoreSelfCollisions,
+                        ikreturn=False, releasegil=True
+                    )
+
+                    collision_error = None
+                    # update collision_error to contain collision info.
+                    with robot.CreateRobotStateSaver(p.LinkTransformation):
+                        for q in ik_solutions:
+                            robot.SetActiveDOFValues(q)
+                            report = CollisionReport()
+                            if self.env.CheckCollision(robot, report=report):
+                                collision_error = CollisionPlanningError.FromReport(report)
+                            elif robot.CheckSelfCollision(report=report):
+                                collision_error = SelfCollisionPlanningError.FromReport(report)
+                            else: 
+                                collision_error = None 
+                    if collision_error is not None: 
+                        raise collision_error
+                    else:
+                        raise 
+
                 # Otherwise we'll gracefully terminate.
                 else:
                     logger.warning('Terminated early at time %f < %f: %s',

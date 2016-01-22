@@ -595,6 +595,51 @@ class Tests(unittest.TestCase):
                                                 decimal=7, err_msg=error, \
                                                 verbose=True)
 
+class Test_GetPointFrom(unittest.TestCase):
+    def setUp(self):
+        self.env = openravepy.Environment()
+        
+    def tearDown(self):
+        self.env.Destroy()
+
+    def test_GetPointFrom_Kinbody(self):
+        # Check that each input type returns the correct xyz coord
+
+        # Kinbody
+        self.env.Load('data/mug1.dae')
+        mug = self.env.GetKinBody('mug')
+        mug.SetTransform(numpy.eye(4)) 
+        coord_kinbody = prpy.util.GetPointFrom(mug)
+        expected_kinbody_coords = [0, 0, 0]
+        numpy.testing.assert_array_almost_equal(coord_kinbody, expected_kinbody_coords)
+
+    def test_GetPointFrom_Space(self):
+        # Check that each input type returns the correct xyz coord
+        expected_coord = [1, 3, 4]
+
+        # Point in space
+        space_coord = numpy.array([1, 3, 4])
+        space_result = prpy.util.GetPointFrom(space_coord)
+        numpy.testing.assert_array_almost_equal(space_result, expected_coord)
+
+    def test_GetPointFrom_Transform(self):
+        # Check that each input type returns the correct xyz coord
+        expected_coord = [1, 3, 4]
+ 
+        # 4x4 Transform
+        trans_coord = numpy.eye(4)
+        trans_coord[0:3, 3] = expected_coord
+        trans_result = prpy.util.GetPointFrom(trans_coord)
+        numpy.testing.assert_array_almost_equal(trans_result, expected_coord)
+
+    def test_GetPointFrom_List(self):
+        # Check that each input type returns the correct xyz coord
+        expected_coord = [1, 3, 4]
+
+        # List
+        list_coord = [1, 3, 4]
+        list_result = prpy.util.GetPointFrom(list_coord)
+        numpy.testing.assert_array_almost_equal(list_result, expected_coord)
 
 if __name__ == '__main__':
     unittest.main()
