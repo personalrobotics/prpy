@@ -1382,14 +1382,16 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     @param traj An OpenRAVE trajectory
     @param times List of times in seconds
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
-    @return pva_list List of list of derivatives at specified times.
-                     Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the derivatives[i]-th derivative
-                     of position of size |times| x |derivatives|
-
+    @return List of list of derivatives at specified times.
+            Inserts 'None' for unavailable or undesired fields
+            The i-th element is the derivatives[i]-th derivative
+            of position of size |times| x |derivatives|
     """
-    duration = traj.GetDuration()
+    if not IsTimedTrajectory(traj):
+        raise ValueError("Joint states can only be interpolated"
+                         " on a timed trajectory.")
 
+    duration = traj.GetDuration()
     times = numpy.array(times)
     if any(times > duration):
         raise ValueError('Input times {0:} exceed duration {1:.2f}'
@@ -1418,10 +1420,10 @@ def JointStateFromTraj(robot, traj, time, derivatives=[0, 1, 2]):
     @param traj An OpenRAVE trajectory
     @param time time in seconds
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
-    @return pva_list List of list of derivatives at specified times.
-                     Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the derivatives[i]-th derivative
-                     of position of size |times| x |derivatives|
+    @return List of list of derivatives at specified times.
+            Inserts 'None' for unavailable or undesired fields
+            The i-th element is the derivatives[i]-th derivative
+            of position of size |times| x |derivatives|
     """
     return JointStatesFromTraj(robot, traj, (time,), derivatives)[0]
 
