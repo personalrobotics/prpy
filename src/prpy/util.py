@@ -529,11 +529,12 @@ class Watchdog(object):
         Also restarts the timer thread if it has existed
         '''
         with self.timer_thread_lock:
+            if self.canceled or not self.thread_checking_time.is_alive():
+                self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
+                self.thread_checking_time.start()
+
             self.start_time = time.time()
             self.canceled = False
-        if not self.thread_checking_time.is_alive():
-            self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
-            self.thread_checking_time.start()
 
     def stop(self):
         '''
@@ -556,7 +557,8 @@ class Watchdog(object):
               elapsed_time = time.time() - self.start_time
           if elapsed_time > self.timeout_duration:
               self.handler(*self.handler_args, **self.handler_kwargs)
-              self.canceled = True
+              with self.timer_thread_lock:
+                self.canceled = True
               break
           else:
               time.sleep(self.timeout_duration - elapsed_time)
