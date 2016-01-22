@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)
 class ApriltagsModule(PerceptionModule):
     
     def __init__(self, marker_topic, marker_data_path, kinbody_path,
-                 detection_frame, destination_frame):
+                 detection_frame, destination_frame,reference_link,):
         """
         This initializes an April Tags detector.
         
@@ -55,6 +55,7 @@ class ApriltagsModule(PerceptionModule):
         self.kinbody_path = kinbody_path
         self.detection_frame = detection_frame
         self.destination_frame = destination_frame
+        self.reference_link = reference_link
         
         
     def __str__(self):
@@ -63,7 +64,7 @@ class ApriltagsModule(PerceptionModule):
 
     def _DetectObjects(self, env, marker_topic=None, marker_data_path=None, 
                        kinbody_path=None, detection_frame=None, 
-                       destination_frame=None, **kw_args):
+                       destination_frame=None, reference_link=None,**kw_args):
         """
         Use the apriltags service to detect objects and add them to the
         environment. Params are as in __init__.
@@ -88,13 +89,15 @@ class ApriltagsModule(PerceptionModule):
 
             if kinbody_path is None:
                 kinbody_path = self.kinbody_path
-            
 
             if detection_frame is None:
                 detection_frame = self.detection_frame
 
             if destination_frame is None:
                 destination_frame = self.destination_frame
+
+            if reference_link is None:
+                reference_link = self.reference_link
 
             # TODO: Creating detector is not instant...might want
             #  to just do this once in the constructor
@@ -104,7 +107,8 @@ class ApriltagsModule(PerceptionModule):
                                           kinbody_path,
                                           marker_topic,
                                           detection_frame,
-                                          destination_frame)
+                                          destination_frame,
+                                          reference_link)
 
             logger.warn('Waiting to detect objects...')
             return detector.Update()
