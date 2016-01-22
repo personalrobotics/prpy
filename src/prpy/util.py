@@ -518,8 +518,6 @@ class Watchdog(object):
         self.canceled = False
 
         self.thread_checking_time.start()
-        #self.timer = threading.Timer(self.timeout_duration, self.handler)
-        #self.timer.start()
 
     def reset(self):
         '''
@@ -537,10 +535,6 @@ class Watchdog(object):
             self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
             self.thread_checking_time.start()
 
-        #self.timer.cancel()
-        #self.timer = threading.Timer(self.timeout_duration, self.handler)
-        #self.timer.start()
-        
     def stop(self):
         '''
         Stop the watchdog, so it will not call handler
