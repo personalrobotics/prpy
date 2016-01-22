@@ -1374,6 +1374,39 @@ def IsInCollision(traj, robot, selfcoll_only=False):
     return False    
 
 
+OPENRAVE_JOINT_DERIVATIVES = {
+    0: "joint_values",
+    1: "joint_velocities",
+    2: "joint_accelerations",
+    3: "joint_jerks",
+    4: "joint_snaps",
+    5: "joint_crackles",
+    6: "joint_pops"
+}
+
+
+def GetJointDerivativeGroup(cspec, derivative):
+    """
+    Helper function to extract a joint derivative group from a trajectory.
+
+    We use a manual mapping of joint derivatives to string values because the
+    OpenRAVE source code internally hard codes these constants anyway:
+    https://github.com/rdiankov/openrave/blob/master/src/libopenrave/configurationspecification.cpp#L983
+
+    @param cspec a trajectory configurationspecification
+    @param derivative the desired joint position derivative
+                      (e.g. 0 = positions, 1 = velocities, ...)
+    @return a ConfigurationSpecification Group for the derivative
+            or None if it does not exist in the specification.
+    """
+    try:
+        return cspec.GetGroupFromName(OPENRAVE_JOINT_DERIVATIVES[derivative])
+    except KeyError:
+        return None
+    except openravepy.openrave_exception:
+        return None
+
+
 def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     """
     Helper function to extract the joint position, velocity and acceleration
