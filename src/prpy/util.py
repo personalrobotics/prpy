@@ -497,6 +497,74 @@ class Timer(object):
     def get_duration(self):
         return self.end - self.start
 
+class Watchdog(object):
+    '''
+    Calls specified function after duration, unless reset/stopped beforehand
+
+    @param timeout_duration how long to wait before calling handler
+    @param handler function to call after timeout_duration
+    @param args for handler
+    @param kwargs for handler
+    '''
+    def __init__(self, timeout_duration, handler, args=(), kwargs={}):
+        self.timeout_duration = timeout_duration
+        self.handler = handler
+        self.handler_args = args
+        self.handler_kwargs = kwargs
+
+        self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
+        self.timer_thread_lock = threading.Lock()
+        self.start_time = time.time()
+        self.canceled = False
+
+        self.thread_checking_time.start()
+
+    def reset(self):
+        '''
+        Resets the timer
+
+        Causes the handler function to be called after the next 
+        timeout duration is reached
+
+        Also restarts the timer thread if it has existed
+        '''
+        with self.timer_thread_lock:
+            if self.canceled or not self.thread_checking_time.is_alive():
+                self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
+                self.thread_checking_time.start()
+
+            self.start_time = time.time()
+            self.canceled = False
+
+    def stop(self):
+        '''
+        Stop the watchdog, so it will not call handler
+        '''
+        with self.timer_thread_lock:
+          self.canceled = True
+
+    def _check_timer_loop(self):
+      '''
+      Internal function for timer thread to loop
+
+      If elapsed time has passed, calls the handler function
+      Exists if watchdog was canceled, or handler was called
+      '''
+      while True:
+          with self.timer_thread_lock:
+              if self.canceled:
+                  break
+              elapsed_time = time.time() - self.start_time
+          if elapsed_time > self.timeout_duration:
+              self.handler(*self.handler_args, **self.handler_kwargs)
+              with self.timer_thread_lock:
+                self.canceled = True
+              break
+          else:
+              time.sleep(self.timeout_duration - elapsed_time)
+
+
+
 
 def quadraticPlusJointLimitObjective(dq, J, dx, q, q_min, q_max, delta_joint_penalty=5e-1, lambda_dqdist=0.01, *args):
     '''
