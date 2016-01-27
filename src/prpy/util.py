@@ -497,6 +497,74 @@ class Timer(object):
     def get_duration(self):
         return self.end - self.start
 
+class Watchdog(object):
+    '''
+    Calls specified function after duration, unless reset/stopped beforehand
+
+    @param timeout_duration how long to wait before calling handler
+    @param handler function to call after timeout_duration
+    @param args for handler
+    @param kwargs for handler
+    '''
+    def __init__(self, timeout_duration, handler, args=(), kwargs={}):
+        self.timeout_duration = timeout_duration
+        self.handler = handler
+        self.handler_args = args
+        self.handler_kwargs = kwargs
+
+        self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
+        self.timer_thread_lock = threading.Lock()
+        self.start_time = time.time()
+        self.canceled = False
+
+        self.thread_checking_time.start()
+
+    def reset(self):
+        '''
+        Resets the timer
+
+        Causes the handler function to be called after the next 
+        timeout duration is reached
+
+        Also restarts the timer thread if it has existed
+        '''
+        with self.timer_thread_lock:
+            if self.canceled or not self.thread_checking_time.is_alive():
+                self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
+                self.thread_checking_time.start()
+
+            self.start_time = time.time()
+            self.canceled = False
+
+    def stop(self):
+        '''
+        Stop the watchdog, so it will not call handler
+        '''
+        with self.timer_thread_lock:
+          self.canceled = True
+
+    def _check_timer_loop(self):
+      '''
+      Internal function for timer thread to loop
+
+      If elapsed time has passed, calls the handler function
+      Exists if watchdog was canceled, or handler was called
+      '''
+      while True:
+          with self.timer_thread_lock:
+              if self.canceled:
+                  break
+              elapsed_time = time.time() - self.start_time
+          if elapsed_time > self.timeout_duration:
+              self.handler(*self.handler_args, **self.handler_kwargs)
+              with self.timer_thread_lock:
+                self.canceled = True
+              break
+          else:
+              time.sleep(self.timeout_duration - elapsed_time)
+
+
+
 
 def quadraticPlusJointLimitObjective(dq, J, dx, q, q_min, q_max, delta_joint_penalty=5e-1, lambda_dqdist=0.01, *args):
     '''
@@ -1374,6 +1442,39 @@ def IsInCollision(traj, robot, selfcoll_only=False):
     return False    
 
 
+OPENRAVE_JOINT_DERIVATIVES = {
+    0: "joint_values",
+    1: "joint_velocities",
+    2: "joint_accelerations",
+    3: "joint_jerks",
+    4: "joint_snaps",
+    5: "joint_crackles",
+    6: "joint_pops"
+}
+
+
+def GetJointDerivativeGroup(cspec, derivative):
+    """
+    Helper function to extract a joint derivative group from a trajectory.
+
+    We use a manual mapping of joint derivatives to string values because the
+    OpenRAVE source code internally hard codes these constants anyway:
+    https://github.com/rdiankov/openrave/blob/master/src/libopenrave/configurationspecification.cpp#L983
+
+    @param cspec a trajectory configurationspecification
+    @param derivative the desired joint position derivative
+                      (e.g. 0 = positions, 1 = velocities, ...)
+    @return a ConfigurationSpecification Group for the derivative
+            or None if it does not exist in the specification.
+    """
+    try:
+        return cspec.GetGroupFromName(OPENRAVE_JOINT_DERIVATIVES[derivative])
+    except KeyError:
+        return None
+    except openravepy.openrave_exception:
+        return None
+
+
 def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     """
     Helper function to extract the joint position, velocity and acceleration
@@ -1382,14 +1483,16 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     @param traj An OpenRAVE trajectory
     @param times List of times in seconds
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
-    @return pva_list List of list of derivatives at specified times.
-                     Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the derivatives[i]-th derivative
-                     of position of size |times| x |derivatives|
-
+    @return List of list of derivatives at specified times.
+            Inserts 'None' for unavailable or undesired fields
+            The i-th element is the derivatives[i]-th derivative
+            of position of size |times| x |derivatives|
     """
-    duration = traj.GetDuration()
+    if not IsTimedTrajectory(traj):
+        raise ValueError("Joint states can only be interpolated"
+                         " on a timed trajectory.")
 
+    duration = traj.GetDuration()
     times = numpy.array(times)
     if any(times > duration):
         raise ValueError('Input times {0:} exceed duration {1:.2f}'
@@ -1418,10 +1521,10 @@ def JointStateFromTraj(robot, traj, time, derivatives=[0, 1, 2]):
     @param traj An OpenRAVE trajectory
     @param time time in seconds
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
-    @return pva_list List of list of derivatives at specified times.
-                     Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the derivatives[i]-th derivative
-                     of position of size |times| x |derivatives|
+    @return List of list of derivatives at specified times.
+            Inserts 'None' for unavailable or undesired fields
+            The i-th element is the derivatives[i]-th derivative
+            of position of size |times| x |derivatives|
     """
     return JointStatesFromTraj(robot, traj, (time,), derivatives)[0]
 

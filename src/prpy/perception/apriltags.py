@@ -45,9 +45,13 @@ logger.setLevel(logging.INFO)
 class ApriltagsModule(PerceptionModule):
     
     def __init__(self, marker_topic, marker_data_path, kinbody_path,
+<<<<<<< HEAD
                  detection_frame='head/kinect2_rgb_optical_frame', 
                  destination_frame='map',
                  reference_link=None):
+=======
+                 detection_frame, destination_frame,reference_link,):
+>>>>>>> 04969431c6ade145958470732b866682bdfdebfe
         """
         This initializes an April Tags detector.
         
@@ -70,18 +74,29 @@ class ApriltagsModule(PerceptionModule):
         self.kinbody_path = kinbody_path
         self.detection_frame = detection_frame
         self.destination_frame = destination_frame
+<<<<<<< HEAD
         self.generated_bodies = []
 
         self.reference_link = reference_link
         self.listener = tf.TransformListener()
         self.ReloadKinbodyData()
+=======
+        self.reference_link = reference_link
+        
+>>>>>>> 04969431c6ade145958470732b866682bdfdebfe
         
     def __str__(self):
         return self.__class__.__name__
 
+<<<<<<< HEAD
     def ReloadKinbodyData(self):
         """
         Load the kinbody data (tag-object relation) from the json file. 
+=======
+    def _DetectObjects(self, env, marker_topic=None, marker_data_path=None, 
+                       kinbody_path=None, detection_frame=None, 
+                       destination_frame=None, reference_link=None,**kw_args):
+>>>>>>> 04969431c6ade145958470732b866682bdfdebfe
         """
         with open(self.marker_data_path, 'r') as f:
             self.marker_data = json.load(f)
@@ -93,6 +108,7 @@ class ApriltagsModule(PerceptionModule):
 
         @return The list of newly added and updated kinbodies associated with the detected apriltags
         """
+<<<<<<< HEAD
         marker_message = rospy.wait_for_message(self.marker_topic, 
                                                 MarkerArray,
                                                 timeout=timeout)
@@ -159,6 +175,45 @@ class ApriltagsModule(PerceptionModule):
 
         return added_kinbodies, updated_kinbodies
 
+=======
+        try:
+            # Allow caller to override any of the initial parameters
+            # loaded into the module
+            if marker_topic is None:
+                marker_topic = self.marker_topic
+            
+            if marker_data_path is None:
+                marker_data_path = self.marker_data_path
+
+            if kinbody_path is None:
+                kinbody_path = self.kinbody_path
+
+            if detection_frame is None:
+                detection_frame = self.detection_frame
+
+            if destination_frame is None:
+                destination_frame = self.destination_frame
+
+            if reference_link is None:
+                reference_link = self.reference_link
+
+            # TODO: Creating detector is not instant...might want
+            #  to just do this once in the constructor
+            import kinbody_detector.kinbody_detector as kd
+            detector = kd.KinBodyDetector(env,
+                                          marker_data_path,
+                                          kinbody_path,
+                                          marker_topic,
+                                          detection_frame,
+                                          destination_frame,
+                                          reference_link)
+
+            logger.warn('Waiting to detect objects...')
+            return detector.Update()
+        except Exception, e:
+            logger.error('Detecton failed update: %s' % str(e))
+            raise
+>>>>>>> 04969431c6ade145958470732b866682bdfdebfe
 
     @PerceptionMethod
     def DetectObjects(self, robot, **kw_args):

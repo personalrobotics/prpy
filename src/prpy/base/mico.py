@@ -30,6 +30,10 @@
 
 import openravepy
 from manipulator import Manipulator
+from std_msgs.msg import Float64
+import rospy
+import threading
+from ..util import Watchdog
 
 class Mico(Manipulator):
     def __init__(self, sim,
@@ -67,6 +71,14 @@ class Mico(Manipulator):
                 self.GetName(), '', self.GetArmIndices(), 0, True)
             self.servo_simulator = ServoSimulator(self, rate=20,
                                                   watchdog_timeout=0.1)
+        else:
+            #if not simulation, create publishers for each joint
+            self.velocity_topic_names = ['vel_j'+str(i)+'_controller/command' for i in range(1,7)]
+            self.velocity_publishers = [rospy.Publisher(topic_name, Float64, queue_size=1) for topic_name in self.velocity_topic_names]
+            self.velocity_publisher_lock = threading.Lock()
+            
+            #create watchdog to send zero velocity
+            self.servo_watchdog = Watchdog(timeout_duration=0.25, handler=self.SendVelocitiesToMico, args=[[0.,0.,0.,0.,0.,0.,]])
 
     def CloneBindings(self, parent):
         super(Mico, self).CloneBindings(parent)
@@ -99,4 +111,12 @@ class Mico(Manipulator):
             self.GetRobot().GetController().Reset(0)
             self.servo_simulator.SetVelocity(velocities)
         else:
-            raise NotImplementedError('Servo is not implemented.') 
+            self.SendVelocitiesToMico(velocities)
+            #reset watchdog timer
+            self.servo_watchdog.reset()
+
+
+    def SendVelocitiesToMico(self, velocities):
+        with self.velocity_publisher_lock:
+            for velocity_publisher,velocity in zip(self.velocity_publishers, velocities):
+                velocity_publisher.publish(velocity)
