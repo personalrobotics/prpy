@@ -29,6 +29,14 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+import prpy
+import rospy
+import os
+import tf
+import json
+import numpy
+from visualization_msgs.msg import MarkerArray, MarkerArray
+from tf.transformations import quaternion_matrix
 from base import PerceptionModule, PerceptionMethod
 
 logger = logging.getLogger(__name__)
@@ -37,7 +45,9 @@ logger.setLevel(logging.INFO)
 class ApriltagsModule(PerceptionModule):
     
     def __init__(self, marker_topic, marker_data_path, kinbody_path,
-                 detection_frame, destination_frame):
+                 detection_frame='head/kinect2_rgb_optical_frame', 
+                 destination_frame='map',
+                 reference_link=None):
         """
         This initializes an April Tags detector.
         
@@ -50,74 +60,117 @@ class ApriltagsModule(PerceptionModule):
 
         super(ApriltagsModule, self).__init__()
         
+        try:
+            rospy.init_node('apriltag_detector', anonymous=True)
+        except rospy.exception.ROSException:
+            pass
+
         self.marker_topic = marker_topic
         self.marker_data_path = marker_data_path
         self.kinbody_path = kinbody_path
         self.detection_frame = detection_frame
         self.destination_frame = destination_frame
-        
+        self.generated_bodies = []
+
+        self.reference_link = reference_link
+        self.listener = tf.TransformListener()
+        self.ReloadKinbodyData()
         
     def __str__(self):
         return self.__class__.__name__
-    
 
-    def _DetectObjects(self, env, marker_topic=None, marker_data_path=None, 
-                       kinbody_path=None, detection_frame=None, 
-                       destination_frame=None, **kw_args):
+    def ReloadKinbodyData(self):
         """
-        Use the apriltags service to detect objects and add them to the
-        environment. Params are as in __init__.
+        Load the kinbody data (tag-object relation) from the json file. 
+        """
+        with open(self.marker_data_path, 'r') as f:
+            self.marker_data = json.load(f)
 
+    def Update(self, env, timeout=10):
+        """
+        This updates the kinbodies after the detection. 
         @param env: The current OpenRAVE environment
-        @param marker_topic The ROS topic to read markers from. Typically the output topic for April Tags
-        @param marker_data_path The json file where the association between tag and object is stored
-        @param kinbody_path The path to the folder where kinbodies are stored
-        @param detection_frame The TF frame of the camera
-        @param destination_frame The desired world TF frame
 
-        @return The list of kinbodies associated with the detected apriltags
+        @return The list of newly added and updated kinbodies associated with the detected apriltags
         """
-        try:
-            # Allow caller to override any of the initial parameters
-            # loaded into the module
-            if marker_topic is None:
-                marker_topic = self.marker_topic
-            
-            if marker_data_path is None:
-                marker_data_path = self.marker_data_path
+        marker_message = rospy.wait_for_message(self.marker_topic, 
+                                                MarkerArray,
+                                                timeout=timeout)
+        added_kinbodies = []
+        updated_kinbodies = []
+        for marker in marker_message.markers:
+            if marker.ns in self.marker_data:
+                kinbody_file, kinbody_offset = self.marker_data[marker.ns]
+                kinbody_offset = numpy.array(kinbody_offset)
+                marker_pose = numpy.array(quaternion_matrix([
+                        marker.pose.orientation.x,
+                        marker.pose.orientation.y,
+                        marker.pose.orientation.z,
+                        marker.pose.orientation.w
+                    ]))
+                marker_pose[0,3] = marker.pose.position.x
+                marker_pose[1,3] = marker.pose.position.y
+                marker_pose[2,3] = marker.pose.position.z
+                try:
+                    self.listener.waitForTransform(
+                        self.detection_frame,
+                        self.destination_frame,
+                        rospy.Time(),
+                        rospy.Duration(timeout))
+                
+                    frame_trans, frame_rot = self.listener.lookupTransform(
+                        self.destination_frame,
+                        self.detection_frame,
+                        rospy.Time(0))
 
-            if kinbody_path is None:
-                kinbody_path = self.kinbody_path
-            
+                except Exception, e:
+                    logger.error("Can't retrive head tf tree please check head connection: %s" % str(e))
+                    raise
 
-            if detection_frame is None:
-                detection_frame = self.detection_frame
+                frame_offset = numpy.matrix(quaternion_matrix(frame_rot))
+                frame_offset[0,3] = frame_trans[0]
+                frame_offset[1,3] = frame_trans[1]
+                frame_offset[2,3] = frame_trans[2]
 
-            if destination_frame is None:
-                destination_frame = self.destination_frame
+                kinbody_pose = numpy.array(numpy.dot(numpy.dot(frame_offset, marker_pose),
+                                            kinbody_offset))
 
-            # TODO: Creating detector is not instant...might want
-            #  to just do this once in the constructor
-            import kinbody_detector.kinbody_detector as kd
-            detector = kd.KinBodyDetector(env,
-                                          marker_data_path,
-                                          kinbody_path,
-                                          marker_topic,
-                                          detection_frame,
-                                          destination_frame)
+                final_kb_pose = kinbody_pose
 
-            logger.warn('Waiting to detect objects...')
-            return detector.Update()
-        except Exception, e:
-            logger.error('Detecton failed update: %s' % str(e))
-            raise
+                #Transform w.r.t reference link if link present
+                if self.reference_link is not None:
+                    ref_link_pose = self.reference_link.GetTransform()
+                    final_kb_pose = numpy.dot(ref_link_pose, kinbody_pose)
+
+                kinbody_name = kinbody_file.replace('.kinbody.xml', '')
+                kinbody_name = kinbody_name + str(marker.id)
+
+                if env.GetKinBody(kinbody_name) is None:
+                    new_body = prpy.rave.add_object(
+                        env,
+                        kinbody_name,
+                        os.path.join(self.kinbody_path, kinbody_file))
+                    added_kinbodies.append(new_body)
+                    self.generated_bodies.append(new_body)
+
+                body = env.GetKinBody(kinbody_name)
+                body.SetTransform(final_kb_pose)
+                updated_kinbodies.append(body)
+
+        return added_kinbodies, updated_kinbodies
+
 
     @PerceptionMethod
     def DetectObjects(self, robot, **kw_args):
         """
         Overriden method for detection_frame
         """
-        added_kinbodies, updated_kinbodies = self._DetectObjects(robot.GetEnv(), **kw_args)
+        try:
+            added_kinbodies, updated_kinbodies = self.Update(robot.GetEnv(), **kw_args)
+        except Exception, e:
+            logger.error('Detecton failed update: %s' % str(e))
+            raise
+
         return added_kinbodies + updated_kinbodies
                                           
     @PerceptionMethod
@@ -125,7 +178,11 @@ class ApriltagsModule(PerceptionModule):
         """
         Detects a single named object.
         """
-        added_bodies, updated_bodies = self._DetectObjects(robot.GetEnv(), **kw_args)
+        try:
+            added_bodies, updated_bodies = self.Update(robot.GetEnv(), **kw_args)
+        except Exception, e:
+            logger.error('Detecton failed update: %s' % str(e))
+            raise
 
         return_obj = None
         for obj in added_bodies:
