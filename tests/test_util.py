@@ -598,8 +598,8 @@ class Tests(unittest.TestCase):
 
     # GetForwardKinematics()
 
-    def test_GetForwardKinematics(self):
-        # Zero configuration, use thes the active manipulator by default
+    def test_GetForwardKinematics_UseActiveManipulator(self):
+        # Zero configuration, uses the the active manipulator by default
         q0 = numpy.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         T_ee = prpy.util.GetForwardKinematics(self.robot, q0)
 
@@ -613,6 +613,7 @@ class Tests(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(T_ee, expected_T_ee0, decimal=7, \
                                                 err_msg=error, verbose=True)
 
+    def test_GetForwardKinematics_SpecifyManipulator(self):
         # A different configuration, specifying the manipulator to use
         q1 = numpy.array([-1.8, 0.0, -0.7, 2.0, 0.5, 0.2, 0.0])
         manip = self.robot.GetActiveManipulator()
@@ -626,6 +627,31 @@ class Tests(unittest.TestCase):
                 ' does not equal the expected end-effector' + \
                 ' transform ' + str(expected_T_ee1)
         numpy.testing.assert_array_almost_equal(T_ee, expected_T_ee1, decimal=7, \
+                                                err_msg=error, verbose=True)
+
+    def test_GetForwardKinematics_SpecifyFrame(self):
+        # Get the FK with respect to the base frame ('segway') of the
+        # manipulator chain. This should give the same result as not
+        # specifying the reference frame at all.
+        q1 = numpy.array([-1.8, 0.0, -0.7, 2.0, 0.5, 0.2, 0.0])
+        manip = self.robot.GetActiveManipulator()
+        frame = 'segway'
+        T_ee = prpy.util.GetForwardKinematics(self.robot, q1, manip, frame)
+
+        expected_T_ee2 = numpy.array([[ 0.7126777,  0.3653714, -0.5988272, -0.3313395],
+                                      [-0.0541115, -0.8224716, -0.5662263, -0.3259651],
+                                      [-0.6994014,  0.4359404, -0.5663864,  1.4394693],
+                                      [ 0.0,        0.0,        0.0,        1.0      ]])
+
+        # We need to transform the expected result along the z-axis
+        # because the Segway-WAM model is strange
+        T_segway = self.robot.GetLink('segway').GetTransform()
+        expected_T_ee2 = numpy.dot(numpy.linalg.inv(T_segway), expected_T_ee2)
+
+        error = 'The end-effector transform ' + str(T_ee) + \
+                ' does not equal the expected end-effector' + \
+                ' transform ' + str(expected_T_ee2)
+        numpy.testing.assert_array_almost_equal(T_ee, expected_T_ee2, decimal=7, \
                                                 err_msg=error, verbose=True)
 
 
