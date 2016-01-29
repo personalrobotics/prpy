@@ -1040,8 +1040,6 @@ def GetForwardKinematics(robot, q, manipulator=None, frame=None):
     @returns T_ee: The pose of the end effector (or last link in the
                    serial chain) as a 4x4 matrix.
     """
-    from tf import transformations
-
     if manipulator == None:
         manipulator = robot.GetActiveManipulator()
 
@@ -1057,8 +1055,12 @@ def GetForwardKinematics(robot, q, manipulator=None, frame=None):
     # Robot state is restored
 
     if frame != None:
-        T_ref_frame = robot.GetLink(frame).GetTransform()
-        T_ee = transformations.concatenate_matrices(numpy.linalg.inv(T_ref_frame), T_ee)
+        link = robot.GetLink(frame)
+        if link == None:
+            raise ValueError('Failed to get link \'{:s}\''.format(frame))
+
+        T_ref_frame = link.GetTransform()
+        T_ee = numpy.dot(numpy.linalg.inv(T_ref_frame), T_ee)
 
     return T_ee
 
