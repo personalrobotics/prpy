@@ -87,7 +87,7 @@ class ApriltagsModule(PerceptionModule):
         with open(self.marker_data_path, 'r') as f:
             self.marker_data = json.load(f)
 
-    def Update(self, env, timeout=10):
+    def Update(self, timeout=10):
         """
         This updates the kinbodies after the detection. 
         @param env: The current OpenRAVE environment
@@ -96,6 +96,7 @@ class ApriltagsModule(PerceptionModule):
         marker_message = rospy.wait_for_message(self.marker_topic, 
                                                 MarkerArray,
                                                 timeout=timeout)
+        env = self.env
         added_kinbodies = []
         updated_kinbodies = []
         for marker in marker_message.markers:
@@ -165,7 +166,8 @@ class ApriltagsModule(PerceptionModule):
         Overriden method for detection_frame
         """
         try:
-            added_kinbodies, updated_kinbodies = self.Update(robot.GetEnv(), **kw_args)
+            self.env = robot.GetEnv();
+            added_kinbodies, updated_kinbodies = self.Update(**kw_args)
         except Exception, e:
             logger.error('Detecton failed update: %s' % str(e))
             raise
@@ -178,7 +180,8 @@ class ApriltagsModule(PerceptionModule):
         Detects a single named object.
         """
         try:
-            added_bodies, updated_bodies = self.Update(robot.GetEnv(), **kw_args)
+            self.env = robot.GetEnv();
+            added_bodies, updated_bodies = self.Update( **kw_args)
         except Exception, e:
             logger.error('Detecton failed update: %s' % str(e))
             raise
