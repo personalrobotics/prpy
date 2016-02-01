@@ -123,6 +123,14 @@ class ApriltagsModule(PerceptionModule):
         """
         added_kinbodies, updated_kinbodies = self._DetectObjects(robot.GetEnv(), **kw_args)
         return added_kinbodies + updated_kinbodies
+
+    @PerceptionMethod
+    def UpdateObjects(self, robot, **kw_args):
+        """
+        Update the pose of any objects currently in the environment
+        """
+        added_kinbodies, updated_kinbodies = self._DetectObjects(robot.GetEnv(), **kw_args)
+        return added_kinbodies + updated_kinbodies
                                           
     @PerceptionMethod
     def DetectObject(self, robot, object_name, **kw_args):
