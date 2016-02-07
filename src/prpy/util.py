@@ -725,6 +725,58 @@ def GeodesicDistance(t1, t2, r=1.0):
     error[3] = r*error[3]
     return numpy.linalg.norm(error)
 
+
+def GetGeodesicDistanceBetweenTransforms(T0, T1):
+    """
+    Wrapper, to match GetGeodesicDistanceBetweenQuaternions()
+    """
+    return GeodesicDistance(T0, T1, r=1.0)
+
+
+def GetEuclideanDistanceBetweenTransforms(T0, T1):
+    """
+    Calculate the Euclidean distance between two 4x4 transforms.
+    (also called L2 or Pythagorean distance)
+    """
+    p0 = T0[0:3,3] # Get the x,y,z translation from the 4x4 matrix
+    p1 = T1[0:3,3]
+    return numpy.sqrt(numpy.sum((p0-p1)**2))
+
+
+def GetMinDistanceBetweenTransformAndWorkspaceTraj(T, traj, dt=0.01):
+    """
+    Find the location on a workspace trajectory which is closest
+    to the specified transform.
+
+    @param numpy.matrix T: A 4x4 transformation matrix.
+    @param openravepy.Trajectory traj: A timed workspace trajectory.
+    @param float dt: Resolution at which to sample along the trajectory.
+
+    @return (float,float) (min_dist, t_loc) The minimum distance and the
+                                            time value along the timed
+                                            trajectory.
+    """
+    if not IsTimedTrajectory(traj):
+        raise ValueError("Trajectory must have timing information.")
+
+    if not IsWorkspaceTrajectory(traj):
+        raise ValueError("Trajectory is not a workspace trajectory, it "
+                         "must have configuration specification of "
+                         "openravepy.IkParameterizationType.Transform6D")
+
+    min_dist = numpy.inf
+    t_loc = 0.0
+    t = 0.0
+    while t < traj.GetDuration():
+        T_curr = openravepy.matrixFromPose(traj.Sample(t)[0:7])
+        error = GetEuclideanDistanceBetweenTransforms(T, T_curr)
+        if error < min_dist:
+            min_dist = error
+            t_loc = t
+        t = t + dt
+    return (min_dist, t_loc)
+
+
 def FindCatkinResource(package, relative_path):
     '''
     Find a Catkin resource in the share directory or
@@ -896,6 +948,37 @@ def IsTimedTrajectory(trajectory):
     cspec = trajectory.GetConfigurationSpecification()
     empty_waypoint = numpy.zeros(cspec.GetDOF())
     return cspec.ExtractDeltaTime(empty_waypoint) is not None
+
+
+def IsJointSpaceTrajectory(traj):
+    """
+    Check if trajectory is a joint space trajectory.
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        if traj.GetConfigurationSpecification().GetGroupFromName("joint_values"):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
+def IsWorkspaceTrajectory(traj):
+    """
+    Check if trajectory is a workspace trajectory.
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        if traj.GetConfigurationSpecification().GetGroupFromName("ikparam_values"):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
 
 def ComputeEnabledAABB(kinbody):
     """
