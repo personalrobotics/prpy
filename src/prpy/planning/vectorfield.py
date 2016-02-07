@@ -112,8 +112,11 @@ class VectorFieldPlanner(BasePlanner):
                 return Status.TERMINATE
             return Status.CONTINUE
 
+        integration_timelimit = 10.0
         traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
-                                      timelimit)
+                                      integration_timelimit,
+                                      timelimit,
+                                      **kw_args)
 
         # Flag this trajectory as unconstrained. This overwrites the
         # constrained flag set by FollowVectorField.
@@ -197,8 +200,11 @@ class VectorFieldPlanner(BasePlanner):
 
             return Status.CONTINUE
 
+        integration_timelimit = 10.0
         return self.FollowVectorField(robot, vf_straightline, TerminateMove,
-                                      timelimit, **kw_args)
+                                      integration_timelimit,
+                                      timelimit, 
+                                      **kw_args)
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
