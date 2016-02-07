@@ -243,8 +243,7 @@ class VectorFieldPlanner(BasePlanner):
         from .exceptions import (
             CollisionPlanningError,
             SelfCollisionPlanningError,
-            TimeoutPlanningError,
-            JointLimitError
+            TimeoutPlanningError
         )
         from openravepy import CollisionReport, RaveCreateTrajectory
         from ..util import ComputeJointVelocityFromTwist, GetCollisionCheckPts, ComputeUnitTiming
@@ -263,8 +262,7 @@ class VectorFieldPlanner(BasePlanner):
         env = robot.GetEnv()
         active_indices = robot.GetActiveDOFIndices()
 
-        # Get the robot's joint limits
-        q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+        # Get the robot's joint velocity limits
         qdot_limit = robot.GetDOFVelocityLimits(active_indices)
 
         # Create a new trajectory matching the current
@@ -295,25 +293,9 @@ class VectorFieldPlanner(BasePlanner):
             if time.time() - time_start >= timelimit:
                 raise TimeLimitError()
 
-            # Check joint position limits. Do this before setting the DOF so we
-            # don't set the DOFs out of limits.
-            lower_position_violations = (q < q_limit_min)
-            if lower_position_violations.any():
-                index = lower_position_violations.nonzero()[0][0]
-                raise JointLimitError(robot,
-                    dof_index=active_indices[index],
-                    dof_value=q[index],
-                    dof_limit=q_limit_min[index],
-                    description='position')
-
-            upper_position_violations = (q > q_limit_max)
-            if upper_position_violations.any():
-                index = upper_position_violations.nonzero()[0][0]
-                raise JointLimitError(robot,
-                    dof_index=active_indices[index],
-                    dof_value=q[index],
-                    dof_limit=q_limit_max[index],
-                    description='position')
+            # Check joint position limits.
+            # We do this before setting the joint angles.
+            util.CheckJointLimits(robot, q)
 
             robot.SetActiveDOFValues(q)
 
