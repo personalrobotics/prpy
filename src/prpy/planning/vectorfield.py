@@ -246,23 +246,36 @@ class VectorFieldPlanner(BasePlanner):
 
         env = robot.GetEnv()
         active_indices = robot.GetActiveDOFIndices()
+
+        # Get the robot's joint limits
         q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
         qdot_limit = robot.GetDOFVelocityLimits(active_indices)
 
+        # Create a new trajectory matching the current
+        # robot's joint configuration specification
         cspec = robot.GetActiveConfigurationSpecification('linear')
         cspec.AddDeltaTimeGroup()
         cspec.ResetGroupOffsets()
-
         path = RaveCreateTrajectory(env, '')
         path.Init(cspec)
 
         time_start = time.time()
 
         def fn_wrapper(t, q):
+            """
+            The integrator will try to solve this equation
+            at each time step.
+            Note: t is the integration time and is non-monotonic.
+            """
+            # Set the joint values, without checking the joint limits
             robot.SetActiveDOFValues(q, CheckLimitsAction.Nothing)
+
             return fn_vectorfield()
 
         def fn_status_callback(t, q):
+            """
+            This is called for each collision check.
+            """
             if time.time() - time_start >= timelimit:
                 raise TimeLimitError()
 
@@ -277,7 +290,7 @@ class VectorFieldPlanner(BasePlanner):
                     dof_limit=q_limit_min[index],
                     description='position')
 
-            upper_position_violations = (q> q_limit_max)
+            upper_position_violations = (q > q_limit_max)
             if upper_position_violations.any():
                 index = upper_position_violations.nonzero()[0][0]
                 raise JointLimitError(robot,
@@ -305,6 +318,9 @@ class VectorFieldPlanner(BasePlanner):
                 raise TerminationError()
 
         def fn_callback(t, q):
+            """
+            This is called at every successful integration step.
+            """
             try:
                 # Add the waypoint to the trajectory.
                 waypoint = numpy.zeros(cspec.GetDOF())
@@ -335,11 +351,20 @@ class VectorFieldPlanner(BasePlanner):
                 return -1 # Stop.
 
         # Integrate the vector field to get a configuration space path.
+        #
         # TODO: Tune the integrator parameters.
+        #
+        # Integrator: 'dopri5'
+        # DOPRI (Dormand & Prince 1980) is an explicit method for solving ODEs.
+        # It is a member of the Runge-Kutta family of solvers.
         integrator = scipy.integrate.ode(f=fn_wrapper)
         integrator.set_integrator(name='dopri5',
-            first_step=0.1, atol=1e-3, rtol=1e-3)
+                                  first_step=0.1,
+                                  atol=1e-3,
+                                  rtol=1e-3)
+        # Set function to be called at every successful integration step.
         integrator.set_solout(fn_callback)
+        # Initial conditions
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
         integrator.integrate(t=integration_timelimit)
 
@@ -364,7 +389,8 @@ class VectorFieldPlanner(BasePlanner):
 
         # Add a segment for the feasible part of the last integration step.
         output_path.Insert(output_path.GetNumWaypoints(),
-            path.Sample(t_cache), cspec)
+                           path.Sample(t_cache),
+                           cspec)
 
         # Flag this trajectory as constrained.
         util.SetTrajectoryTags(
