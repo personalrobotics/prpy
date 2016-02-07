@@ -113,7 +113,8 @@ class VectorFieldPlanner(BasePlanner):
 
             Succeed if end-effector pose is close to the goal pose.
             """
-            pose_error = util.GeodesicDistance(manip.GetEndEffectorTransform(),
+            pose_error = util.GetGeodesicDistanceBetweenTransforms(
+                                               manip.GetEndEffectorTransform(),
                                                goal_pose)
             if pose_error < pose_error_tol:
                 return Status.TERMINATE
@@ -221,6 +222,138 @@ class VectorFieldPlanner(BasePlanner):
                                       integration_timelimit,
                                       timelimit, 
                                       **kw_args)
+
+
+    @PlanningMethod
+    def PlanWorkspacePath(self, robot, traj,
+                          timelimit=5.0,
+                          position_tolerance=0.01,
+                          angular_tolerance=0.15,
+                          goal_pose_tol=0.01,
+                          **kw_args):
+        """
+        Plan a configuration space path given a workspace path.
+        Trajectory timing information is ignored.
+
+        @param openravepy.Robot      robot: The robot.
+        @param openravepy.Trajectory traj:  Workspace trajectory,
+                                            represented as an
+                                            OpenRAVE AffineTrajectory.
+        @param float timelimit: Max planning time (seconds).
+        @param float position_tolerance: Constraint tolerance (meters).
+        @param float angular_tolerance:  Constraint tolerance (radians).
+        @param float goal_pose_tol: Goal tolerance (meters).
+
+        @return openravepy.Trajectory qtraj: Configuration space path.
+        """
+        if position_tolerance < 0.0:
+            raise ValueError('Position tolerance must be non-negative.')
+        elif angular_tolerance < 0.0:
+            raise ValueError('Angular tolerance must be non-negative.')
+
+        manip = robot.GetActiveManipulator()
+        Tstart = manip.GetEndEffectorTransform()
+
+        # Get the final end-effector pose
+        duration = traj.GetDuration()
+        T_ee_goal = openravepy.matrixFromPose(traj.Sample(duration)[0:7])
+
+        def vf_path():
+            """
+            Function defining a joint-space vector field.
+            """
+            T_ee_actual = manip.GetEndEffectorTransform()
+
+            # Find where we are on the goal trajectory by finding
+            # the the closest point
+            (_,t) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
+                                                                   T_ee_actual,
+                                                                   traj)
+            # Get the desired end-effector transform from
+            # the goal trajectory
+            t_step = 0.2
+            desired_T_ee = openravepy.matrixFromPose(traj.Sample(t)[0:7])
+            pose_ee_next = traj.Sample(t+t_step)[0:7]
+            desired_T_ee_next = openravepy.matrixFromPose(pose_ee_next)
+
+            # The twist between the actual end-effector position and
+            # where it should be on the goal trajectory
+            twist_perpendicular = util.GeodesicTwist(T_ee_actual,
+                                                     desired_T_ee)
+            direction_perpendicular = desired_T_ee[0:3,3] - T_ee_actual[0:3,3]
+
+            # The twist tangent to where the end-effector should be
+            # on the goal trajectory
+            twist_parallel = util.GeodesicTwist(desired_T_ee,
+                                                desired_T_ee_next)
+            direction_parallel = desired_T_ee_next[0:3,3] - desired_T_ee[0:3,3]
+
+            twist = 0.0*twist_perpendicular + 1.0*twist_parallel
+
+            K_p = 0.5
+            direction = (1.0-K_p)*direction_perpendicular + \
+                         K_p*direction_parallel
+            # Normalize the direction vector
+            direction = numpy.array(direction, dtype='float')
+            direction /= numpy.linalg.norm(direction)
+
+            # Modify the twist
+            twist[0:3] = direction
+
+            # Calculate joint velocities using an optimized jacobian
+            dqout, _ = util.ComputeJointVelocityFromTwist(robot, twist,
+                                              joint_velocity_limits=numpy.PINF)
+            return dqout
+
+        def TerminateMove():
+            """
+            Function defining the termination condition.
+
+            Fail if deviation larger than position and angular tolerance.
+            Succeed if distance moved is larger than max_distance.
+            Cache and continue if distance moved is larger than distance.
+            """
+            from .exceptions import ConstraintViolationPlanningError
+
+            T_ee_curr = manip.GetEndEffectorTransform()
+
+            # Find where we are on the goal trajectory by finding
+            # the the closest point
+            (_, t) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
+                                                                     T_ee_curr,
+                                                                     traj)
+            # Get the desired end-effector transform from
+            # the goal trajectory
+            T_ee_desired = openravepy.matrixFromPose(traj.Sample(t)[0:7])
+
+            # Calculate error between current end-effector pose
+            # and where we should be on the goal trajectory
+            geodesic_error = util.GeodesicError(T_ee_desired, T_ee_curr)
+            orientation_error = geodesic_error[3]
+            position_error = geodesic_error[0:3]
+
+            if numpy.fabs(orientation_error) > angular_tolerance:
+                raise ConstraintViolationPlanningError(
+                    'Deviated from orientation constraint.')
+
+            position_deviation = numpy.linalg.norm(position_error)
+            if position_deviation > position_tolerance:
+                raise ConstraintViolationPlanningError(
+                    'Deviated from straight line constraint.')
+
+            # Check if we have reached the end of the goal trajectory
+            dist_to_goal = util.GetGeodesicDistanceBetweenTransforms(T_ee_curr,
+                                                                     T_ee_goal)
+            if numpy.fabs(dist_to_goal) <= goal_pose_tol:
+                return Status.CACHE_AND_TERMINATE
+
+            return Status.CONTINUE
+
+        integration_timelimit = 10.0
+        return self.FollowVectorField(robot, vf_path, TerminateMove,
+                                      integration_timelimit,
+                                      timelimit, **kw_args)
+
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
