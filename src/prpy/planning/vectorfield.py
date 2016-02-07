@@ -95,8 +95,11 @@ class VectorFieldPlanner(BasePlanner):
         manip = robot.GetActiveManipulator()
 
         def vf_geodesic():
+            """
+            Function defining a joint-space vector field.
+            """
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
-                                            goal_pose)
+                                       goal_pose)
             dqout, tout = util.ComputeJointVelocityFromTwist(
                 robot, twist, joint_velocity_limits=numpy.PINF)
 
@@ -105,9 +108,13 @@ class VectorFieldPlanner(BasePlanner):
             return min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1. for i in xrange(vlimits.shape[0])) * dqout
 
         def CloseEnough():
-            pose_error = util.GeodesicDistance(
-                        manip.GetEndEffectorTransform(),
-                        goal_pose)
+            """
+            Function defining the termination condition.
+
+            Succeed if end-effector pose is close to the goal pose.
+            """
+            pose_error = util.GeodesicDistance(manip.GetEndEffectorTransform(),
+                                               goal_pose)
             if pose_error < pose_error_tol:
                 return Status.TERMINATE
             return Status.CONTINUE
@@ -131,8 +138,8 @@ class VectorFieldPlanner(BasePlanner):
                                 **kw_args):
         """
         Plan to a desired end-effector offset with move-hand-straight
-        constraint. movement less than distance will return failure. The motion
-        will not move further than max_distance.
+        constraint. Movement less than distance will return failure.
+        The motion will not move further than max_distance.
         @param robot
         @param direction unit vector in the direction of motion
         @param distance minimum distance in meters
@@ -161,6 +168,9 @@ class VectorFieldPlanner(BasePlanner):
         Tstart = manip.GetEndEffectorTransform()
 
         def vf_straightline():
+            """
+            Function defining a joint-space vector field.
+            """
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                             Tstart)
             twist[0:3] = direction
@@ -171,20 +181,26 @@ class VectorFieldPlanner(BasePlanner):
             return dqout
 
         def TerminateMove():
-            '''
+            """
+            Function defining the termination condition.
+
             Fail if deviation larger than position and angular tolerance.
             Succeed if distance moved is larger than max_distance.
             Cache and continue if distance moved is larger than distance.
-            '''
+            """
             from .exceptions import ConstraintViolationPlanningError 
 
             Tnow = manip.GetEndEffectorTransform()
-            error = util.GeodesicError(Tstart, Tnow)
-            if numpy.fabs(error[3]) > angular_tolerance:
+
+            geodesic_error = util.GeodesicError(Tstart, Tnow)
+            orientation_error = geodesic_error[3]
+            position_error = geodesic_error[0:3]
+
+            if numpy.fabs(orientation_error) > angular_tolerance:
                 raise ConstraintViolationPlanningError(
                     'Deviated from orientation constraint.')
-            distance_moved = numpy.dot(error[0:3], direction)
-            position_deviation = numpy.linalg.norm(error[0:3] -
+            distance_moved = numpy.dot(position_error, direction)
+            position_deviation = numpy.linalg.norm(position_error -
                                                    distance_moved*direction)
             if position_deviation > position_tolerance:
                 raise ConstraintViolationPlanningError(
