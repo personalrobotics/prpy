@@ -233,6 +233,8 @@ class VectorFieldPlanner(BasePlanner):
         @param robot
         @param fn_vectorfield a vectorfield of joint velocities
         @param fn_terminate custom termination condition
+        @param integration_timelimit The initial time step to be taken
+                                     by the integrator.
         @param timelimit time limit before giving up
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
