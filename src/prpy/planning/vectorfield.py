@@ -225,7 +225,8 @@ class VectorFieldPlanner(BasePlanner):
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
                           integration_timelimit=10.,
-                          timelimit=5.0, dt_multiplier=1.01, **kw_args):
+                          timelimit=5.0,
+                          **kw_args):
         """
         Follow a joint space vectorfield to termination.
 
@@ -233,10 +234,6 @@ class VectorFieldPlanner(BasePlanner):
         @param fn_vectorfield a vectorfield of joint velocities
         @param fn_terminate custom termination condition
         @param timelimit time limit before giving up
-        @param dt_multiplier multiplier of the minimum resolution at which
-               the vector field will be followed. Defaults to 1.0.
-               Any larger value means the vectorfield will be re-evaluated
-               floor(dt_multiplier) steps
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
