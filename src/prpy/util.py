@@ -1027,6 +1027,44 @@ def CheckJointLimits(robot, q):
             description='position')
 
 
+def GetForwardKinematics(robot, q, manipulator=None, frame=None):
+    """
+    Get the forward kinematics for a specific joint configuration,
+    relative to the OpenRAVE world frame.
+
+    @param openravepy.robot robot: The robot object.
+    @param list             q:     List or array of joint positions.
+    @param manipulator
+    @param string frame: Get the end effector transform relative to a
+                         specific frame e.g. '/right/wam_base'
+    @returns T_ee: The pose of the end effector (or last link in the
+                   serial chain) as a 4x4 matrix.
+    """
+    if manipulator == None:
+        manipulator = robot.GetActiveManipulator()
+
+    T_ee = None
+
+    # Save the robot state
+    sp = openravepy.Robot.SaveParameters
+    robot_saver = robot.CreateRobotStateSaver(sp.LinkTransformation)
+
+    with robot_saver:
+        robot.SetActiveDOFValues(q)
+        T_ee = manipulator.GetEndEffectorTransform()
+    # Robot state is restored
+
+    if frame != None:
+        link = robot.GetLink(frame)
+        if link == None:
+            raise ValueError('Failed to get link \'{:s}\''.format(frame))
+
+        T_ref_frame = link.GetTransform()
+        T_ee = numpy.dot(numpy.linalg.inv(T_ref_frame), T_ee)
+
+    return T_ee
+
+
 def ConvertIntToBinaryString(x, reverse=False):
     """
     Convert an integer to a binary string.

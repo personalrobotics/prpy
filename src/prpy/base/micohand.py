@@ -127,20 +127,7 @@ class MicoHand(EndEffector):
         """ Close the hand.
         @param timeout blocking execution timeout
         """
-        if self.simulated:
-            robot = self.manipulator.GetRobot()
-            p = openravepy.KinBody.SaveParameters
-
-            with robot.CreateRobotStateSaver(p.ActiveDOF | p.ActiveManipulator):
-                self.manipulator.SetActive()
-                robot.task_manipulation.CloseFingers()
-
-            if timeout:
-                robot.WaitForController(timeout)
-
-            return None
-        else:
-            return self.MoveHand(f1=value, f2=value, timeout=timeout)
+        return self.MoveHand(f1=value, f2=value, timeout=timeout)
 
     def CloseHandTight(self, value=1.2, timeout=None):
         """ Close the hand tightly.
