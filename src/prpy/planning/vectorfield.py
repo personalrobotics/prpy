@@ -96,7 +96,8 @@ class VectorFieldPlanner(BasePlanner):
 
         def vf_geodesic():
             """
-            Function defining a joint-space vector field.
+            Define a joint-space vector field, that moves along the
+            geodesic (shortest path) from the start pose to the goal pose.
             """
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
                                        goal_pose)
@@ -109,9 +110,10 @@ class VectorFieldPlanner(BasePlanner):
 
         def CloseEnough():
             """
-            Function defining the termination condition.
-
-            Succeed if end-effector pose is close to the goal pose.
+            The termination condition.
+            At each integration step, the geodesic error between the
+            start and goal poses is compared. If within threshold,
+            the integration will terminate.
             """
             pose_error = util.GetGeodesicDistanceBetweenTransforms(
                                                manip.GetEndEffectorTransform(),
@@ -120,9 +122,9 @@ class VectorFieldPlanner(BasePlanner):
                 return Status.TERMINATE
             return Status.CONTINUE
 
-        integration_timelimit = 10.0
+        integration_interval = 10.0
         traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
-                                      integration_timelimit,
+                                      integration_interval,
                                       timelimit,
                                       **kw_args)
 
@@ -163,7 +165,7 @@ class VectorFieldPlanner(BasePlanner):
 
         # Normalize the direction vector.
         direction = numpy.array(direction, dtype='float')
-        direction /= numpy.linalg.norm(direction)
+        direction = util.NormalizeVector(direction)
 
         manip = robot.GetActiveManipulator()
         Tstart = manip.GetEndEffectorTransform()
@@ -217,9 +219,9 @@ class VectorFieldPlanner(BasePlanner):
 
             return Status.CONTINUE
 
-        integration_timelimit = 10.0
+        integration_interval = 10.0
         return self.FollowVectorField(robot, vf_straightline, TerminateMove,
-                                      integration_timelimit,
+                                      integration_interval,
                                       timelimit, 
                                       **kw_args)
 
@@ -230,6 +232,8 @@ class VectorFieldPlanner(BasePlanner):
                           position_tolerance=0.01,
                           angular_tolerance=0.15,
                           goal_pose_tol=0.01,
+                          Kp_ff=None,
+                          Kp_e=None,
                           **kw_args):
         """
         Plan a configuration space path given a workspace path.
@@ -243,13 +247,47 @@ class VectorFieldPlanner(BasePlanner):
         @param float position_tolerance: Constraint tolerance (meters).
         @param float angular_tolerance:  Constraint tolerance (radians).
         @param float goal_pose_tol: Goal tolerance (meters).
+        @param numpy.array Kp_ff: Feed-forward gain.
+                                  A 1x6 vector, where first 3 elements
+                                  affect the translational velocity,
+                                  the last 3 elements affect the
+                                  rotational velocity.
+        @param numpy.array Kp_e: Error gain.
+                                 A 1x6 vector, where first 3 elements
+                                 affect the translational velocity,
+                                 the last 3 elements affect the
+                                 rotational velocity.
 
         @return openravepy.Trajectory qtraj: Configuration space path.
         """
+
+        if not util.IsTrajectoryTypeIkParameterization(traj):
+            raise ValueError("Trajectory is not a workspace trajectory, it "
+                             "must have configuration specification of "
+                             "openravepy.IkParameterizationType.Transform6D")
+
+        #if IsTimedTrajectory(traj):
+        #    raise ValueError("PlanWorkspacePath expected an un-timed "
+        #                     "trajectory.")
+
         if position_tolerance < 0.0:
             raise ValueError('Position tolerance must be non-negative.')
         elif angular_tolerance < 0.0:
             raise ValueError('Angular tolerance must be non-negative.')
+        elif goal_pose_tol < 0.0:
+            raise ValueError('Goal-pose tolerance must be non-negative.')
+
+        #
+        #
+        # ADD ComputeGeodesicUnitTiming()
+        #
+        #
+
+        # Set the default gains
+        if Kp_ff == None:
+            Kp_ff = numpy.array([1.0,1.0,1.0,1.0,1.0,1.0])
+        if Kp_e == None:
+            Kp_e = numpy.array([1.0,1.0,1.0,1.0,1.0,1.0])
 
         manip = robot.GetActiveManipulator()
         Tstart = manip.GetEndEffectorTransform()
@@ -266,7 +304,7 @@ class VectorFieldPlanner(BasePlanner):
 
             # Find where we are on the goal trajectory by finding
             # the the closest point
-            (_,t) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
+            (_,t,_) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
                                                                    T_ee_actual,
                                                                    traj)
             # Get the desired end-effector transform from
@@ -278,27 +316,23 @@ class VectorFieldPlanner(BasePlanner):
 
             # The twist between the actual end-effector position and
             # where it should be on the goal trajectory
+            # (the error term)
             twist_perpendicular = util.GeodesicTwist(T_ee_actual,
                                                      desired_T_ee)
-            direction_perpendicular = desired_T_ee[0:3,3] - T_ee_actual[0:3,3]
 
             # The twist tangent to where the end-effector should be
             # on the goal trajectory
+            # (the feed-forward term)
             twist_parallel = util.GeodesicTwist(desired_T_ee,
                                                 desired_T_ee_next)
-            direction_parallel = desired_T_ee_next[0:3,3] - desired_T_ee[0:3,3]
 
-            twist = 0.0*twist_perpendicular + 1.0*twist_parallel
+            # Normalize the translational and angular velocity of
+            # the feed-forward twist
+            twist_parallel[0:3] = util.NormalizeVector(twist_parallel[0:3])
+            twist_parallel[3:6] = util.NormalizeVector(twist_parallel[3:6])
 
-            K_p = 0.5
-            direction = (1.0-K_p)*direction_perpendicular + \
-                         K_p*direction_parallel
-            # Normalize the direction vector
-            direction = numpy.array(direction, dtype='float')
-            direction /= numpy.linalg.norm(direction)
-
-            # Modify the twist
-            twist[0:3] = direction
+            # Apply gains
+            twist = Kp_e*twist_perpendicular + Kp_ff*twist_parallel
 
             # Calculate joint velocities using an optimized jacobian
             dqout, _ = util.ComputeJointVelocityFromTwist(robot, twist,
@@ -319,7 +353,7 @@ class VectorFieldPlanner(BasePlanner):
 
             # Find where we are on the goal trajectory by finding
             # the the closest point
-            (_, t) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
+            (_,t,_) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
                                                                      T_ee_curr,
                                                                      traj)
             # Get the desired end-effector transform from
@@ -349,15 +383,15 @@ class VectorFieldPlanner(BasePlanner):
 
             return Status.CONTINUE
 
-        integration_timelimit = 10.0
+        integration_interval = 10.0
         return self.FollowVectorField(robot, vf_path, TerminateMove,
-                                      integration_timelimit,
+                                      integration_interval,
                                       timelimit, **kw_args)
 
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
-                          integration_timelimit=10.,
+                          integration_time_interval=10.0,
                           timelimit=5.0,
                           **kw_args):
         """
@@ -366,8 +400,8 @@ class VectorFieldPlanner(BasePlanner):
         @param robot
         @param fn_vectorfield a vectorfield of joint velocities
         @param fn_terminate custom termination condition
-        @param integration_timelimit The initial time step to be taken
-                                     by the integrator.
+        @param integration_time_interval The time interval to integrate
+                                         over.
         @param timelimit time limit before giving up
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
@@ -420,7 +454,12 @@ class VectorFieldPlanner(BasePlanner):
 
         def fn_status_callback(t, q):
             """
-            This is called for each collision check.
+            Check joint-limits and collisions for a specific joint
+            configuration. This is called multiple times at DOF
+            resolution in order to check along the entire length of the
+            trajectory.
+            Note: Currently this is called after each integration time
+            step, which means we are doing more checks than required.
             """
             if time.time() - time_start >= timelimit:
                 raise TimeLimitError()
@@ -496,7 +535,7 @@ class VectorFieldPlanner(BasePlanner):
         integrator.set_solout(fn_callback)
         # Initial conditions
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
-        integrator.integrate(t=integration_timelimit)
+        integrator.integrate(t=integration_time_interval)
 
         t_cache = nonlocals['t_cache']
         exception = nonlocals['exception'] 

@@ -196,6 +196,19 @@ def ComputeAinv(N,dof):
                 invA[i*dof+k,j*dof+k] = invA_small[i-1,j-1]
     return invA
     
+def NormalizeVector(vec):
+    """
+    Normalize a vector.
+    This is faster than doing: vec/numpy.linalg.norm(vec)
+
+    @param numpy.array vec: A 1-dimensional vector.
+    @returns numpy.array result: A vector of the same size, where the
+                                 L2 norm of the elements equals 1.
+    """
+    magnitude = numpy.sqrt(vec.dot(vec))
+    vec2 = (vec / magnitude)
+    return numpy.nan_to_num(vec2) # convert NaN to zero
+
 def MatrixToTraj(traj_matrix,cs,dof,robot):
     env = robot.GetEnv()
     traj = openravepy.RaveCreateTrajectory(env,'')
@@ -730,12 +743,14 @@ def GetGeodesicDistanceBetweenTransforms(T0, T1):
     """
     Wrapper, to match GetGeodesicDistanceBetweenQuaternions()
     """
+
     return GeodesicDistance(T0, T1, r=1.0)
 
 
 def GetEuclideanDistanceBetweenTransforms(T0, T1):
     """
-    Calculate the Euclidean distance between two 4x4 transforms.
+    Calculate the Euclidean distance between the translational
+    component of two 4x4 transforms.
     (also called L2 or Pythagorean distance)
     """
     p0 = T0[0:3,3] # Get the x,y,z translation from the 4x4 matrix
@@ -752,29 +767,44 @@ def GetMinDistanceBetweenTransformAndWorkspaceTraj(T, traj, dt=0.01):
     @param openravepy.Trajectory traj: A timed workspace trajectory.
     @param float dt: Resolution at which to sample along the trajectory.
 
-    @return (float,float) (min_dist, t_loc) The minimum distance and the
-                                            time value along the timed
-                                            trajectory.
+    @return (float,float) (min_dist, t_loc, T_loc) The minimum distance,
+                                         the time value along the timed
+                                         trajectory, and the transform.
     """
     if not IsTimedTrajectory(traj):
         raise ValueError("Trajectory must have timing information.")
 
-    if not IsWorkspaceTrajectory(traj):
+    if not IsTrajectoryTypeIkParameterization(traj):
         raise ValueError("Trajectory is not a workspace trajectory, it "
                          "must have configuration specification of "
                          "openravepy.IkParameterizationType.Transform6D")
 
-    min_dist = numpy.inf
-    t_loc = 0.0
-    t = 0.0
-    while t < traj.GetDuration():
+    def _GetError(t):
         T_curr = openravepy.matrixFromPose(traj.Sample(t)[0:7])
         error = GetEuclideanDistanceBetweenTransforms(T, T_curr)
+
+    min_dist = numpy.inf
+    t_loc = 0.0
+    T_loc = None
+
+    # Iterate over the trajectory
+    t = 0.0
+    duration = traj.GetDuration()
+    while t < duration:
+        error = _GetError(t)
         if error < min_dist:
             min_dist = error
             t_loc = t
         t = t + dt
-    return (min_dist, t_loc)
+    # Also check the end-point
+    error = _GetError(duration)
+    if error < min_dist:
+        min_dist = error
+        t_loc = t
+
+    T_loc = openravepy.matrixFromPose(traj.Sample(t_loc)[0:7])
+
+    return (min_dist, t_loc, T_loc)
 
 
 def FindCatkinResource(package, relative_path):
@@ -965,7 +995,7 @@ def IsJointSpaceTrajectory(traj):
     return False
 
 
-def IsWorkspaceTrajectory(traj):
+def IsTrajectoryTypeIkParameterization(traj):
     """
     Check if trajectory is a workspace trajectory.
 
