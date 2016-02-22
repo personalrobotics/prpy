@@ -31,11 +31,9 @@
 import logging
 import numpy
 import openravepy
-import time
 from .. import util
 from base import BasePlanner, PlanningError, PlanningMethod, Tags
 from enum import Enum
-import math
 
 logger = logging.getLogger(__name__)
 
@@ -96,13 +94,14 @@ class VectorFieldPlanner(BasePlanner):
 
         def vf_geodesic():
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
-                                            goal_pose)
+                                       goal_pose)
             dqout, tout = util.ComputeJointVelocityFromTwist(
                 robot, twist, joint_velocity_limits=numpy.PINF)
 
             # Go as fast as possible
             vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-            return min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1. for i in xrange(vlimits.shape[0])) * dqout
+            return (min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1.
+                    for i in xrange(vlimits.shape[0])) * dqout)
 
         def CloseEnough():
             pose_error = util.GeodesicDistance(
@@ -112,8 +111,11 @@ class VectorFieldPlanner(BasePlanner):
                 return Status.TERMINATE
             return Status.CONTINUE
 
-        traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
-                                      timelimit)
+        p = openravepy.KinBody.SaveParameters
+        with robot.CreateRobotStateSaver(p.ActiveDOF):
+            robot.SetActiveDOFs(manip.GetArmIndices())
+            traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
+                                          timelimit)
 
         # Flag this trajectory as unconstrained. This overwrites the
         # constrained flag set by FollowVectorField.
@@ -159,7 +161,7 @@ class VectorFieldPlanner(BasePlanner):
 
         def vf_straightline():
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
-                                            Tstart)
+                                       Tstart)
             twist[0:3] = direction
 
             dqout, _ = util.ComputeJointVelocityFromTwist(
@@ -173,7 +175,7 @@ class VectorFieldPlanner(BasePlanner):
             Succeed if distance moved is larger than max_distance.
             Cache and continue if distance moved is larger than distance.
             '''
-            from .exceptions import ConstraintViolationPlanningError 
+            from .exceptions import ConstraintViolationPlanningError
 
             Tnow = manip.GetEndEffectorTransform()
             error = util.GeodesicError(Tstart, Tnow)
@@ -197,8 +199,11 @@ class VectorFieldPlanner(BasePlanner):
 
             return Status.CONTINUE
 
-        return self.FollowVectorField(robot, vf_straightline, TerminateMove,
-                                      timelimit, **kw_args)
+        p = openravepy.KinBody.SaveParameters
+        with robot.CreateRobotStateSaver(p.ActiveDOF):
+            robot.SetActiveDOFs(manip.GetArmIndices())
+            return self.FollowVectorField(robot, vf_straightline,
+                                          TerminateMove, timelimit, **kw_args)
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
@@ -368,4 +373,3 @@ class VectorFieldPlanner(BasePlanner):
             }, append=True
         )
         return output_path
-
