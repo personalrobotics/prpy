@@ -112,7 +112,7 @@ class ChiselModule():
                         rospy.Time(),
                         rospy.Duration(10))
                 frame_trans, frame_rot = self.listener.lookupTransform(
-                        '/map', '/herb_base',
+                        '/herb_base', '/map',
                         rospy.Time(0))
                 from tf.transformations import quaternion_matrix
                 offset = numpy.array(numpy.matrix(quaternion_matrix(frame_rot)))
