@@ -40,11 +40,9 @@ robot.DetectObjects()
 mesh_client.SendCommand('GetMesh Chisel/full_mesh')
 '''
 
-
-
 class ChiselModule():
 
-	def __init__(self,mesh_client,service_namespace=None):
+	def __init__(self, env, mesh_client=None, service_namespace=None):
 
 		try:
 			rospy.init_node('chisel_detector',anonymous=True)
@@ -54,13 +52,35 @@ class ChiselModule():
 		if service_namespace is None:
 			service_namespace = 'Chisel'
 
+                if mesh_client is None:
+                        import openravepy
+                        mesh_client = openravepy.RaveCreateSensorSystem(env, 'mesh_marker')
+
 		self.mesh_client = mesh_client
 		self.serv_ns = service_namespace
 
-	def DetectObject(self,robot,**kw_args):
+                from offscreen_render import ros_camera_sim
+                self.camera = ros_camera_sim.RosCameraSim(env)
+                self.camera.start('/head/kinect2/qhd')
+                self.camera_bodies = []
+
+
+                self.detect_chisel_refresh=None
+		
+
+
+	def DetectObject(self, robot, ignored_bodies=None, **kw_args):
     
 		env = robot.GetEnv()
 		already_in_env = False
+
+                if ignored_bodies is None:
+                        ignored_bodies = []
+
+                for b in ignored_bodies:
+                        if b not in self.camera_bodies:
+                                self.camera.add_body(b)
+                                self.camera_bodies.push_back(b)
 
 		#Check if kinbody in env
 		for body in env.GetBodies():
@@ -74,10 +94,12 @@ class ChiselModule():
 			env.RemoveKinBody(chisel_kb)
 
 		#Reset Chisel
-		srv_nm = self.serv_ns+'/Reset'
-		rospy.wait_for_service(srv_nm)
-		detect_chisel_refresh = rospy.ServiceProxy(srv_nm,
-	                                 chisel_msgs.srv.ResetService)
+                if self.detect_chisel_refresh is None:
+                        srv_nm = self.serv_ns+'/Reset'
+                        rospy.wait_for_service(srv_nm)
+                        detect_chisel_refresh = rospy.ServiceProxy(srv_nm,
+                                                                   chisel_msgs.srv.ResetService)
+                detect_chisel_refresh()
 
-	`	#Get Kinbody and load into env
-		#self.mesh_client.SendCommand('GetMesh Chisel/full_mesh')
+		#Get Kinbody and load into env
+		self.mesh_client.SendCommand('GetMesh Chisel/full_mesh')
