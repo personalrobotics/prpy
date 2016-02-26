@@ -42,7 +42,8 @@ mesh_client.SendCommand('GetMesh Chisel/full_mesh')
 
 class ChiselModule():
 
-	def __init__(self, env, mesh_client=None, service_namespace=None):
+	def __init__(self, env, mesh_client=None, service_namespace=None,
+                     reference_link=None):
 
 		try:
 			rospy.init_node('chisel_detector',anonymous=True)
@@ -64,10 +65,11 @@ class ChiselModule():
                 self.camera.start('/head/kinect2/qhd')
                 self.camera_bodies = []
 
-
                 self.detect_chisel_refresh=None
-		
+                self.reference_link=reference_link
 
+                import tf
+                self.listener = tf.TransformListener()
 
 	def DetectObject(self, robot, ignored_bodies=None, **kw_args):
     
@@ -80,7 +82,7 @@ class ChiselModule():
                 for b in ignored_bodies:
                         if b not in self.camera_bodies:
                                 self.camera.add_body(b)
-                                self.camera_bodies.push_back(b)
+                                self.camera_bodies.append(b)
 
 		#Check if kinbody in env
 		for body in env.GetBodies():
@@ -103,3 +105,27 @@ class ChiselModule():
 
 		#Get Kinbody and load into env
 		self.mesh_client.SendCommand('GetMesh Chisel/full_mesh')
+
+                self.listener.waitForTransform(
+                       '/map',
+                       '/herb_base',
+                        rospy.Time(),
+                        rospy.Duration(10))
+                frame_trans, frame_rot = self.listener.lookupTransform(
+                        '/map', '/herb_base',
+                        rospy.Time(0))
+                from tf.transformations import quaternion_matrix
+                offset = numpy.array(numpy.matrix(quaternion_matrix(frame_rot)))
+                offset[0,3] = frame_trans[0]
+                offset[1,3] = frame_trans[1]
+                offset[2,3] = frame_trans[2]
+
+                chisel_mesh = env.GetKinBody('Chisel/full_mesh')
+                if chisel_mesh is not None and self.reference_link is not None:
+                        print 'Moving mesh'
+                        t = numpy.dot(offset, chisel_mesh.GetTransform())
+                        ref_link_pose = self.reference_link.GetTransform()
+                        t = numpy.dot(ref_link_pose, t)
+                        chisel_mesh.SetTransform(t)
+                        
+                return chisel_mesh
