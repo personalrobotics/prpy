@@ -9,7 +9,7 @@
 import numpy as np
 
 
-def get_sigma_points(mu, cov, Lambda=None, alpha=10e-3, beta=2):
+def get_sigma_points(mu, cov, Lambda=None, alpha=1e-1, beta=2):
     """
     Returns 2n points and their weights to be processed for UKF.
     @return X: Sigma points (2n+1) to be evaluated.
@@ -58,7 +58,6 @@ def weighted_xz_cov(mu, X, mu_z, Z, weights):
 
     return total
 
-
 def unscented_kalman_filter(mu, cov, u, z, R, Q, process, measure):
     """ Recursive function for UKF update.
     @param mu: mean at t-1
@@ -79,17 +78,19 @@ def unscented_kalman_filter(mu, cov, u, z, R, Q, process, measure):
     mu_predicted = np.average(X_processed, axis=1, weights=Wm)
     cov_predicted = weighted_cov(mu_predicted, X_processed, Wc) + R
 
+    print "X_processed", X_processed
+    print "mu_predicted", mu_predicted
     # Get sigma points from the processed distribution.
     X, Wm, Wc = get_sigma_points(mu_predicted, cov_predicted)
 
     # Predict observation distribution.
     Z = measure(X)
     z_mean = np.average(Z, axis=1, weights=Wm)
-    print "zm", z_mean
-    print "Z", Z
     S = weighted_cov(z_mean, Z, Wc) + Q
     XZ_cov = weighted_xz_cov(mu_predicted, X, z_mean, Z, Wc)
 
+    print "z", z
+    print "zm", z_mean
     from numpy.linalg import inv
     Kalman_gain = XZ_cov*inv(S)
     new_mu = mu_predicted + Kalman_gain*(z - z_mean)

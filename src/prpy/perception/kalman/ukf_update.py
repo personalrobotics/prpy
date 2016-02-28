@@ -7,7 +7,7 @@
 # Process, measure, and ukf-update object pose 
 # from observed feature point through camera
 
-import numpy as np
+import numpy
 
 
 def process(u, X):
@@ -19,40 +19,59 @@ def process(u, X):
     return X
 
 
-def measure(x, P, T, height=2):
+def convert_to_kinbody_pose(se2_pose, height):
+    """ Takes [theta, x, y].
+    Returns 4x4 object transform.
+    """
+    r = se2_pose[0]
+    x = se2_pose[1]
+    y = se2_pose[2]
+
+    obj_transform = numpy.identity(4)
+    obj_transform[:3, :3] = numpy.array(
+                                [[numpy.cos(r), -numpy.sin(r), 0.],
+                                 [numpy.sin(r),  numpy.cos(r), 0.],
+                                 [0., 0., 1.]])
+    obj_transform[:, 3] = numpy.array([x, y, height, 1])
+    obj_transform = numpy.matrix(obj_transform)
+    return obj_transform
+
+def project_marker_to_im_screen(P, marker_pose):
+    """ Returns (u,v,1) on image screen """ 
+    projection = numpy.dot(P, marker_pose[:, 3])
+    
+    for i in range(3):
+        projection[i] /= projection[2]
+    return projection
+
+
+def measure(x, P, frame_offset, kinbody_offset, height=0.5):
     """ Measurement of x through camera.
     @param x: Object pose in (x,y,theta)
     @param P: Camera matrix (3x4)
-    @param T: Offset of feature w.r.t object frame
-              T*x is 4x1 homogeneous 3d position
+    @param frame_offset: offset between april-tag detection frame and world frame
+    @param kinbody_offset: offset between kinbody and feature
     @return Z:= 3x1 projected feature point on image screen
     """
-    Z = np.matrix(np.zeros(shape=(2, x.shape[1])))
+    Z = numpy.matrix(numpy.zeros(shape=(2, x.shape[1])))
 
     for i in range(x.shape[1]):
-        xi = np.array(x[:, i]).tolist()
+        # object se2 pose
+        xi = numpy.array(x[:, i].transpose())[0]
+        # convert to se(3)
+        obj_transform = convert_to_kinbody_pose(xi, height)
+        # expected marker pose
+        expected_marker_pose = numpy.dot(numpy.dot(numpy.linalg.inv(frame_offset),
+                                                   obj_transform),
+                                         numpy.linalg.inv(kinbody_offset))
+        expected_projection = project_marker_to_im_screen(P, expected_marker_pose)
 
-        # 3D feature point pose
-        X = np.matrix(np.identity(4))
-        t = xi[2][0]
-        X[0:2, 0:2] = np.matrix([[np.cos(t), -np.sin(t)],
-                                 [np.sin(t), np.cos(t)]])
-        X[:, 3] = np.matrix([[xi[0][0]], [xi[1][0]], [height], [1]])
-        F = np.dot(T, X)
-        W = np.matrix([[0], [0], [0], [1]])
-
-        # 3D position
-        Y = F*W
-
-        # Projection to image screen
-        Y = np.dot(P, Y)
-        z = Y/Y[2]
-        Z[:, i] = z[0:2]
+        Z[:, i] = expected_projection[0:2]
 
     return Z
 
 
-def update(mu, cov, P, T, z, height, Q=np.matrix(np.identity(2))):
+def update(mu, cov, P, frame_offset, kinbody_offset, z, height=0.5, Q=numpy.matrix(numpy.identity(2))):
     """
     Given current estimate (mu, cov) of obj in SE(2)
     and detected feature point z in im screen,
@@ -61,7 +80,8 @@ def update(mu, cov, P, T, z, height, Q=np.matrix(np.identity(2))):
     @param mu: (x,y,theta) object pose
     @param cov: 3x3 covariance matrix
     @param P: camera matrix
-    @param T: offset from obj frame to feature point
+    @param frame_offset: offset between april-tag detection frame and world frame
+    @param kinbody_offset: offset between kinbody and feature
     @param z: observed (u,v) of feature point on image screen
     @param height: known height of object
     @param Q: measurement noise
@@ -73,24 +93,24 @@ def update(mu, cov, P, T, z, height, Q=np.matrix(np.identity(2))):
     from ukf import unscented_kalman_filter
     return unscented_kalman_filter(mu, cov, None, z, 0, Q,
                                    process,
-                                   lambda x: measure(x, P, T))
+                                   lambda x: measure(x, P, frame_offset, kinbody_offset, height))
 
 
 if __name__ == "__main__":
-    T = np.matrix(np.identity(4))
-    P = np.matrix(np.zeros(shape=(3, 4)))
-    P[0:3, 0:3] = np.identity(3)
+    T = numpy.matrix(numpy.identity(4))
+    P = numpy.matrix(numpy.zeros(shape=(3, 4)))
+    P[0:3, 0:3] = numpy.identity(3)
 
     from ukf import unscented_kalman_filter
     x = 4
     y = 2
-    theta = np.pi/2
-    mu = np.matrix([[x], [y], [theta]])
-    cov = np.matrix(np.identity(3))
+    theta = numpy.pi/2
+    mu = numpy.matrix([[x], [y], [theta]])
+    cov = numpy.matrix(numpy.identity(3))
     R = 0
-    Q = np.matrix(np.identity(2))
+    Q = numpy.matrix(numpy.identity(2))
 
-    z = np.matrix([[3], [2]])
+    z = numpy.matrix([[3], [2]])
     Z = measure(mu, P, T)
 
     for i in range(20):

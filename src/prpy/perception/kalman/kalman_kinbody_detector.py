@@ -51,7 +51,7 @@ class KinBodyDetector(object):
                                0.0, 0.0, 0.0, 1.0, 0.0])
         self.P = self.P.reshape([3, 4])
 
-    def convert_to_kinbody_pose(se2_pose, height):
+    def convert_to_kinbody_pose(self, se2_pose, height):
         """ Takes [theta, x, y].
         Returns 4x4 object transform.
         """
@@ -59,7 +59,7 @@ class KinBodyDetector(object):
         x = se2_pose[1]
         y = se2_pose[2]
 
-        obj_transform = numpy.ones((4, 4))
+        obj_transform = numpy.identity(4)
         obj_transform[:3, :3] = numpy.array(
                                     [[numpy.cos(r), -numpy.sin(r), 0.],
                                      [numpy.sin(r),  numpy.cos(r), 0.],
@@ -67,6 +67,15 @@ class KinBodyDetector(object):
         obj_transform[:, 3] = numpy.array([x, y, height, 1])
         obj_transform = numpy.matrix(obj_transform)
         return obj_transform
+
+    def project_marker_to_im_screen(self, marker_pose):
+        """ Returns (u,v,1) on image screen """ 
+        projection = numpy.dot(self.P, marker_pose[:, 3])[0]
+        projection = numpy.array(projection)[0]
+
+        for i in range(3):
+            projection[i] /= projection[2]
+        return projection
 
     def optimize(self, kinbody_offset, frame_offset,
                  marker_pose, kinbody_init_pose, table_height):
@@ -80,15 +89,10 @@ class KinBodyDetector(object):
 
         def cost(x):
             """ x = theta(r), tx, ty,"""
-            obj_transform = convert_to_kinbody_pose(x, h)
+            obj_transform = self.convert_to_kinbody_pose(x, h)
 
+            projection = self.project_marker_to_im_screen(marker_pose)
             import numpy.linalg as la
-            projection = numpy.dot(self.P, marker_pose[:, 3])[0]
-            projection = numpy.array(projection)[0]
-
-            for i in range(3):
-                projection[i] /= projection[2]
-
             expected_marker_pose = numpy.dot(numpy.dot(la.inv(frame_offset),
                                                        obj_transform),
                                              la.inv(kinbody_offset))
@@ -123,16 +127,18 @@ class KinBodyDetector(object):
         tx = res.x[1]
         ty = res.x[2]
 
-        obj_transform = numpy.ones((4, 4))
-        obj_transform[:3, :3] = numpy.array(
-                                    [[numpy.cos(r), -numpy.sin(r), 0.],
-                                     [numpy.sin(r),  numpy.cos(r), 0.],
-                                     [0., 0., 1.]])
-
-        obj_transform[:, 3] = numpy.array([tx, ty, h, 1])
-        obj_transform[3, :] = numpy.array([0, 0, 0, 1])
+        obj_transform = self.convert_to_kinbody_pose((r, tx, ty), h)
 
         return obj_transform, (r, tx, ty)
+
+    
+    def update_kinbody_pose(self, obj_transform, reference_link):
+        final_kb_pose = obj_transform
+        if self.reference_link is not None:
+            ref_link_pose = self.reference_link.GetTransform()
+            final_kb_pose = numpy.dot(ref_link_pose,
+                                      final_kb_pose)
+        return final_kb_pose
 
     def ReloadKinbodyData(self):
         with open(self.marker_data_path, 'r') as f:
@@ -187,9 +193,10 @@ class KinBodyDetector(object):
 
                 from table_clearing.perception_utils import (get_table_height,
                                                              PerceptionException)
+                print kinbody_file
                 # Optimize to get initial pose guess
-                # if "table" not in kinbody_file:
-                if True:
+                if "table" not in kinbody_file:
+                # if True:
                     try:
                         h = get_table_height(self.env)
                         obj_transform, se2_pose = self.optimize(kinbody_offset,
@@ -200,55 +207,56 @@ class KinBodyDetector(object):
                         print "Optimizing: ", kinbody_file
                         if obj_transform is not None:
                             kinbody_pose = obj_transform
-                            if self.reference_link is not None:
-                                ref_link_pose = self.reference_link.GetTransform()
-                                final_kb_pose = numpy.dot(ref_link_pose,
-                                                          kinbody_pose)
-                                DrawAxes(self.env, final_kb_pose)
-
                     except PerceptionException:
                         h = 0.5  # Known table height
                         obj_transform, se2_pose = self.optimize(kinbody_offset,
                                                                 frame_offset,
                                                                 marker_pose,
+                                                                kinbody_pose,
                                                                 h)
 
                         if obj_transform is not None:
                             kinbody_pose = obj_transform
+                    
+                    print "Run UKF update"
+                    # Get mu = (theta, x, y) from current kinbody pose estimate.
+                    mu = numpy.matrix(se2_pose).transpose()
+                    cov = numpy.matrix(numpy.identity(3))
 
-                final_kb_pose = kinbody_pose
+                    # Get marker position z=(u,v,1) on image screen
+                    projection = self.project_marker_to_im_screen(marker_pose)
+                    z = numpy.matrix(projection[0:2]).transpose()
 
-                # Get mu = (x,y,theta) from current kinbody pose estimate.
-                mu = numpy.matrix(se2_pose)
-                cov = numpy.matrix(numpy.identity(3))
+                    # Update (x,y,theta) from UKF
+                    from ukf_update import update
+                    mu_new, cov_new = update(mu, cov, self.P,
+                                             frame_offset,
+                                             kinbody_offset,
+                                             z,
+                                             height=h)
 
-                # Get marker position z=(u,v,1) on image screen
-                projection = numpy.dot(self.P, marker_pose[:, 3])[0]
-                projection = numpy.array(projection)[0]
-                for i in range(3):
-                    projection[i] /= projection[2]
+                    print "mu old, mu UKF"
+                    print mu
+                    print mu_new
+                    print "cov old, cov UKF"
+                    print cov
+                    print cov_new
 
-                # Update (x,y,theta) from UKF
-                from ukf_update import update
-                mu_new, cov_new = update(mu, cov, self.P,
-                                 numpy.inv(kinbody_offset),
-                                 projection, height=h)
+                    kinbody_pose = self.convert_to_kinbody_pose(mu_new, h)
+                
+                final_kb_pose = numpy.array(kinbody_pose)
 
-                print "mu"
-                print mu
-                print mu_new
-                print "cov"
-                print cov
-                print cov_new
-
-                kinbody_pose = convert_to_kinbody_pose(mu, h)
-                final_kb_pose = kinbody_pose
+                print "final_kb_pose"
+                print final_kb_pose
 
                 #Transform w.r.t reference link if link present
                 if self.reference_link is not None:
                     ref_link_pose = self.reference_link.GetTransform()
                     final_kb_pose = numpy.dot(ref_link_pose,kinbody_pose)
-                    
+                
+                DrawAxes(self.env, final_kb_pose)
+                
+
                 kinbody_name = kinbody_file.replace('.kinbody.xml', '')
                 kinbody_name = kinbody_name + str(marker.id)
                 
