@@ -325,7 +325,7 @@ def SetTrajectoryTags(traj, tags, append=False):
     traj.SetDescription(json.dumps(all_tags))
 
 
-def SimplifyTrajectory(traj, robot):
+def SimplifyTrajectory(traj, robot, tolerances=None):
     """
     Re-interpolate trajectory as minimal set of linear segments.
 
@@ -338,6 +338,7 @@ def SimplifyTrajectory(traj, robot):
 
     @param robot the robot that should be used for the interpolation
     @param traj input trajectory that will be simplified
+    @param tolerances list of acceptable tolerances for each robot active DOF
     @returns output trajectory of timed linear segments
     """
     from scipy import interpolate
@@ -360,7 +361,8 @@ def SimplifyTrajectory(traj, robot):
     values = numpy.array(
         [cspec.ExtractJointValues(traj.GetWaypoint(i), robot, dofs)
          for i in idxs])
-    resolutions = numpy.array([j.GetResolution(0) for j in joints])
+    if tolerances is None:
+        tolerances = numpy.array([j.GetResolution(0) for j in joints])
 
     # Start with an extrema set of the first to the last waypoint.
     mask = numpy.zeros(times.shape, dtype=bool)
@@ -378,7 +380,7 @@ def SimplifyTrajectory(traj, robot):
         max_err_vals = numpy.max(errors, axis=0)
 
         # Add any extrema that deviated more than joint resolution.
-        max_err_idx = max_err_idx[max_err_vals > resolutions]
+        max_err_idx = max_err_idx[max_err_vals > tolerances]
         mask[max_err_idx] = True
 
         # If none deviated more than joint resolution, the set is complete.
