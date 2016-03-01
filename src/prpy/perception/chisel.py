@@ -99,9 +99,9 @@ class ChiselModule(PerceptionModule):
             # Apply a transform to the chisel kinbody to put it in the correct
             # location in the OpenRAVE environment
             from kinbody_helper import transform_to_or
-            transform_to_or(detection_frame="/map",
+            transform_to_or(kinbody=chisel_mesh,
+                            detection_frame="/map",
                             destination_frame=self.destination_frame,
-                            reference_link=self.reference_link,
-                            kinbody=chisel_mesh)
+                            reference_link=self.reference_link)
                         
         return chisel_mesh
