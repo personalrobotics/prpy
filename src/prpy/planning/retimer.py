@@ -96,7 +96,7 @@ class OpenRAVERetimer(BasePlanner):
         # Remove co-linear waypoints. Some of the default OpenRAVE retimers do
         # not perform this check internally (e.g. ParabolicTrajectoryRetimer).
         # if not IsTimedTrajectory(output_traj):
-        #    output_traj = SimplifyTrajectory(output_traj, robot)
+        output_traj = SimplifyTrajectory(output_traj, robot)
 
         # Only collision check the active DOFs.
         dof_indices, _ = cspec.ExtractUsedIndices(robot)
