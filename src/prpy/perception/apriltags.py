@@ -36,13 +36,13 @@ logger.setLevel(logging.INFO)
 
 class ApriltagsModule(PerceptionModule):
     
-    def __init__(self, marker_topic, marker_data_path, kinbody_path,
+    def __init__(self, marker_topic, marker_data_paths, kinbody_path,
                  detection_frame, destination_frame,reference_link,):
         """
         This initializes an April Tags detector.
         
         @param marker_topic The ROS topic to read markers from. Typically the output topic for April Tags
-        @param marker_data_path The json file where the association between tag and object is stored
+        @param marker_data_paths A list of json files where the association between tag and object is stored
         @param kinbody_path The path to the folder where kinbodies are stored
         @param detection_frame The TF frame of the camera
         @param destination_frame The desired world TF frame
@@ -51,7 +51,7 @@ class ApriltagsModule(PerceptionModule):
         super(ApriltagsModule, self).__init__()
         
         self.marker_topic = marker_topic
-        self.marker_data_path = marker_data_path
+        self.marker_data_paths = marker_data_paths
         self.kinbody_path = kinbody_path
         self.detection_frame = detection_frame
         self.destination_frame = destination_frame
@@ -62,7 +62,7 @@ class ApriltagsModule(PerceptionModule):
         return self.__class__.__name__
     
 
-    def _DetectObjects(self, env, marker_topic=None, marker_data_path=None, 
+    def _DetectObjects(self, env, marker_topic=None, marker_data_paths=None, 
                        kinbody_path=None, detection_frame=None, 
                        destination_frame=None, reference_link=None,**kw_args):
         """
@@ -71,7 +71,7 @@ class ApriltagsModule(PerceptionModule):
 
         @param env: The current OpenRAVE environment
         @param marker_topic The ROS topic to read markers from. Typically the output topic for April Tags
-        @param marker_data_path The json file where the association between tag and object is stored
+        @param marker_data_paths A list of json files where the association between tag and object is stored
         @param kinbody_path The path to the folder where kinbodies are stored
         @param detection_frame The TF frame of the camera
         @param destination_frame The desired world TF frame
@@ -84,8 +84,8 @@ class ApriltagsModule(PerceptionModule):
             if marker_topic is None:
                 marker_topic = self.marker_topic
             
-            if marker_data_path is None:
-                marker_data_path = self.marker_data_path
+            if marker_data_paths is None:
+                marker_data_paths = self.marker_data_paths
 
             if kinbody_path is None:
                 kinbody_path = self.kinbody_path
@@ -103,7 +103,7 @@ class ApriltagsModule(PerceptionModule):
             #  to just do this once in the constructor
             import kinbody_detector.kinbody_detector as kd
             detector = kd.KinBodyDetector(env,
-                                          marker_data_path,
+                                          marker_data_paths,
                                           kinbody_path,
                                           marker_topic,
                                           detection_frame,
