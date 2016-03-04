@@ -1103,7 +1103,7 @@ def IsTrajectoryTypeIkParameterizationTranslationDirection5D(traj):
     """
     try:
         IKP_type = openravepy.IkParameterizationType.TranslationDirection5D
-        group_name = "ikparam_values {0}".format(IKP_type)
+        group_name = "ikparam_values {0}".format(int(IKP_type))
         if traj.GetConfigurationSpecification().GetGroupFromName(group_name):
             return True
     except openravepy.openrave_exception:
