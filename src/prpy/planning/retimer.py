@@ -59,6 +59,10 @@ class OpenRAVERetimer(BasePlanner):
 
     @PlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
+        return self._RetimeTrajectory(robot, path, options=None, **kw_args)
+
+    def _RetimeTrajectory(self, robot, path, options=None, **kw_args):
+        """ Inner implementation of retiming using OpenRAVE planner. """
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
         from copy import deepcopy
 
@@ -154,13 +158,15 @@ class HauserParabolicSmoother(OpenRAVERetimer):
             'time_limit': float(timelimit),
         })
 
+    @PlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
         from copy import deepcopy
         if options is None:
             options = {}
         new_options = deepcopy(options)
         new_options['time_limit'] = kw_args.get('timelimit', 3.)
-        return super(HauserParabolicSmoother, self).RetimeTrajectory(
+
+        return super(HauserParabolicSmoother, self)._RetimeTrajectory(
             robot, path, options=new_options, **kw_args)
 
 
