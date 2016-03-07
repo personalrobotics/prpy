@@ -80,7 +80,7 @@ class GreedyIKPlanner(BasePlanner):
                 maxaccelerations=0.1*numpy.ones(7)
             )
 
-        return self.PlanWorkspacePath(robot, traj, timelimit)
+        return self._PlanWorkspacePath(robot, traj, timelimit)
 
     @PlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
@@ -138,8 +138,8 @@ class GreedyIKPlanner(BasePlanner):
                 maxaccelerations=0.1*numpy.ones(7)
             )
 
-        return self.PlanWorkspacePath(robot, traj,
-                                      timelimit, min_waypoint_index=1)
+        return self._PlanWorkspacePath(robot, traj,
+                                       timelimit, min_waypoint_index=1)
 
     @PlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
@@ -147,6 +147,27 @@ class GreedyIKPlanner(BasePlanner):
         """
         Plan a configuration space path given a workspace path.
         All timing information is ignored.
+
+        @param robot
+        @param traj workspace trajectory
+                    represented as OpenRAVE AffineTrajectory
+        @param min_waypoint_index minimum waypoint index to reach
+        @param timelimit timeout in seconds
+        @return qtraj configuration space path
+        """
+        return _PlanWorkspacePath(robot, traj, timelimit=5.0,
+                                  min_waypoint_index=None, **kw_args)
+
+    def _PlanWorkspacePath(self, robot, traj, timelimit=5.0,
+                           min_waypoint_index=None, **kw_args):
+        """
+        Plan a configuration space path given a workspace path.
+        All timing information is ignored.
+
+        This is the _internal_ version of this call, meant to be called
+        from within a @PlanningMethod.  Consider using the un-prefixed
+        version of the call for more general-purpose use.
+
         @param robot
         @param traj workspace trajectory
                     represented as OpenRAVE AffineTrajectory

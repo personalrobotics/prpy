@@ -112,8 +112,8 @@ class VectorFieldPlanner(BasePlanner):
                 return Status.TERMINATE
             return Status.CONTINUE
 
-        traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
-                                      timelimit)
+        traj = self._FollowVectorField(robot, vf_geodesic, CloseEnough,
+                                       timelimit)
 
         # Flag this trajectory as unconstrained. This overwrites the
         # constrained flag set by FollowVectorField.
@@ -197,8 +197,8 @@ class VectorFieldPlanner(BasePlanner):
 
             return Status.CONTINUE
 
-        return self.FollowVectorField(robot, vf_straightline, TerminateMove,
-                                      timelimit, **kw_args)
+        return self._FollowVectorField(robot, vf_straightline, TerminateMove,
+                                       timelimit, **kw_args)
 
     @PlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
@@ -206,6 +206,32 @@ class VectorFieldPlanner(BasePlanner):
                           timelimit=5.0, dt_multiplier=1.01, **kw_args):
         """
         Follow a joint space vectorfield to termination.
+
+        @param robot
+        @param fn_vectorfield a vectorfield of joint velocities
+        @param fn_terminate custom termination condition
+        @param timelimit time limit before giving up
+        @param dt_multiplier multiplier of the minimum resolution at which
+               the vector field will be followed. Defaults to 1.0.
+               Any larger value means the vectorfield will be re-evaluated
+               floor(dt_multiplier) steps
+        @param kw_args keyword arguments to be passed to fn_vectorfield
+        @return traj
+        """
+        return self._FollowVectorField(robot, fn_vectorfield, fn_terminate,
+                                       integration_timelimit=10.,
+                                       timelimit=5.0, dt_multiplier=1.01,
+                                       **kw_args)
+
+    def _FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
+                           integration_timelimit=10.,
+                           timelimit=5.0, dt_multiplier=1.01, **kw_args):
+        """
+        Follow a joint space vectorfield to termination.
+
+        This is the _internal_ version of this call, meant to be called
+        from within a @PlanningMethod.  Consider using the un-prefixed
+        version of the call for more general-purpose use.
 
         @param robot
         @param fn_vectorfield a vectorfield of joint velocities

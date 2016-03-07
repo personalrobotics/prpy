@@ -154,7 +154,6 @@ class HauserParabolicSmoother(OpenRAVERetimer):
             'time_limit': float(timelimit),
         })
 
-    @PlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
         from copy import deepcopy
         if options is None:
@@ -163,6 +162,7 @@ class HauserParabolicSmoother(OpenRAVERetimer):
         new_options['time_limit'] = kw_args.get('timelimit', 3.)
         return super(HauserParabolicSmoother, self).RetimeTrajectory(
             robot, path, options=new_options, **kw_args)
+
 
 class OpenRAVEAffineRetimer(BasePlanner):
     def __init__(self,):
