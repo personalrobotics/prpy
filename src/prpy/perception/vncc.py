@@ -72,30 +72,6 @@ class VnccModule(PerceptionModule):
         
 	return pose
 
-    def _LocalToWorld(self,pose):
-        """
-        Transform a pose from local frame to world frame
-        @param pose The 4x4 transformation matrix containing the pose to transform
-        @return The 4x4 transformation matrix describing the pose in world frame
-        """
-        #Get pose w.r.t world frame
-        self.listener.waitForTransform(self.world_frame,self.detection_frame,
-                                       rospy.Time(),rospy.Duration(10))
-        t, r = self.listener.lookupTransform(self.world_frame,self.detection_frame,
-                                             rospy.Time(0))
-        
-        #Get relative transform between frames
-        offset_to_world = numpy.matrix(transformations.quaternion_matrix(r))
-        offset_to_world[0,3] = t[0]
-        offset_to_world[1,3] = t[1]
-        offset_to_world[2,3] = t[2]
-        
-        #Compose with pose to get pose in world frame
-        result = numpy.array(numpy.dot(offset_to_world, pose))
-        
-        return result
-        
-
     def _GetDetection(self, obj_name):
         """
         Calls the service to get a detection of a particular object.
