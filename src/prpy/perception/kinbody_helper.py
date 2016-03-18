@@ -1,5 +1,6 @@
 
-def transform_to_or(kinbody, detection_frame, destination_frame, 
+def transform_to_or(kinbody, detection_frame=None, destination_frame=None, 
+                    detection_in_destination=None,
                     reference_link=None, pose=None):
     """
     Transform the pose of a kinbody from a pose determined using TF to 
@@ -16,26 +17,31 @@ def transform_to_or(kinbody, detection_frame, destination_frame,
       tf frame is the identity)
     @param pose The pose to transform (if None, kinbody.GetTransform() is used)
     """
-
-    import numpy, tf, rospy
-    listener = tf.TransformListener()
-
+    import numpy
     if pose is None:
         with kinbody.GetEnv():
             pose = kinbody.GetTransform()
 
-    listener.waitForTransform(
-        detection_frame, destination_frame,
-        rospy.Time(),
-        rospy.Duration(10))
+    if detection_in_destination is None:
+        import tf, rospy
+        listener = tf.TransformListener()
 
-    frame_trans, frame_rot = listener.lookupTransform(
-        destination_frame, detection_frame,
-        rospy.Time(0))
+        if pose is None:
+            with kinbody.GetEnv():
+                pose = kinbody.GetTransform()
+
+        listener.waitForTransform(
+            detection_frame, destination_frame,
+            rospy.Time(),
+            rospy.Duration(10))
         
-    from tf.transformations import quaternion_matrix
-    detection_in_destination = numpy.array(numpy.matrix(quaternion_matrix(frame_rot)))
-    detection_in_destination[:3,3] = frame_trans
+        frame_trans, frame_rot = listener.lookupTransform(
+            destination_frame, detection_frame,
+            rospy.Time(0))
+        
+        from tf.transformations import quaternion_matrix
+        detection_in_destination = numpy.array(numpy.matrix(quaternion_matrix(frame_rot)))
+        detection_in_destination[:3,3] = frame_trans
     
     body_in_destination = numpy.dot(detection_in_destination, pose)
 

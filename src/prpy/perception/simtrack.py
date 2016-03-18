@@ -188,6 +188,7 @@ class SimtrackModule(PerceptionModule):
 
         robot = kwargs['robot']
         obj_name = kwargs['obj_name']
+        detection_in_destination = kwargs['detection_in_destination']
 
         env = robot.GetEnv()
         with env:
@@ -204,18 +205,28 @@ class SimtrackModule(PerceptionModule):
              obj = env.GetKinBody(obj_name)
                                               
         from kinbody_helper import transform_to_or
-        transform_to_or(kinbody=obj,
-                        detection_frame=self.detection_frame,
-                        destination_frame=self.destination_frame,
-                        reference_link=self.reference_link,
-                        pose=pose_tf)
+        if detection_in_destination is not None:
+            transform_to_or(kinbody=obj,
+                            detection_in_destination=detection_in_destination,
+                            reference_link=self.reference_link,
+                            pose=pose_tf)
+        else:
+            transform_to_or(kinbody=obj,
+                            detection_frame=self.detection_frame,
+                            destination_frame=self.destination_frame,
+                            reference_link=self.reference_link,
+                            pose=pose_tf)
 
     @PerceptionMethod
-    def StartTrackObject(self, robot, obj_name, **kw_args):
+    def StartTrackObject(self, robot, obj_name, cache_transform=True, **kw_args):
         """
         Subscribe to the pose array for an object in order to track
         @param robot The OpenRAVE robot
         @param obj_name The name of the object to track
+        @param cache_transform If true, lookup the transform from detection_frame
+          to destination_frame once, cache it and use it for the duration of tracking.
+          This speeds up tracking by removing the need to perform a tf lookup
+          in the callback.
         """
         import rospy
         from geometry_msgs.msg import PoseStamped
@@ -229,13 +240,32 @@ class SimtrackModule(PerceptionModule):
         if obj_name in self.track_sub and self.track_sub[obj_name] is not None:
             raise PerceptionException('The object %s is already being tracked' % obj_name)
 
-        print 'Subscribing to topic: ', pose_topic
+        #  These speeds up tracking by removing the need to do a tf lookup
+        detection_in_destination=None
+        if cache_transform:
+            import numpy, tf, rospy
+            listener = tf.TransformListener()
+            
+            listener.waitForTransform(
+                self.detection_frame, self.destination_frame,
+                rospy.Time(),
+                rospy.Duration(10))
+            
+            frame_trans, frame_rot = listener.lookupTransform(
+                self.destination_frame, self.detection_frame,
+                rospy.Time(0))
+        
+            from tf.transformations import quaternion_matrix
+            detection_in_destination = numpy.array(numpy.matrix(quaternion_matrix(frame_rot)))
+            detection_in_destination[:3,3] = frame_trans
+
         self.track_sub[obj_name] = rospy.Subscriber(pose_topic, 
                                                     PoseStamped, 
                                                     callback=self._UpdatePose,
                                                     callback_args={
                                                         'robot':robot, 
-                                                        'obj_name':obj_name},
+                                                        'obj_name':obj_name,
+                                                        'detection_in_destination': detection_in_destination},
                                                     queue_size=1
         )
 
