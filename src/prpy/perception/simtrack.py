@@ -27,13 +27,7 @@ class SimtrackModule(PerceptionModule):
             rospy.init_node('simtrack_detector', anonymous=True)
         except rospy.exceptions.ROSException:
             pass
-            
-        #For getting transforms in world frame
-        if detection_frame is not None and world_frame is not None:
-            self.listener = tf.TransformListener()
-        else:
-            self.listener = None
-                
+                            
         if service_namespace is None:
             service_namespace='/simtrack'
         self.service_namespace = service_namespace
@@ -51,6 +45,9 @@ class SimtrackModule(PerceptionModule):
                                      'pop_tarts': 'pop_tarts_visual'}
         self.query_to_kinbody_map = {'fuze_bottle_visual': 'fuze_bottle',
                                      'pop_tarts_visual': 'pop_tarts'}
+        
+        # A dictionary of subscribers to topic - one for each body
+        self.track_sub = {}
 
     @staticmethod
     def _MsgToPose(msg):
@@ -71,13 +68,14 @@ class SimtrackModule(PerceptionModule):
 	return pose
 
     def _GetDetections(self, obj_names):
-        import simtrack_msgs.srv
         """
         Calls the service to get a detection of a particular object.
         @param obj_name The name of the object to detect
         @return A 4x4 transformation matrix describing the pose of the object
         in world frame, None if the object is not detected
         """
+        import simtrack_msgs.srv, rospy
+
         #Call detection service for a particular object
         detect_simtrack = rospy.ServiceProxy(self.service_namespace+'/detect_objects',
                                          simtrack_msgs.srv.DetectObjects)
@@ -111,14 +109,16 @@ class SimtrackModule(PerceptionModule):
             raise PerceptionException('The simtrack module cannot detect object %s', obj_name)
 
         query_name = self.kinbody_to_query_map[obj_name]
-        obj_poses = self._GetDetections(query_name)
-        if len(obj_poses is 0):
+        obj_poses = self._GetDetections([query_name])
+        if len(obj_poses) == 0:
             raise PerceptionException('Failed to detect object %s', obj_name)
         
         obj_pose = None
 
+        print query_name
         for (name, pose) in obj_poses:
-            if (name is query_name):
+            print name
+            if name == query_name:
                 obj_pose = pose
                 break;
 
@@ -142,7 +142,8 @@ class SimtrackModule(PerceptionModule):
         transform_to_or(kinbody=body,
                         detection_frame=self.detection_frame,
                         destination_frame=self.destination_frame,
-                        reference_link=self.reference_link)
+                        reference_link=self.reference_link,
+                        pose=obj_pose)
 
         return body
 
@@ -176,6 +177,75 @@ class SimtrackModule(PerceptionModule):
             transform_to_or(kinbody=body,
                             detection_frame=self.detection_frame,
                             destination_frame=self.destination_frame,
-                            reference_link=self.reference_link)
+                            reference_link=self.reference_link,
+                            pose=obj_pose)
 
+    def _UpdatePose(self, msg, kwargs):
+        """
+        Update the pose of an object
+        """
+        pose_tf = self._MsgToPose(msg)
 
+        robot = kwargs['robot']
+        obj_name = kwargs['obj_name']
+
+        env = robot.GetEnv()
+        with env:
+             obj = env.GetKinBody(obj_name)
+        if obj is None:
+            from prpy.rave import add_object
+            kinbody_file = '%s.kinbody.xml' % obj_name
+            new_body = add_object(
+                env,
+                obj_name,
+                os.path.join(self.kinbody_path, kinbody_file))
+
+        with env:
+             obj = env.GetKinBody(obj_name)
+                                              
+        from kinbody_helper import transform_to_or
+        transform_to_or(kinbody=obj,
+                        detection_frame=self.detection_frame,
+                        destination_frame=self.destination_frame,
+                        reference_link=self.reference_link,
+                        pose=pose_tf)
+
+    @PerceptionMethod
+    def StartTrackObject(self, robot, obj_name, **kw_args):
+        """
+        Subscribe to the pose array for an object in order to track
+        @param robot The OpenRAVE robot
+        @param obj_name The name of the object to track
+        """
+        import rospy
+        from geometry_msgs.msg import PoseStamped
+        from prpy.perception.base import PerceptionException
+
+        if obj_name not in self.kinbody_to_query_map:
+            raise PerceptionException('The simtrack module cannot track object %s' & obj_name)
+        query_name = self.kinbody_to_query_map[obj_name]
+        pose_topic = self.service_namespace + '/' + query_name
+
+        if obj_name in self.track_sub and self.track_sub[obj_name] is not None:
+            raise PerceptionException('The object %s is already being tracked' % obj_name)
+
+        print 'Subscribing to topic: ', pose_topic
+        self.track_sub[obj_name] = rospy.Subscriber(pose_topic, 
+                                                    PoseStamped, 
+                                                    callback=self._UpdatePose,
+                                                    callback_args={
+                                                        'robot':robot, 
+                                                        'obj_name':obj_name},
+                                                    queue_size=1
+        )
+
+    @PerceptionMethod
+    def StopTrackObject(self, robot, obj_name, **kw_args):
+        """
+        Unsubscribe from the pose array to end tracking
+        @param robot The OpenRAVE robot
+        @param obj_name The name of the object to stop tracking
+        """
+        if obj_name in self.track_sub and self.track_sub[obj_name] is not None:
+            self.track_sub[obj_name].unregister()            
+            self.track_sub[obj_name] = None
