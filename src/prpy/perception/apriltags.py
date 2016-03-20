@@ -37,7 +37,8 @@ logger.setLevel(logging.INFO)
 class ApriltagsModule(PerceptionModule):
     
     def __init__(self, marker_topic, marker_data_path, kinbody_path,
-                 detection_frame, destination_frame,reference_link,):
+                 detection_frame, destination_frame,reference_link,
+                 optimize=False, kalman=False, frame_offset=None):
         """
         This initializes an April Tags detector.
         
@@ -46,6 +47,8 @@ class ApriltagsModule(PerceptionModule):
         @param kinbody_path The path to the folder where kinbodies are stored
         @param detection_frame The TF frame of the camera
         @param destination_frame The desired world TF frame
+        @param optimize Use optimizing_kinbody_detector
+        @param frame_offset Use this for transformation between detection and destination frame 
         """
 
         super(ApriltagsModule, self).__init__()
@@ -56,7 +59,12 @@ class ApriltagsModule(PerceptionModule):
         self.detection_frame = detection_frame
         self.destination_frame = destination_frame
         self.reference_link = reference_link
-        
+        self.optimize = optimize
+        self.kalman = kalman
+        self.frame_offset = frame_offset
+        if optimize and kalman:
+            raise ValueError("Can't do optimizion and kalman simulateneously.")
+
         
     def __str__(self):
         return self.__class__.__name__
@@ -101,14 +109,35 @@ class ApriltagsModule(PerceptionModule):
 
             # TODO: Creating detector is not instant...might want
             #  to just do this once in the constructor
-            import kinbody_detector.kinbody_detector as kd
-            detector = kd.KinBodyDetector(env,
-                                          marker_data_path,
-                                          kinbody_path,
-                                          marker_topic,
-                                          detection_frame,
-                                          destination_frame,
-                                          reference_link)
+            if not self.optimize and not self.kalman:
+                import kinbody_detector.kinbody_detector as kd
+                detector = kd.KinBodyDetector(env,
+                                              marker_data_path,
+                                              kinbody_path,
+                                              marker_topic,
+                                              detection_frame,
+                                              destination_frame,
+                                              reference_link,
+                                              frame_offset=frame_offset)
+            elif self.optimize:
+                import kinbody_detector.optimizing_kinbody_detector as kd
+                detector = kd.OptimizingKinBodyDetector(env,
+                                                        marker_data_path,
+                                                        kinbody_path,
+                                                        marker_topic,
+                                                        detection_frame,
+                                                        destination_frame,
+                                                        reference_link,
+                                                        frame_offset=frame_offset)
+            elif self.kalman:
+                import kalman.kalman_kinbody_detector as kd
+                detector = kd.KinBodyDetector(env,
+                                              marker_data_path,
+                                              kinbody_path,
+                                              marker_topic,
+                                              detection_frame,
+                                              destination_frame,
+                                              frame_offset=frame_offset) 
 
             logger.warn('Waiting to detect objects...')
             return detector.Update()
@@ -147,3 +176,4 @@ class ApriltagsModule(PerceptionModule):
 
         from prpy.perception.base import PerceptionException
         raise PerceptionException('Failed to detect object %s', object_name)
+

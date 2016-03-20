@@ -8,6 +8,11 @@ import numpy
 from visualization_msgs.msg import MarkerArray, Marker
 from tf.transformations import quaternion_matrix
 
+import logging
+from base import PerceptionModule, PerceptionMethod
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class DetectorException(Exception):
     pass
@@ -148,7 +153,12 @@ class KinBodyDetector(object):
         marker_message = rospy.wait_for_message(self.marker_topic,
                                                 MarkerArray,
                                                 timeout=timeout)
-        
+        # current image
+        from sensor_msgs import Image
+        image = rospy.wait_for_message('camera/rgb/image_raw', #TODO: topic name
+                                        Image,
+                                        timeout=timeout)
+
         added_kinbodies = []
         updated_kinbodies = []
         
@@ -171,7 +181,6 @@ class KinBodyDetector(object):
                         rospy.Time(),
                         rospy.Duration(timeout))
                 frame_trans, frame_rot = self.listener.lookupTransform(
-#                        self.detection_frame,
                         self.destination_frame,
                         self.detection_frame,
                         rospy.Time(0))
@@ -193,18 +202,16 @@ class KinBodyDetector(object):
 
                 from table_clearing.perception_utils import (get_table_height,
                                                              PerceptionException)
-                print kinbody_file
-                # Optimize to get initial pose guess
                 if "table" not in kinbody_file:
-                # if True:
-                    try:
+                    try: 
+                        # Optimize for non-table objects to get initial guess
                         h = get_table_height(self.env)
                         obj_transform, se2_pose = self.optimize(kinbody_offset,
                                                                 frame_offset,
                                                                 marker_pose,
                                                                 kinbody_pose,
                                                                 h)
-                        print "Optimizing: ", kinbody_file
+                        logger.info("Optimizing: %s", kinbody_file)
                         if obj_transform is not None:
                             kinbody_pose = obj_transform
                     except PerceptionException:
@@ -218,7 +225,6 @@ class KinBodyDetector(object):
                         if obj_transform is not None:
                             kinbody_pose = obj_transform
                     
-                    print "Run UKF update"
                     # Get mu = (theta, x, y) from current kinbody pose estimate.
                     mu = numpy.matrix(se2_pose).transpose()
                     cov = numpy.matrix(numpy.identity(3))
@@ -227,29 +233,62 @@ class KinBodyDetector(object):
                     projection = self.project_marker_to_im_screen(marker_pose)
                     z = numpy.matrix(projection[0:2]).transpose()
 
-                    # Update (x,y,theta) from UKF
-                    from ukf_update import update
+                    # Update (x,y,theta) by UKF
+                    logger.info("Run UKF update for %s", kinbody_file)
+                    from ukf_update import update, measure
+                    from ukf import get_sigma_points
+                    sig_points = get_sigma_points(mu, cov)
+                    # sig_points_projection = measure(sig_points, self.P,
+                    #                                 frame_offset,
+                    #                                 kinbody_offset,
+                    #                                 height=h)
+                    #TODO: draw sigma_points_on_screen on 2D image 
+
+                    # Convert sigma points to poses and draw on screen
+                    for i in sigma_points:
+                        kin_pose = self.convert_to_kinbody_pose(i, h)
+                        if self.reference_link is not None:
+                            ref_link_pose = self.reference_link.GetTransform()
+                            kin_pose = numpy.dot(ref_link_pose, kin_pose)
+                            DrawAxes(self.env, kin_pose)
+
+
                     mu_new, cov_new = update(mu, cov, self.P,
                                              frame_offset,
                                              kinbody_offset,
                                              z,
                                              height=h)
 
-                    print "mu old, mu UKF"
-                    print mu
-                    print mu_new
-                    print "cov old, cov UKF"
-                    print cov
-                    print cov_new
+                    sig_points_new = get_sigma_points(mu_new, cov_new)
+                    # sig_points_new_projection = measure(sig_points_new,
+                    #                                     self.P,
+                    #                                     frame_offset,
+                    #                                     kinbody_offset,
+                    #                                     height=h)
+                    # TODO: draw new sigma_points on 2D image 
+                    raw_input('Drew old kin_poses, proceed to draw new ones')
+                    
+                    # Convert sigma points to poses and draw on screen
+                    for i in sigma_points_new:
+                        kin_pose = self.convert_to_kinbody_pose(i, h)
+                        if self.reference_link is not None:
+                            ref_link_pose = self.reference_link.GetTransform()
+                            kin_pose = numpy.dot(ref_link_pose, kin_pose)
+                            DrawAxes(self.env, kin_pose)
+
+
+                    logger.info("mu old: %s", str(mu.transpose()))
+                    logger.info("mu new: %s", str(mu_new.transpose()))
+                    logger.info("cov old: \n %s", str(cov))
+                    logger.info("cov new: \n %s", str(cov_new))
 
                     kinbody_pose = self.convert_to_kinbody_pose(mu_new, h)
                 
                 final_kb_pose = numpy.array(kinbody_pose)
 
-                print "final_kb_pose"
-                print final_kb_pose
+                logger.info("final_kb_pose %s", str(final_kb_pose))
 
-                #Transform w.r.t reference link if link present
+                # Transform w.r.t reference link if link present
                 if self.reference_link is not None:
                     ref_link_pose = self.reference_link.GetTransform()
                     final_kb_pose = numpy.dot(ref_link_pose,kinbody_pose)

@@ -71,7 +71,8 @@ def measure(x, P, frame_offset, kinbody_offset, height=0.5):
     return Z
 
 
-def update(mu, cov, P, frame_offset, kinbody_offset, z, height=0.5, Q=numpy.matrix(numpy.identity(2))):
+def update(mu, cov, P, frame_offset, kinbody_offset, z, 
+           height=0.5, Q=numpy.matrix(numpy.identity(2))):
     """
     Given current estimate (mu, cov) of obj in SE(2)
     and detected feature point z in im screen,
@@ -93,7 +94,9 @@ def update(mu, cov, P, frame_offset, kinbody_offset, z, height=0.5, Q=numpy.matr
     from ukf import unscented_kalman_filter
     return unscented_kalman_filter(mu, cov, None, z, 0, Q,
                                    process,
-                                   lambda x: measure(x, P, frame_offset, kinbody_offset, height))
+                                   lambda x: measure(x, P, frame_offset, 
+                                                     kinbody_offset, height)
+                                   )
 
 
 if __name__ == "__main__":
