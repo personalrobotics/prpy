@@ -12,14 +12,17 @@ from base import PerceptionModule, PerceptionMethod
 
 class VnccModule(PerceptionModule):
 
-    def __init__(self, kinbody_path, detection_frame, world_frame,
+    def __init__(self, kinbody_path, detection_frame, 
+                 destination_frame=None, reference_link=None,
                  service_namespace=None):
         """
         This initializes a VNCC detector.
         
         @param kinbody_path The path to the folder where kinbodies are stored
         @param detection_frame The TF frame of the camera
-        @param world_frame The desired world TF frame
+        @param destination_frame The tf frame that the kinbody should be transformed to
+        @param reference_link The OpenRAVE link that corresponds to the tf frame
+        given by the destination_frame parameter
         @param service_namespace The namespace for the VNCC service (default: /vncc)
         """
 
@@ -39,7 +42,11 @@ class VnccModule(PerceptionModule):
             service_namespace='/vncc'
 
         self.detection_frame = detection_frame
-        self.world_frame = world_frame
+        if destination_frame is None:
+            destination_frame='/map'
+        self.destination_frame = destination_frame
+        self.reference_link = reference_link
+
         self.service_namespace = service_namespace
             
         self.kinbody_path = kinbody_path
@@ -65,30 +72,6 @@ class VnccModule(PerceptionModule):
         
 	return pose
 
-    def _LocalToWorld(self,pose):
-        """
-        Transform a pose from local frame to world frame
-        @param pose The 4x4 transformation matrix containing the pose to transform
-        @return The 4x4 transformation matrix describing the pose in world frame
-        """
-        #Get pose w.r.t world frame
-        self.listener.waitForTransform(self.world_frame,self.detection_frame,
-                                       rospy.Time(),rospy.Duration(10))
-        t, r = self.listener.lookupTransform(self.world_frame,self.detection_frame,
-                                             rospy.Time(0))
-        
-        #Get relative transform between frames
-        offset_to_world = numpy.matrix(transformations.quaternion_matrix(r))
-        offset_to_world[0,3] = t[0]
-        offset_to_world[1,3] = t[1]
-        offset_to_world[2,3] = t[2]
-        
-        #Compose with pose to get pose in world frame
-        result = numpy.array(numpy.dot(offset_to_world, pose))
-        
-        return result
-        
-
     def _GetDetection(self, obj_name):
         """
         Calls the service to get a detection of a particular object.
@@ -107,9 +90,8 @@ class VnccModule(PerceptionModule):
             
         #Assumes one instance of object
         result = self._MsgToPose(detect_resp.detections[0])
-        if (self.detection_frame is not None and self.world_frame is not None):
-            result = self._LocalToWorld(result)
         result[:3,:3] = numpy.eye(3)
+
         return result
 
     @PerceptionMethod
@@ -144,5 +126,12 @@ class VnccModule(PerceptionModule):
                 os.path.join(self.kinbody_path, kinbody_file))
             
         body = env.GetKinBody(obj_name)
-        body.SetTransform(obj_pose)
+
+        # Apply a transform to the kinbody to put it in the 
+        #  desired location in OpenRAVE
+        from kinbody_helper import transform_to_or
+        transform_to_or(kinbody=body,
+                        detection_frame=self.detection_frame,
+                        destination_frame=self.destination_frame,
+                        reference_link=self.reference_link)
         return body

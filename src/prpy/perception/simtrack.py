@@ -7,14 +7,16 @@ from base import PerceptionModule, PerceptionMethod
 
 class SimtrackModule(PerceptionModule):
 
-    def __init__(self, kinbody_path, detection_frame, world_frame,
+    def __init__(self, kinbody_path, detection_frame, 
+                 destination_frame=None, reference_link=None,
                  service_namespace=None):
         """
         This initializes a simtrack detector.
         
         @param kinbody_path The path to the folder where kinbodies are stored
         @param detection_frame The TF frame of the camera
-        @param world_frame The desired world TF frame
+        @param destination_frame The tf frame that the kinbody should be transformed to
+        @param reference_link The OpenRAVE link that corresponds to the tf destination_frame
         @param service_namespace The namespace for the simtrack service (default: /simtrack)
         """
         import rospy
@@ -34,10 +36,13 @@ class SimtrackModule(PerceptionModule):
                 
         if service_namespace is None:
             service_namespace='/simtrack'
+        self.service_namespace = service_namespace
 
         self.detection_frame = detection_frame
-        self.world_frame = world_frame
-        self.service_namespace = service_namespace
+        if destination_frame is None:
+            destination_frame='/map'
+        self.destination_frame = destination_frame
+        self.reference_link = reference_link
             
         self.kinbody_path = kinbody_path
 
@@ -65,31 +70,6 @@ class SimtrackModule(PerceptionModule):
         
 	return pose
 
-    def _LocalToWorld(self,pose):
-        """
-        Transform a pose from local frame to world frame
-        @param pose The 4x4 transformation matrix containing the pose to transform
-        @return The 4x4 transformation matrix describing the pose in world frame
-        """
-        import rospy
-        #Get pose w.r.t world frame
-        self.listener.waitForTransform(self.world_frame,self.detection_frame,
-                                       rospy.Time(),rospy.Duration(10))
-        t, r = self.listener.lookupTransform(self.world_frame,self.detection_frame,
-                                             rospy.Time(0))
-        
-        #Get relative transform between frames
-        offset_to_world = numpy.matrix(transformations.quaternion_matrix(r))
-        offset_to_world[0,3] = t[0]
-        offset_to_world[1,3] = t[1]
-        offset_to_world[2,3] = t[2]
-        
-        #Compose with pose to get pose in world frame
-        result = numpy.array(numpy.dot(offset_to_world, pose))
-        
-        return result
-        
-
     def _GetDetections(self, obj_names):
         import simtrack_msgs.srv
         """
@@ -111,8 +91,6 @@ class SimtrackModule(PerceptionModule):
             obj_name = detect_resp.detected_models[i];
             obj_pose = detect_resp.detected_poses[i];
             obj_pose_tf = self._MsgToPose(obj_pose);
-            if (self.detection_frame is not None and self.world_frame is not None):
-                obj_pose_tf = self._LocalToWorld(obj_pose_tf)
             detections.append((obj_name, obj_pose_tf));
 
         return detections
@@ -157,7 +135,15 @@ class SimtrackModule(PerceptionModule):
                 os.path.join(self.kinbody_path, kinbody_file))
             
         body = env.GetKinBody(obj_name)
-        body.SetTransform(obj_pose)
+
+        # Apply a transform to the kinbody to put it in the 
+        #  desired location in OpenRAVE
+        from kinbody_helper import transform_to_or
+        transform_to_or(kinbody=body,
+                        detection_frame=self.detection_frame,
+                        destination_frame=self.destination_frame,
+                        reference_link=self.reference_link)
+
         return body
 
     @PerceptionMethod 
@@ -166,6 +152,8 @@ class SimtrackModule(PerceptionModule):
         Overriden method for detection_frame
         """
         from prpy.perception.base import PerceptionException
+        from kinbody_helper import transform_to_or
+
         env = robot.GetEnv()
         # Detecting empty list will detect all possible objects
         detections = self._GetDetections([])
@@ -175,7 +163,6 @@ class SimtrackModule(PerceptionModule):
                 continue
 
             kinbody_name = self.query_to_kinbody_map[obj_name]
-
             if env.GetKinBody(kinbody_name) is None:
                 from prpy.rave import add_object
                 kinbody_file = '%s.kinbody.xml' % kinbody_name
@@ -183,8 +170,12 @@ class SimtrackModule(PerceptionModule):
                     env,
                     kinbody_name,
                     os.path.join(self.kinbody_path, kinbody_file))
-            print kinbody_name
+
+
             body = env.GetKinBody(kinbody_name)
-            body.SetTransform(obj_pose)
+            transform_to_or(kinbody=body,
+                            detection_frame=self.detection_frame,
+                            destination_frame=self.destination_frame,
+                            reference_link=self.reference_link)
 
 
