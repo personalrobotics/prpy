@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_sigma_points(mu, cov, Lambda=None, alpha=1e-1, beta=2):
+def get_sigma_points(mu, cov, Lambda=None, alpha=1e-2, beta=2, k=1000):
     """
     Returns 2n+1 points and their weights to be processed 
     for UKF where n is the dimension of mu.
@@ -29,13 +29,16 @@ def get_sigma_points(mu, cov, Lambda=None, alpha=1e-1, beta=2):
     n = np.shape(mu)[0]
 
     if not Lambda:
-        Lambda = alpha**2*n - n
+        Lambda = alpha**2.0*(n+k) - n
 
     X = np.matrix(np.empty(shape=(n, 2*n + 1)))
     X[:, 0] = mu
     W = list()
+
     msr = np.matrix(LA.sqrtm(np.matrix((n+Lambda)*cov)))
 
+    print "msr"
+    print msr
     for i in range(n):
         X[:, 2*i + 1] = mu + msr[:, i]
         X[:, 2*i + 2] = mu - msr[:, i]
@@ -44,6 +47,18 @@ def get_sigma_points(mu, cov, Lambda=None, alpha=1e-1, beta=2):
     # Insert w0 for Wm and Wc.
     Wm = np.array([Lambda/(n + Lambda)] + W) 
     Wc = np.array([Lambda/(n + Lambda) + 1 - alpha**2 + beta] + W)
+
+    # making weights non-negative; is this correct?
+    if Wm.min()<0:
+        print "Old Wm\n", Wm
+        Wm = Wm + abs(2*Wm.min())
+        Wm = Wm/sum(Wm)
+        print "Wm\n", Wm
+    if Wc.min()<0:
+        Wc = Wc + abs(2*Wc.min())
+        Wc = Wc/sum(Wc)
+        print "Wc", Wc
+
 
     return X, Wm, Wc
 
@@ -90,20 +105,27 @@ def unscented_kalman_filter(mu, cov, u, z, R, Q, process, measure):
     mu_predicted = np.average(X_processed, axis=1, weights=Wm)
     cov_predicted = weighted_cov(mu_predicted, X_processed, Wc) + R
 
-    logger.info("X_processed %s", str(X_processed))
+    logger.info("X old\n %s", str(X))
+    logger.info("X_processed\n %s", str(X_processed))
     logger.info("mu_predicted %s", str(mu_predicted))
 
     # Get sigma points from the processed distribution.
     X_next, Wm_next, Wc_next = get_sigma_points(mu_predicted, cov_predicted)
 
+    logger.info("X_next based on prediction\n %s", X_next)
+
     # Predict observation distribution.
     Z = measure(X_next)
-    z_mean = np.average(Z, axis=1, weights=Wm)
+    z_mean = np.average(Z, axis=1, weights=Wm_next)
     S = weighted_cov(z_mean, Z, Wc_next) + Q
     XZ_cov = weighted_xz_cov(mu_predicted, X_next, z_mean, Z, Wc_next)
 
-    logger.info("z %s", str(z))
-    logger.info("z mean %s", str(z_mean))
+    logger.info("z\n%s", str(z))
+    logger.info("z mean\n%s", str(z_mean))
+    logger.info("Z\n%s", str(Z[:,:5]))
+
+    import IPython
+    IPython.embed()
 
     from numpy.linalg import inv
     Kalman_gain = XZ_cov*inv(S)

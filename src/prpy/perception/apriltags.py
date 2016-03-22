@@ -118,9 +118,10 @@ class ApriltagsModule(PerceptionModule):
                                               detection_frame,
                                               destination_frame,
                                               reference_link,
-                                              frame_offset=frame_offset)
+                                              frame_offset=self.frame_offset)
             elif self.optimize:
                 import kinbody_detector.optimizing_kinbody_detector as kd
+                logger.info("Using optimizing_kinbody_detector")
                 detector = kd.OptimizingKinBodyDetector(env,
                                                         marker_data_path,
                                                         kinbody_path,
@@ -128,7 +129,7 @@ class ApriltagsModule(PerceptionModule):
                                                         detection_frame,
                                                         destination_frame,
                                                         reference_link,
-                                                        frame_offset=frame_offset)
+                                                        frame_offset=self.frame_offset)
             elif self.kalman:
                 import kalman.kalman_kinbody_detector as kd
                 detector = kd.KinBodyDetector(env,
@@ -137,7 +138,8 @@ class ApriltagsModule(PerceptionModule):
                                               marker_topic,
                                               detection_frame,
                                               destination_frame,
-                                              frame_offset=frame_offset) 
+                                              reference_link,
+                                              frame_offset=self.frame_offset) 
 
             logger.warn('Waiting to detect objects...')
             return detector.Update()

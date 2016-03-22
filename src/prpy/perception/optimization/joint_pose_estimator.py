@@ -22,17 +22,16 @@ from tf.transformations import (quaternion_matrix,
 from openravepy.misc import DrawAxes
 
 import logging
-from base import PerceptionModule, PerceptionMethod
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class CameraTableJointPoseEstimator(object):
-""" 
-Assuming table height is known and is lying flat on the ground, 
-estimate the pose of table as well as the frame offset
-between destimation frame and detection frame (camera frame).
-"""
+    """ 
+    Assuming table height is known and is lying flat on the ground, 
+    estimate the pose of table as well as the frame offset
+    between destimation frame and detection frame (camera frame).
+    """
 
     def __init__(self, env, marker_data_path,
                  kinbody_directory,
@@ -66,6 +65,10 @@ between destimation frame and detection frame (camera frame).
 
         self.P = self.P.reshape([3, 4])
 
+    def ReloadKinbodyData(self):
+        with open(self.marker_data_path, 'r') as f:
+            self.marker_data = json.load(f)
+            
     def se2_to_kinbody_pose(self, se2_pose, height):
         """ Takes [theta, x, y].
         Returns 4x4 object transform.
