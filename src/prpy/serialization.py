@@ -558,7 +558,7 @@ JOINT_INFO_MAP = {
     '_name': str_identity,
     '_type': (
         lambda x: x.name,
-        lambda x: openravepy.KinBody.JointType.names[x].encode()
+        lambda x: openravepy.KinBody.JointType.names[x]
     ),
     '_vanchor': numpy_identity,
     '_vaxes': (

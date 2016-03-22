@@ -109,15 +109,17 @@ def add_object(env, object_name, object_xml_path, object_pose = None):
 
    return None
 
+
+
 # render a trajectory in the environment
-def render_trajectory(env, manip, traj):
+def render_trajectory(env, manip, traj,obj_path):
    '''
    Renders a trajectory in the specified OpenRAVE environment
    @param env The openrave environment object
    @param traj The trajectory to render
    '''
 
-   sphere_obj_path = 'objects/misc/smallsphere.kinbody.xml'
+   sphere_obj_path = obj_path+'/objects/smallsphere.kinbody.xml'
    numdofs = len(manip.GetArmIndices())
 
    with env:
@@ -132,12 +134,11 @@ def render_trajectory(env, manip, traj):
          
          # put the arm in that pose
          manip.SetActive()
-         manip.parent.SetActiveDOFValues(arm_config)
+         manip.GetRobot().SetActiveDOFValues(arm_config)
 
          # grab the end effector pose
          ee_pose = manip.GetEndEffectorTransform()
 
-         # render a sphere here
          add_object(env, 'traj_sphere'+str(wid), sphere_obj_path, ee_pose)
 
 # Clear out any rendered trajectories
