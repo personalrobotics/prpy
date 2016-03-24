@@ -196,6 +196,20 @@ def ComputeAinv(N,dof):
                 invA[i*dof+k,j*dof+k] = invA_small[i-1,j-1]
     return invA
     
+def NormalizeVector(vec):
+    """
+    Normalize a vector.
+    This is faster than doing: vec/numpy.linalg.norm(vec)
+
+    @param numpy.array vec: A 1-dimensional vector.
+    @returns numpy.array result: A vector of the same size, where the
+                                 L2 norm of the elements equals 1.
+    """
+    numpy.seterr(divide='ignore', invalid='ignore')
+    magnitude = numpy.sqrt(vec.dot(vec))
+    vec2 = (vec / magnitude)
+    return numpy.nan_to_num(vec2) # convert NaN to zero
+
 def MatrixToTraj(traj_matrix,cs,dof,robot):
     env = robot.GetEnv()
     traj = openravepy.RaveCreateTrajectory(env,'')
@@ -497,6 +511,74 @@ class Timer(object):
     def get_duration(self):
         return self.end - self.start
 
+class Watchdog(object):
+    '''
+    Calls specified function after duration, unless reset/stopped beforehand
+
+    @param timeout_duration how long to wait before calling handler
+    @param handler function to call after timeout_duration
+    @param args for handler
+    @param kwargs for handler
+    '''
+    def __init__(self, timeout_duration, handler, args=(), kwargs={}):
+        self.timeout_duration = timeout_duration
+        self.handler = handler
+        self.handler_args = args
+        self.handler_kwargs = kwargs
+
+        self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
+        self.timer_thread_lock = threading.Lock()
+        self.start_time = time.time()
+        self.canceled = False
+
+        self.thread_checking_time.start()
+
+    def reset(self):
+        '''
+        Resets the timer
+
+        Causes the handler function to be called after the next 
+        timeout duration is reached
+
+        Also restarts the timer thread if it has existed
+        '''
+        with self.timer_thread_lock:
+            if self.canceled or not self.thread_checking_time.is_alive():
+                self.thread_checking_time = threading.Thread(target=self._check_timer_loop)
+                self.thread_checking_time.start()
+
+            self.start_time = time.time()
+            self.canceled = False
+
+    def stop(self):
+        '''
+        Stop the watchdog, so it will not call handler
+        '''
+        with self.timer_thread_lock:
+          self.canceled = True
+
+    def _check_timer_loop(self):
+      '''
+      Internal function for timer thread to loop
+
+      If elapsed time has passed, calls the handler function
+      Exists if watchdog was canceled, or handler was called
+      '''
+      while True:
+          with self.timer_thread_lock:
+              if self.canceled:
+                  break
+              elapsed_time = time.time() - self.start_time
+          if elapsed_time > self.timeout_duration:
+              self.handler(*self.handler_args, **self.handler_kwargs)
+              with self.timer_thread_lock:
+                self.canceled = True
+              break
+          else:
+              time.sleep(self.timeout_duration - elapsed_time)
+
+
+
 
 def quadraticPlusJointLimitObjective(dq, J, dx, q, q_min, q_max, delta_joint_penalty=5e-1, lambda_dqdist=0.01, *args):
     '''
@@ -645,6 +727,25 @@ def GeodesicError(t1, t2):
     return numpy.hstack((trans, angle))
 
 
+def AngleBetweenQuaternions(quat1, quat2):
+    """
+    Compute the angle between two quaternions.
+    From 0 to 2pi.
+    """
+    theta = numpy.arccos( 2.0*( quat1.dot(quat2) )**2 - 1.0)
+    return theta
+
+
+def AngleBetweenRotations(rot1, rot2):
+    """
+    Compute the angle between two 3x3 rotation matrices.
+    From 0 to 2pi.
+    """
+    quat1 = openravepy.quatFromRotationMatrix(rot1)
+    quat2 = openravepy.quatFromRotationMatrix(rot2)
+    return AngleBetweenQuaternions(quat1, quat2)
+
+
 def GeodesicDistance(t1, t2, r=1.0):
     '''
     Computes the geodesic distance between two transforms
@@ -656,6 +757,92 @@ def GeodesicDistance(t1, t2, r=1.0):
     error = GeodesicError(t1, t2)
     error[3] = r*error[3]
     return numpy.linalg.norm(error)
+
+
+def GetGeodesicDistanceBetweenTransforms(T0, T1, r=1.0):
+    """
+    Wrapper, to match GetGeodesicDistanceBetweenQuaternions()
+
+    Calculate the geodesic distance between two transforms, being
+    gd = norm( relative translation + r * axis-angle error )
+
+    @param t1 current transform
+    @param t2 goal transform
+    @param r in units of meters/radians converts radians to meters
+    """
+    return GeodesicDistance(T0, T1, r)
+
+
+def GetEuclideanDistanceBetweenPoints(p0, p1):
+    """
+    Calculate the Euclidean distance (L2 norm) between two vectors.
+    """
+    sum = 0.0
+    for i in xrange(len(p0)):
+        sum = sum + (p0[i]-p1[i])*(p0[i]-p1[i])
+    return numpy.sqrt(sum)
+
+
+def GetEuclideanDistanceBetweenTransforms(T0, T1):
+    """
+    Calculate the Euclidean distance between the translational
+    component of two 4x4 transforms.
+    (also called L2 or Pythagorean distance)
+    """
+    p0 = T0[0:3,3] # Get the x,y,z translation from the 4x4 matrix
+    p1 = T1[0:3,3]
+    return GetEuclideanDistanceBetweenPoints(p0, p1)
+
+
+def GetMinDistanceBetweenTransformAndWorkspaceTraj(T, traj, dt=0.01):
+    """
+    Find the location on a workspace trajectory which is closest
+    to the specified transform.
+
+    @param numpy.matrix T: A 4x4 transformation matrix.
+    @param openravepy.Trajectory traj: A timed workspace trajectory.
+    @param float dt: Resolution at which to sample along the trajectory.
+
+    @return (float,float) (min_dist, t_loc, T_loc) The minimum distance,
+                                         the time value along the timed
+                                         trajectory, and the transform.
+    """
+    if not IsTimedTrajectory(traj):
+        raise ValueError("Trajectory must have timing information.")
+
+    if not IsTrajectoryTypeIkParameterizationTransform6D(traj):
+        raise ValueError("Trajectory is not a workspace trajectory, it "
+                         "must have configuration specification of "
+                         "openravepy.IkParameterizationType.Transform6D")
+
+    def _GetError(t):
+        T_curr = openravepy.matrixFromPose(traj.Sample(t)[0:7])
+        error = GetEuclideanDistanceBetweenTransforms(T, T_curr)
+        return error
+
+    min_dist = numpy.inf
+    t_loc = 0.0
+    T_loc = None
+
+    # Iterate over the trajectory
+    t = 0.0
+    duration = traj.GetDuration()
+    while t < duration:
+        error = _GetError(t)
+        if error < min_dist:
+            min_dist = error
+            t_loc = t
+        t = t + dt
+    # Also check the end-point
+    error = _GetError(duration)
+    if error < min_dist:
+        min_dist = error
+        t_loc = t
+
+    T_loc = openravepy.matrixFromPose(traj.Sample(t_loc)[0:7])
+
+    return (min_dist, t_loc, T_loc)
+
 
 def FindCatkinResource(package, relative_path):
     '''
@@ -829,6 +1016,101 @@ def IsTimedTrajectory(trajectory):
     empty_waypoint = numpy.zeros(cspec.GetDOF())
     return cspec.ExtractDeltaTime(empty_waypoint) is not None
 
+
+def IsJointSpaceTrajectory(traj):
+    """
+    Check if trajectory is a joint space trajectory.
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        if traj.GetConfigurationSpecification().GetGroupFromName("joint_values"):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
+def IsWorkspaceTrajectory(traj):
+    """
+    Check if trajectory is a workspace trajectory.
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    return IsTrajectoryTypeIkParameterizationTransform6D(traj)
+
+
+def IsTrajectoryTypeIkParameterization(traj):
+    """
+    Check if trajectory has a configuration specification
+    of type IkParameterization:
+      Transform6d
+      Rotation3D
+      Translation3D
+      Direction3D
+      Ray4D
+      Lookat3D
+      TranslationDirection5D
+      TranslationXY2D
+      TranslationXYOrientation3D
+      TranslationLocalGlobal6D
+      TranslationXAxisAngle4D
+      TranslationYAxisAngle4D
+      TranslationZAxisAngle4D
+      TranslationXAxisAngleZNorm4D
+      TranslationYAxisAngleXNorm4D
+      TranslationZAxisAngleYNorm4D
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        if traj.GetConfigurationSpecification().GetGroupFromName("ikparam_values"):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
+def IsTrajectoryTypeIkParameterizationTransform6D(traj):
+    """
+    Check if trajectory has a configuration specification
+    of type IkParameterization.Transform6D
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        IKP_type = openravepy.IkParameterizationType.Transform6D
+        # The IKP type must be passed as a number
+        group_name = "ikparam_values {0}".format(int(IKP_type))
+        if traj.GetConfigurationSpecification().GetGroupFromName(group_name):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
+def IsTrajectoryTypeIkParameterizationTranslationDirection5D(traj):
+    """
+    Check if trajectory has a configuration specification
+    of type IkParameterization.TranslationDirection5D
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        IKP_type = openravepy.IkParameterizationType.TranslationDirection5D
+        group_name = "ikparam_values {0}".format(int(IKP_type))
+        if traj.GetConfigurationSpecification().GetGroupFromName(group_name):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
 def ComputeEnabledAABB(kinbody):
     """
     Returns the AABB of the enabled links of a KinBody.
@@ -890,16 +1172,20 @@ def ComputeUnitTiming(robot, traj, env=None):
     if env is None:
         env = traj.GetEnv()
 
-    cspec = traj.GetConfigurationSpecification()
-    cspec.AddDeltaTimeGroup()
-    dof_indices, _ = cspec.ExtractUsedIndices(robot)
+    old_cspec = traj.GetConfigurationSpecification()
+    dof_indices, _ = old_cspec.ExtractUsedIndices(robot)
+
+    with robot.CreateRobotStateSaver():
+        robot.SetActiveDOFs(dof_indices)
+        new_cspec = robot.GetActiveConfigurationSpecification('linear')
+    new_cspec.AddDeltaTimeGroup()
 
     new_traj = RaveCreateTrajectory(env, '')
-    new_traj.Init(cspec)
+    new_traj.Init(new_cspec)
 
     for i in range(traj.GetNumWaypoints()):
-        waypoint = traj.GetWaypoint(i, cspec)
-        dof_values = cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        old_waypoint = traj.GetWaypoint(i)
+        dof_values = old_cspec.ExtractJointValues(old_waypoint, robot, dof_indices)
 
         if i == 0:
             deltatime = 0.
@@ -908,10 +1194,338 @@ def ComputeUnitTiming(robot, traj, env=None):
 
         dof_values_prev = dof_values
 
-        cspec.InsertDeltaTime(waypoint, deltatime)
-        new_traj.Insert(i, waypoint)
+        new_waypoint = numpy.zeros(new_cspec.GetDOF())
+        
+        new_cspec.InsertJointValues(new_waypoint, dof_values, robot, dof_indices, 0)
+        new_cspec.InsertDeltaTime(new_waypoint, deltatime)
+        new_traj.Insert(i, new_waypoint)
 
     return new_traj
+
+
+def ComputeGeodesicUnitTiming(traj, env=None, alpha=1.0):
+    """
+    Compute the geodesic unit velocity timing of a workspace path or
+    trajectory, also called a path length parameterization.
+
+    The path length is calculated as the sum of all segment lengths,
+    where each segment length = norm( delta_translation^2 +
+                                           alpha^2*delta_orientation^2 )
+
+    Note: Currently only linear velocity interpolation is supported,
+          however OpenRAVE does allow you to specify quadratic
+          interpolation.
+
+    @param traj: Workspace path or trajectory
+    @param env: Environment to create the output trajectory in, defaults
+                to the same environment as the input trajectory.
+    @param alpha: Weighting for delta orientation.
+    @returns: A workspace trajectory with unit velocity timing.
+    """
+    if not IsTrajectoryTypeIkParameterizationTransform6D(traj):
+        raise ValueError("Trajectory is not a workspace trajectory, it "
+                         "must have configuration specification of "
+                         "openravepy.IkParameterizationType.Transform6D")
+
+    num_waypoints = traj.GetNumWaypoints()
+    if num_waypoints <= 1:
+        raise ValueError("Trajectory needs more than 1 waypoint.")
+
+    from openravepy import RaveCreateTrajectory
+
+    if env is None:
+        env = traj.GetEnv()
+
+    # Create a new workspace trajectory with the same spec
+    # as the old one
+    new_traj = openravepy.RaveCreateTrajectory(env, '')
+    new_cspec = openravepy.IkParameterization.\
+                        GetConfigurationSpecificationFromType(
+                          openravepy.IkParameterizationType.Transform6D,
+                          'linear')
+    new_cspec.AddDeltaTimeGroup()
+    new_traj.Init(new_cspec)
+
+    # Get the current pose of the end effector
+    # Note: OpenRAVE pose is [qx,qy,qz,qw, tx,ty,tz]
+    #       The 8th value is velocity.
+    P_ee_prev = traj.GetWaypoint(0)[range(7)]
+
+    for i in range(num_waypoints):
+        P_ee = traj.GetWaypoint(i)[range(7)] # Get 7 pose values
+
+        # Compute the translation delta
+        p0 = P_ee_prev[4:7] # Get the x,y,z translation
+        p1 = P_ee[4:7]
+        delta_translation = numpy.sqrt(numpy.sum((p0-p1)**2))
+
+        # Compute the orientation delta
+        q0 = P_ee_prev[0:4] # Get qx,qy,qz,qw rotation
+        q1 = P_ee[0:4]
+        delta_angle = AngleBetweenQuaternions(q0, q1)
+
+        dist = numpy.sqrt( delta_translation**2 + (alpha**2)*(delta_angle**2) )
+        if i == 0:
+            deltatime = 0.0
+        else:
+            deltatime = dist
+
+        P_ee_prev = P_ee
+
+        # Insert a new waypoint (1x7 pose, velocity)
+        values = numpy.append(P_ee, [deltatime])
+        new_traj.Insert(i, values)
+
+    return new_traj
+
+
+def CheckJointLimits(robot, q):
+    """
+    Check if a configuration is within a robot's joint position limits.
+
+    If outside limits, this procedure throws an exception
+    of type JointLimitError.
+
+    @param openravepy.robot robot: The robot.
+    @param list             q:     List or array of joint positions.
+    """
+    from prpy.planning.exceptions import JointLimitError
+
+    q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+    active_dof_indices = robot.GetActiveDOFIndices()
+
+    if len(q) != len(active_dof_indices):
+        raise ValueError('The number of joints in the configuration q '
+                         'is not equal to the number of active DOF.')
+
+    lower_position_violations = (q < q_limit_min)
+    if lower_position_violations.any():
+        index = lower_position_violations.nonzero()[0][0]
+        raise JointLimitError(robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_min[index],
+            description='position')
+
+    upper_position_violations = (q > q_limit_max)
+    if upper_position_violations.any():
+        index = upper_position_violations.nonzero()[0][0]
+        raise JointLimitError(robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_max[index],
+            description='position')
+
+
+def GetForwardKinematics(robot, q, manipulator=None, frame=None):
+    """
+    Get the forward kinematics for a specific joint configuration,
+    relative to the OpenRAVE world frame.
+
+    @param openravepy.robot robot: The robot object.
+    @param list             q:     List or array of joint positions.
+    @param manipulator
+    @param string frame: Get the end effector transform relative to a
+                         specific frame e.g. '/right/wam_base'
+    @returns T_ee: The pose of the end effector (or last link in the
+                   serial chain) as a 4x4 matrix.
+    """
+    if manipulator == None:
+        manipulator = robot.GetActiveManipulator()
+
+    T_ee = None
+
+    # Save the robot state
+    sp = openravepy.Robot.SaveParameters
+    robot_saver = robot.CreateRobotStateSaver(sp.LinkTransformation)
+
+    with robot_saver:
+        robot.SetActiveDOFValues(q)
+        T_ee = manipulator.GetEndEffectorTransform()
+    # Robot state is restored
+
+    if frame != None:
+        link = robot.GetLink(frame)
+        if link == None:
+            raise ValueError('Failed to get link \'{:s}\''.format(frame))
+
+        T_ref_frame = link.GetTransform()
+        T_ee = numpy.dot(numpy.linalg.inv(T_ref_frame), T_ee)
+
+    return T_ee
+
+
+def ConvertIntToBinaryString(x, reverse=False):
+    """
+    Convert an integer to a binary string.
+
+    Optionally reverse the output string, which is
+    required for producing a Van Der Corput sequence.
+
+    @param int  x:       The number to be converted.
+    @param bool reverse: If True, the output string will be reversed.
+
+    @returns string: A binary number as a string.
+    """
+    if type(x) != int:
+        raise ValueError('Input number must be an integer')
+
+    if reverse:
+        return ''.join(reversed(bin(x)[2:]))
+
+    return ''.join(bin(x)[2:])
+
+
+def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
+    """
+    Generate the binary Van der Corput sequence, where each value
+    is a dyadic fraction re-scaled to the desired range.
+
+    For example, on the interval [0,1], the first 5 values of
+    the Van der Corput sequence are:
+    [0.0, 1.0, 0.5, 0.5, 0.75]
+
+    @param float lower: The first value of the range of the sequence.
+    @param float upper: The last value of the range of the sequence.
+
+    @param bool include_endpoints: If True, the output sequence will
+                                   include the value 'lower' and the
+                                   value 'upper'.
+                                   If False, these endpoint values
+                                   will not be returned.
+
+    @returns generator: A sequence of float values.
+    """
+    from itertools import count, chain
+
+    if include_endpoints == True:
+        endpoints = (0.0, 1.0)
+    else:
+        endpoints = []
+
+    # Get a sequence of reversed binary numbers:
+    # '1', '01', '11', '001', '101', '011', '111', '0001', ....
+    #
+    # Note: count(1) is a generator, starting at 1, making steps of 1.
+    reverse_binary_seq = (ConvertIntToBinaryString(x, True) for x in count(1))
+
+    # From the reversed binary sequence, generate the Van der Corput
+    # sequence, for which:  0.0 < x < 1.0  (the end-points are excluded)
+    # 0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875, 0.0625, ....
+    #
+    # Note: int(x,2) converts the binary string (base 2) to an integer.
+    raw_seq = (float(int(x,2)) / (2**len(x)) for x in reverse_binary_seq)
+
+    # Scale the Van der Corput sequence across the desired range
+    # and optionally add the end-points.
+    scale = float(upper - lower)
+    return (scale * val + lower for val in chain(endpoints, raw_seq))
+
+
+def SampleTimeGenerator(start, end, step=1):
+    """
+    Generate a linear sequence of values from start to end, with
+    specified step size. Works with int or float values.
+
+    The end value is also returned if it's more than half the
+    distance from the previously returned value.
+
+    For example, on the interval [0.0,5.0], the sequence is:
+    [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+    @param float start: The start value of the sequence.
+    @param float end:   The last value of the sequence.
+    @param float step:  The step-size between values.
+
+    @returns generator: A sequence of float values.
+    """
+    if end <= start:
+        raise ValueError("The 'end' value must be greater than "\
+                         "the 'start' value.")
+    if not (step > 0):
+        raise ValueError("The 'step' value must be positive.")
+    t = start
+    prev_t  = 0.0
+    while t <= numpy.floor(end):
+        yield t
+        prev_t = t
+        t = t + step
+    if (end - float(prev_t)) > (step / 2.0):
+        yield float(end)
+
+
+def VanDerCorputSampleGenerator(start, end, step=2):
+    """
+    This wraps VanDerCorputSequence() in a way that's useful for
+    collision-checking.
+
+    Generates a sequence of values from start to end, with specified
+    step size, using an approximate binary Van der Corput sequence.
+
+    The end value is also returned if it's more than half the
+    distance from the closest value.
+
+    For example, on the interval [0.0, 13.7], the sequence is:
+    [0.0, 13.7, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
+
+    @param float start: The start value of the sequence.
+    @param float end:   The last value of the sequence.
+    @param float step:  The step-size between values.
+
+    @returns generator: A sequence of float values.
+    """
+    import itertools
+
+    # 'start' and 'end' must be positive because
+    # itertools.islice() only accepts a positive integer
+    if end <= start:
+        raise ValueError("The 'end' value must be greater than "\
+                         "the 'start' value.")
+    if not (step > 0):
+        raise ValueError("The 'step' value must be positive.")
+
+    # The duration, rounded to nearest step-size
+    mod_end = int(end - (end % step))
+    steps_to_take = mod_end / float(step)
+    leftover_time = end - float(mod_end)
+
+    # Keep a list to make sure we return all the sample values
+    times_sampled = [False for i in range(mod_end+1)]
+
+    vdc = VanDerCorputSequence(start, steps_to_take)
+    vdc_seq = itertools.islice(vdc, steps_to_take+1)
+    count = 0
+    for s in vdc_seq:
+        # Snap this sample value to the desired step-size
+        idx = int( step * numpy.round(s) )
+        if (idx % step) != 0:
+            idx = idx + 1
+
+        # If required, return the actual end-point value (a float) as
+        # the 2nd sample point to be returned. Then the next sample
+        # point is the end-point rounded to step-size.
+        if count == 1:
+            if leftover_time > (step / 2.0):
+                yield float(end)
+
+        count = count+1
+        while True:
+            if times_sampled[idx] == False:
+                times_sampled[idx] = True
+                yield float(idx)
+                break
+            else:
+                # We have already sampled at this value of t,
+                # so lets try a different value of t.
+                decimals = (s % 1)
+                if decimals < 0.5:
+                    idx = idx - step
+                    if (idx < 0): # handle wrap past zero
+                        idx = int(end - 1)
+                else:
+                    idx = idx + step
+                    if (idx > end): # handle wrap past end
+                        idx = int(start + 1)
 
 
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
@@ -986,6 +1600,136 @@ def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
             dt = 2. * dt
 
 
+def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
+    """
+    For a piece-wise linear trajectory, generate a list
+    of configuration pairs that need to be collision checked.
+
+    This will step along the trajectory from start to end
+    at a resolution that satisifies the specified error metric.
+
+    @param openravepy.Robot      robot: The robot.
+    @param openravepy.Trajectory traj:  The trajectory for which we need
+                                        to generate sample points.
+    @param int      norm_order: 1  ==>  The L1 norm
+                                2  ==>  The L2 norm
+                                inf  ==>  The L_infinity norm
+    @param generator sampling_func A function that returns a sequence of
+                                   sample times.
+                                   e.g. SampleTimeGenerator() 
+                                         or
+                                        VanDerCorputSampleGenerator()
+
+    @returns generator: A tuple (t,q) of float values, being the sample
+                        time and joint configuration.
+    """
+
+    # If trajectory is already timed, strip the deltatime values
+    if IsTimedTrajectory(traj):
+        traj = UntimeTrajectory(traj)
+
+    traj_cspec = traj.GetConfigurationSpecification()
+
+    # Make sure trajectory is linear in joint space
+    try:
+        # OpenRAVE trajectory type can be 'linear', 'quadratic', or
+        # other values including 'cubic', 'quadric' or 'quintic'
+        interp_type = traj_cspec.GetGroupFromName('joint_values').interpolation
+    except openravepy.openrave_exception:
+        raise ValueError('Trajectory does not have a joint_values group')
+    if interp_type != 'linear':
+        raise ValueError('Trajectory must be linear in joint space')
+
+    dof_indices, _ = traj_cspec.ExtractUsedIndices(robot)
+
+    # If trajectory only has 1 waypoint then we only need to
+    # do 1 collision check.
+    num_waypoints = traj.GetNumWaypoints()
+    if num_waypoints == 1:
+        t = 0.0
+        waypoint = traj.GetWaypoint(0)
+        q = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        yield t, q
+        return
+
+    env = robot.GetEnv()
+
+    # Create a temporary trajectory that we will use
+    # for sampling the points to collision check,
+    # because there is no method to modify the 'deltatime'
+    # values of waypoints in an OpenRAVE trajectory.
+    temp_traj_cspec = traj.GetConfigurationSpecification()
+    temp_traj_cspec.AddDeltaTimeGroup()
+    temp_traj = openravepy.RaveCreateTrajectory(env, '')
+    temp_traj.Init(temp_traj_cspec)
+
+    # Set timing of first waypoint in temporary trajectory to t=0
+    waypoint = traj.GetWaypoint(0, temp_traj_cspec)
+    q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+    delta_time = 0.0
+    temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
+    temp_traj.Insert(0, waypoint)
+
+    # Get the resolution (in radians) for each joint
+    q_resolutions = robot.GetDOFResolutions()[dof_indices]
+
+    # Iterate over each segment in the trajectory and set
+    # the timing of each waypoint in the temporary trajectory
+    # so that taking steps of t=1 will be within a required error norm.
+    for i in range(1, num_waypoints):
+        # We already have the first waypoint (q0) of this segment,
+        # so get the joint values for the second waypoint.
+        waypoint = traj.GetWaypoint(i)
+        q1 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
+        dq = numpy.abs(q1 - q0)
+        max_diff_float = numpy.max( numpy.abs(q1 - q0) / q_resolutions)
+        
+        # Get the number of steps (as a float) required for
+        # each joint at DOF resolution
+        num_steps = dq / q_resolutions
+
+        # Calculate the norm:
+        #
+        # norm_order = 1  ==>  The L1 norm
+        # Which is like a diamond shape in configuration space
+        # and equivalent to: L1_norm=sum(num_steps)
+        #
+        # norm_order = 2  ==>  The L2 norm
+        # Which is like an ellipse in configuration space
+        # and equivalent to: L2_norm=numpy.linalg.norm(num_steps)
+        #
+        # norm_order = inf  ==>  The L_infinity norm
+        # Which is like a box shape in configuration space
+        # and equivalent to: L_inf_norm=numpy.max(num_steps)
+        norm = numpy.linalg.norm(num_steps, ord=norm_order)
+
+        # Set timing of this waypoint
+        waypoint = traj.GetWaypoint(i, temp_traj_cspec)
+        delta_time = norm
+        temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
+        temp_traj.Insert(i, waypoint)
+
+        # The last waypoint becomes the first in the next segment
+        q0 = q1
+
+    traj_duration = temp_traj.GetDuration()
+
+    # Sample the trajectory using the specified sample generator
+    seq = None
+    if sampling_func == None:
+        # (default) Linear sequence, from start to end
+        seq = SampleTimeGenerator(0, traj_duration, step=2)
+    else:
+        seq = sampling_func(0, traj_duration, step=2)
+
+    # Sample the trajectory in time
+    # and return time value and joint positions
+    for t in seq:
+        sample = temp_traj.Sample(t)
+        q = temp_traj_cspec.ExtractJointValues(sample, robot, dof_indices)
+        yield t, q
+
+
 def IsInCollision(traj, robot, selfcoll_only=False):
     report = openravepy.CollisionReport()
 
@@ -1026,6 +1770,39 @@ def IsInCollision(traj, robot, selfcoll_only=False):
     return False    
 
 
+OPENRAVE_JOINT_DERIVATIVES = {
+    0: "joint_values",
+    1: "joint_velocities",
+    2: "joint_accelerations",
+    3: "joint_jerks",
+    4: "joint_snaps",
+    5: "joint_crackles",
+    6: "joint_pops"
+}
+
+
+def GetJointDerivativeGroup(cspec, derivative):
+    """
+    Helper function to extract a joint derivative group from a trajectory.
+
+    We use a manual mapping of joint derivatives to string values because the
+    OpenRAVE source code internally hard codes these constants anyway:
+    https://github.com/rdiankov/openrave/blob/master/src/libopenrave/configurationspecification.cpp#L983
+
+    @param cspec a trajectory configurationspecification
+    @param derivative the desired joint position derivative
+                      (e.g. 0 = positions, 1 = velocities, ...)
+    @return a ConfigurationSpecification Group for the derivative
+            or None if it does not exist in the specification.
+    """
+    try:
+        return cspec.GetGroupFromName(OPENRAVE_JOINT_DERIVATIVES[derivative])
+    except KeyError:
+        return None
+    except openravepy.openrave_exception:
+        return None
+
+
 def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     """
     Helper function to extract the joint position, velocity and acceleration
@@ -1034,14 +1811,16 @@ def JointStatesFromTraj(robot, traj, times, derivatives=[0, 1, 2]):
     @param traj An OpenRAVE trajectory
     @param times List of times in seconds
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
-    @return pva_list List of list of derivatives at specified times.
-                     Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the derivatives[i]-th derivative
-                     of position of size |times| x |derivatives|
-
+    @return List of list of derivatives at specified times.
+            Inserts 'None' for unavailable or undesired fields
+            The i-th element is the derivatives[i]-th derivative
+            of position of size |times| x |derivatives|
     """
-    duration = traj.GetDuration()
+    if not IsTimedTrajectory(traj):
+        raise ValueError("Joint states can only be interpolated"
+                         " on a timed trajectory.")
 
+    duration = traj.GetDuration()
     times = numpy.array(times)
     if any(times > duration):
         raise ValueError('Input times {0:} exceed duration {1:.2f}'
@@ -1070,10 +1849,10 @@ def JointStateFromTraj(robot, traj, time, derivatives=[0, 1, 2]):
     @param traj An OpenRAVE trajectory
     @param time time in seconds
     @param derivatives list of desired derivatives defaults to [0, 1, 2]
-    @return pva_list List of list of derivatives at specified times.
-                     Inserts 'None' for unavailable or undesired fields
-                     The i-th element is the derivatives[i]-th derivative
-                     of position of size |times| x |derivatives|
+    @return List of list of derivatives at specified times.
+            Inserts 'None' for unavailable or undesired fields
+            The i-th element is the derivatives[i]-th derivative
+            of position of size |times| x |derivatives|
     """
     return JointStatesFromTraj(robot, traj, (time,), derivatives)[0]
 
@@ -1250,3 +2029,39 @@ def GetManipulatorIndex(robot, manip=None):
             manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
 
     return (manip, manip_idx)
+
+def GetPointFrom(focus):
+    """
+    Given a kinbody, array or transform, returns the xyz
+    location. 
+    param focus The area to be referred to
+    """
+    #Pointing at a kinbody
+    if isinstance(focus, openravepy.KinBody):
+        with focus.GetEnv():
+            focus_trans = focus.GetTransform()
+        coord = list(focus_trans[0:3, 3])
+
+    #Pointing at a kinbody link
+    elif isinstance(focus, openravepy.KinBody.Link):
+        with focus.GetParent().GetEnv():
+            focus_trans = focus.GetTransform()
+        coord = list(focus_trans[0:3, 3])
+
+    #Pointing at a point in space as numpy array
+    elif (isinstance(focus, numpy.ndarray) and (focus.ndim == 1)
+           and (len(focus) == 3)):
+        coord = list(focus)
+
+    #Pointing at point in space as 4x4 transform
+    elif isinstance(focus, numpy.ndarray) and (focus.shape == (4, 4)):
+        coord = list(focus[0:3, 3])
+
+    #Pointing at a point in space as list or tuple
+    elif (isinstance(focus, (tuple, list)) and len(focus) == 3):
+        coord = focus
+
+    else:
+        raise ValueError('Focus of the point is an unknown object')
+
+    return coord

@@ -34,7 +34,7 @@ from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence, Tags
 from ..planning.ompl import OMPLSimplifier
-from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, ParabolicRetimer
+from ..planning.retimer import OpenRAVEAffineRetimer, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
 from ..util import SetTrajectoryTags
 
@@ -71,10 +71,7 @@ class Robot(openravepy.Robot):
         # (joint simplificaiton and retiming).
         self.simplifier = None
         self.retimer = ParabolicRetimer()
-        self.smoother = Sequence(
-            HauserParabolicSmoother(),
-            self.retimer
-        )
+        self.smoother = self.retimer
         self.affine_retimer = OpenRAVEAffineRetimer()
 
     def __dir__(self):
@@ -97,41 +94,53 @@ class Robot(openravepy.Robot):
     def __getattr__(self, name):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
-        self = bind.InstanceDeduplicator.get_canonical(self)
+        canonical = bind.InstanceDeduplicator.get_canonical(self)
 
-        if (name != 'planner'
-            and hasattr(self, 'planner')
-            and self.planner is not None
-            and self.planner.has_planning_method(name)):
+        # For special properties, we do NOT want to recursively look them up.
+        # If they are not found on the canonical instance, stop looking.
+        if canonical == self:
+            if name in ['planner', 'actions', 'detector']:
+                raise AttributeError('{0:s} is missing method "{1:s}".'
+                                     .format(repr(canonical), name))
 
-            delegate_method = getattr(self.planner, name)
+        # For other methods, search the special properties for meta-methods.
+        if (name != 'planner' and
+                hasattr(canonical, 'planner') and
+                canonical.planner is not None and
+                canonical.planner.has_planning_method(name)):
+
+            delegate_method = getattr(canonical.planner, name)
+
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
-                return self._PlanWrapper(delegate_method, args, kw_args)
+                return canonical._PlanWrapper(delegate_method, args, kw_args)
 
             return wrapper_method
-        elif (name != 'actions'
-              and hasattr(self, 'actions')
-              and self.actions is not None
-              and self.actions.has_action(name)):
+        elif (name != 'actions' and
+                hasattr(canonical, 'actions') and
+                canonical.actions is not None and
+                canonical.actions.has_action(name)):
 
-            delegate_method = self.actions.get_action(name)
+            delegate_method = canonical.actions.get_action(name)
+
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
-                return delegate_method(self, *args, **kw_args)
+                return delegate_method(canonical, *args, **kw_args)
             return wrapper_method
-        elif (name != 'detector'
-              and hasattr(self, 'detector')
-              and self.detector is not None
-              and self.detector.has_perception_method(name)):
-            
-            delegate_method = getattr(self.detector, name)
+        elif (name != 'detector' and
+                hasattr(canonical, 'detector') and
+                canonical.detector is not None and
+                canonical.detector.has_perception_method(name)):
+
+            delegate_method = getattr(canonical.detector, name)
+
             @functools.wraps(delegate_method)
             def wrapper_method(*args, **kw_args):
-                return delegate_method(self, *args, **kw_args)
+                return delegate_method(canonical, *args, **kw_args)
             return wrapper_method
 
-        raise AttributeError('{0:s} is missing method "{1:s}".'.format(repr(self), name))
+        raise AttributeError('{0:s} is missing method "{1:s}".'
+                             .format(repr(canonical), name))
 
     def CloneBindings(self, parent):
         self.planner = parent.planner

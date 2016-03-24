@@ -112,3 +112,9 @@ the following format:
             return self._configs[name]
         else:
             raise KeyError('There is no configuration named %s.' % name)
+    
+    """
+    : return known_configurations: A list of named configurations
+    """
+    def get_configuration_list(self):
+        return self._configs.keys()

@@ -70,9 +70,12 @@ class OpenRAVEPlanner(BasePlanner):
               or_args=None, **kw_args):
 
         # Get rid of default postprocessing
-        extraParams =  '<_postprocessing planner=""><_nmaxiterations>0</_nmaxiterations></_postprocessing>'
+        extraParams = ('<_postprocessing planner="">'
+                       '<_nmaxiterations>0</_nmaxiterations>'
+                       '</_postprocessing>')
         # Maximum planner iterations
-        extraParams += '<_nmaxiterations>{:d}</_nmaxiterations>'.format(maxiter)
+        extraParams += ('<_nmaxiterations>{:d}</_nmaxiterations>'
+                        .format(maxiter))
 
         if or_args is not None:
             for key, value in or_args.iteritems():
@@ -122,7 +125,6 @@ class BiRRTPlanner(OpenRAVEPlanner):
         @param goal the desired robot joint configuration
         @return traj a trajectory from current configuration to specified goal
         """
-
         return self._Plan(robot, goal, **kw_args)
 
     @PlanningMethod

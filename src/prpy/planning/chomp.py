@@ -207,9 +207,8 @@ class CHOMPPlanner(BasePlanner):
             traj.Insert(i, waypoint, True)
         
         try:
-            run = self.module.create(robot=robot, starttraj=traj, lambda_=lambda_)
-            self.module.iterate(n_iter=n_iter, run=run)
-            self.module.destroy(run=run)
+            traj = self.module.runchomp(robot=robot, starttraj=traj,
+                lambda_=lambda_, n_iter=n_iter, **kw_args)
         except Exception as e:
             raise PlanningError(str(e))
 
