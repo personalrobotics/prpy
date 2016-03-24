@@ -71,8 +71,8 @@ class WAM(Manipulator):
                                                                affine_dofs=0,
                                                                simulated=sim)
         else:
-            # TODO what is control manager namespace?
-            self.controller_switcher = ControllerManagerClient()
+            # TODO load controller_manager namespace from param/arg?
+            self.controller_switcher = ControllerManagerClient('/controller_manager')
             wam_joints = ['j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7']
             self.controller = RewdOrGravityCompensationController(self.GetRobot(),
                                                                   [namespace + '/' + j for j in wam_joints],
@@ -109,7 +109,6 @@ class WAM(Manipulator):
         if isinstance(stiffness, numbers.Number) and not (0 <= stiffness <= 1):
             raise Exception('Stiffness must be boolean or decimal in the range [0, 1]; got %f.' % stiffness)
         elif not self.simulated:
-            # TODO toggle grav comp/trajectory
             if stiffness:
                 stiff_controllers =     [self.controller.GetNamespace() + "/joint_state_controller",
                                          self.controller.GetNamespace() + "/rewd_trajectory_controller"]

@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -30,10 +30,11 @@
 
 import numpy, openravepy, time
 from .. import util
+from ..controllers import PositionCommandController
 from endeffector import EndEffector
 
 class BarrettHand(EndEffector):
-    def __init__(self, sim, manipulator, owd_namespace, bhd_namespace, ft_sim=True):
+    def __init__(self, sim, manipulator, bhd_namespace, ft_sim=True):
         """End-effector wrapper for the BarrettHand.
         This class wraps a BarrettHand end-effector that is controlled by BHD
         or OWD. The or_owd_controller, or_handstate_sensor, and
@@ -42,7 +43,6 @@ class BarrettHand(EndEffector):
         reading breakaway status) are not supported on the BH-262.
         @param sim whether the hand is simulated
         @param manipulator manipulator the hand is attached to
-        @param owd_namespace ROS namespace that OWD is running in
         @param bhd_namespace ROS namespace that the BarrettHand driver is running in
         @param ft_sim whether the force/torque sensor is simulated
         """
@@ -65,19 +65,27 @@ class BarrettHand(EndEffector):
         # Load the  hand controller.
         robot = self.manipulator.GetRobot()
         env = robot.GetEnv()
-        self.controller = robot.AttachController(name=self.GetName(),
-            args='BHController {0:s} {1:s}'.format('prpy', bhd_namespace),
-            dof_indices=self.GetIndices(), affine_dofs=0, simulated=sim)
 
         # Hand state, force/torque sensor, and tactile pads.
         if not sim:
             self.handstate_sensor = util.create_sensor(env,
                 'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
 
+            self.controller = PositionCommandController(bhd_namespace, 'hand_controller')
+
+        else:
+            self.controller = robot.AttachController(name=self.GetName(),
+                                                     args='IdealController',
+                                                     dof_indices=self.GetIndices(),
+                                                     affine_dofs=0,
+                                                     simulated=sim)
+
         self.ft_simulated = ft_sim
         if not ft_sim:
-            self.ft_sensor = util.create_sensor(env,
-                'BarrettFTSensor {0:s} {1:s}'.format('prpy', owd_namespace))
+            pass
+            # TODO TriggerController for taring f/t sensor
+            # self.ft_sensor = util.create_sensor(env,
+            #     'BarrettFTSensor {0:s} {1:s}'.format('prpy', owd_namespace))
 
         # TODO: Attach the tactile sensor plugin.
 
@@ -103,7 +111,7 @@ class BarrettHand(EndEffector):
         """
         return self.GetFingerIndices() + [ self.GetSpreadIndex() ]
 
-    def MoveHand(hand, f1=None, f2=None, f3=None, spread=None, timeout=None):
+    def MoveHand(self, f1=None, f2=None, f3=None, spread=None, timeout=None):
         """Change the hand preshape.
         Joints that are not specified will not move. This function blocks until
         the hand has reached the desired configuration or a timeout occurs.
@@ -118,15 +126,15 @@ class BarrettHand(EndEffector):
         @param timeout blocking execution timeout, in seconds
         """
         # Default any None's to the current DOF values.
-        preshape = hand.GetDOFValues()
+        preshape = self.GetDOFValues()
         if f1     is not None: preshape[0] = f1
         if f2     is not None: preshape[1] = f2
         if f3     is not None: preshape[2] = f3
         if spread is not None: preshape[3] = spread
 
-        hand.controller.SetDesired(preshape)
-        util.WaitForControllers([ hand.controller ], timeout=timeout) 
-       
+        self.controller.SetDesired(preshape)
+        util.WaitForControllers([ self.controller ], timeout=timeout)
+
     def OpenHand(hand, spread=None, timeout=None):
         """Open the hand with a fixed spread.
         This function blocks until the hand has reached the desired
@@ -180,6 +188,7 @@ class BarrettHand(EndEffector):
         clear the fingers' breakaway state. This function blocks until the
         reset is complete.
         """
+        # TODO TriggerController for resetting hand
         if not hand.simulated:
             hand.controller.SendCommand('ResetHand')
 
@@ -211,7 +220,7 @@ class BarrettHand(EndEffector):
         if not hand.simulated:
             # This is because we are overriding the force/torque sensor datatype.
             sensor_data = hand.handstate_sensor.GetSensorData()
-            breakaway = sensor_data.torque 
+            breakaway = sensor_data.torque
             return breakaway
         else:
             return [ False, False, False ]

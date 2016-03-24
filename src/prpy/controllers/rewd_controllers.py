@@ -3,11 +3,15 @@ import logging
 from ros_control_client_py import FollowJointTrajectoryClient, TrajectoryExecutionFailed
 from ros_control_client_py.util import or_to_ros_trajectory
 
+
 class OrController(object):
     """Dummy/empty OpenRAVE controller class"""
 
     def GetControlDOFIndices(self):
         pass
+
+    def GetNamespace(self):
+        return self.namespace
 
     def GetRobot(self):
         return self.robot
@@ -36,6 +40,7 @@ class OrController(object):
     def GetTorque(self):
         pass
 
+
 class RewdOrController(OrController):
     def __init__(self, robot, namespace, joint_names, simulated=False):
         self.logger = logging.getLogger(__name__)
@@ -44,9 +49,6 @@ class RewdOrController(OrController):
         self.joint_names = joint_names
         self.simulated = simulated
         self.logger.info("Rewd Controller initialized")
-
-    def GetNamespace(self):
-        return self.namespace
 
 
 class RewdOrGravityCompensationController(RewdOrController):
