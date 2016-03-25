@@ -35,7 +35,7 @@ import openravepy
 from base import (BasePlanner,
                   PlanningError,
                   UnsupportedPlanningError,
-                  PlanningMethod)
+                  ClonedPlanningMethod)
 
 
 class OpenRAVEPlanner(BasePlanner):
@@ -54,7 +54,7 @@ class OpenRAVEPlanner(BasePlanner):
     def __str__(self):
         return 'OpenRAVE {0:s}'.format(self.algorithm)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OpenRAVE. This will invoke the
@@ -116,7 +116,7 @@ class BiRRTPlanner(OpenRAVEPlanner):
     def __init__(self):
         OpenRAVEPlanner.__init__(self, algorithm='birrt')
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OpenRAVE. This will invoke the
@@ -127,7 +127,7 @@ class BiRRTPlanner(OpenRAVEPlanner):
         """
         return self._Plan(robot, goal, **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to one of many configuration with OpenRAVE's BiRRT planner.

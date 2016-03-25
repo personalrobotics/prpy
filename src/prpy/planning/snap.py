@@ -30,10 +30,13 @@
 import numpy
 import openravepy
 from prpy.util import SetTrajectoryTags
-from prpy.planning.base import BasePlanner
-from prpy.planning.base import PlanningError
-from prpy.planning.base import PlanningMethod
-from prpy.planning.base import Tags
+from prpy.planning.base import (
+    BasePlanner,
+    PlanningError,
+    LockedPlanningMethod,
+    ClonedPlanningMethod,
+    Tags
+)
 
 
 class SnapPlanner(BasePlanner):
@@ -55,7 +58,7 @@ class SnapPlanner(BasePlanner):
     def __str__(self):
         return 'SnapPlanner'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's
@@ -66,10 +69,9 @@ class SnapPlanner(BasePlanner):
         @param goal desired configuration
         @return traj
         """
-
         return self._Snap(robot, goal, **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's
@@ -99,7 +101,7 @@ class SnapPlanner(BasePlanner):
             ik_param, ikfo.CheckEnvCollisions,
             ikreturn=False, releasegil=True
         )
-        
+
         if ik_solution is None: 
             # FindIKSolutions is slower than FindIKSolution, 
             # so call this only to identify and raise error when
@@ -116,7 +118,7 @@ class SnapPlanner(BasePlanner):
                     raise CollisionPlanningError.FromReport(report) 
                 elif robot.CheckSelfCollision(report=report):
                     raise SelfCollisionPlanningError.FromReport(report)
-            
+
             raise PlanningError('There is no IK solution at the goal pose.')
 
         return self._Snap(robot, ik_solution, **kw_args)
