@@ -34,6 +34,7 @@ import logging
 import numpy
 import openravepy
 from ..clone import Clone
+from ..futures import defer
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 from .exceptions import PlanningError, UnsupportedPlanningError
 
@@ -96,14 +97,12 @@ class PlanningMethod(object):
 
     def __call__(self, instance, robot, *args, **kw_args):
         env = robot.GetEnv()
-        defer = kw_args.get('defer')
 
         # Store the original joint values and indices.
         joint_indices = [robot.GetActiveDOFIndices(), None]
         joint_values = [robot.GetActiveDOFValues(), None]
 
-        with Clone(env, clone_env=instance.env,
-                   lock=True, unlock=False) as cloned_env:
+        with Clone(env, clone_env=instance.env) as cloned_env:
             cloned_robot = cloned_env.Cloned(robot)
 
             # Store the cloned joint values and indices.
@@ -127,30 +126,19 @@ class PlanningMethod(object):
                                str(joint_values[1]))
                 cloned_robot.SetActiveDOFValues(joint_values[0])
 
-            def call_planner():
-                try:
-                    planner_traj = self.func(instance, cloned_robot,
-                                             *args, **kw_args)
+            # Perform the actual planning operation.
+            planner_traj = self.func(instance, cloned_robot,
+                                     *args, **kw_args)
 
-                    # Tag the trajectory with the planner and planning method
-                    # used to generate it. We don't overwrite these tags if
-                    # they already exist.
-                    tags = GetTrajectoryTags(planner_traj)
-                    tags.setdefault(Tags.PLANNER, instance.__class__.__name__)
-                    tags.setdefault(Tags.METHOD, self.func.__name__)
-                    SetTrajectoryTags(planner_traj, tags, append=False)
+            # Tag the trajectory with the planner and planning method
+            # used to generate it. We don't overwrite these tags if
+            # they already exist.
+            tags = GetTrajectoryTags(planner_traj)
+            tags.setdefault(Tags.PLANNER, instance.__class__.__name__)
+            tags.setdefault(Tags.METHOD, self.func.__name__)
+            SetTrajectoryTags(planner_traj, tags, append=False)
 
-                    return CopyTrajectory(planner_traj, env=env)
-                finally:
-                    cloned_env.Unlock()
-
-            if defer is True:
-                from trollius.executor import get_default_executor
-                from trollius.futures import wrap_future
-                executor = kw_args.get('executor') or get_default_executor()
-                return wrap_future(executor.submit(call_planner))
-            else:
-                return call_planner()
+            return CopyTrajectory(planner_traj, env=env)
 
     def __get__(self, instance, instancetype):
         # Bind the self reference and use update_wrapper to propagate the
@@ -226,16 +214,7 @@ class MetaPlanner(Planner):
                                  repr(self), method_name))
 
         def meta_wrapper(*args, **kw_args):
-            defer = kw_args.get('defer')
-
-            if defer is True:
-                from trollius.executor import get_default_executor
-                from trollius.futures import wrap_future
-                executor = kw_args.get('executor') or get_default_executor()
-                return wrap_future(executor.submit(self.plan, method_name,
-                                                   args, kw_args))
-            else:
-                return self.plan(method_name, args, kw_args)
+            return self.plan(method_name, args, kw_args)
 
         # Grab docstrings from the delegate planners.
         meta_wrapper.__name__ = method_name
@@ -296,15 +275,13 @@ class Sequence(MetaPlanner):
                 if planner.has_planning_method(method):
                     logger.info('Sequence - Calling planner "%s".', str(planner))
                     planner_method = getattr(planner, method)
-                    kw_args['defer'] = False
 
                     with Timer() as timer:
                         output = planner_method(*args, **kw_args)
 
                     logger.info('Sequence - Planning succeeded after %.3f'
                                 ' seconds with "%s".',
-                        timer.get_duration(), str(planner)
-                    )
+                                timer.get_duration(), str(planner))
                     return output
                 else:
                     logger.debug('Sequence - Skipping planner "%s"; does not'
@@ -332,61 +309,43 @@ class Ranked(MetaPlanner):
 
     def plan(self, method, args, kw_args):
         all_planners = self._planners
-        planners = []
+        futures = dict()
         results = [None] * len(self._planners)
 
+        # Helper function to call a planner and return its result.
+        def call_planner(planner):
+            planning_method = getattr(planner, method)
+            return planning_method(*args, **kw_args)
+
         # Find only planners that support the required planning method.
+        # Call every planners in parallel using a concurrent executor and
+        # return the first non-error result in the ordering when available.
         for index, planner in enumerate(all_planners):
             if not planner.has_planning_method(method):
                 results[index] = PlanningError(
                     "{:s} does not implement method {:s}."
-                    .format(planner, method)
-                )
+                    .format(planner, method))
                 continue
             else:
-                planners.append((index, planner))
+                futures[index] = defer(call_planner, args=(planner,))
 
-        # Helper function to call a planner and store its result or error.
-        def call_planner(index, planner):
+        # Each time a planner completes, check if we have a valid result
+        # (a planner found a solution and all higher-ranked planners had
+        # already failed).
+        for index, future in futures.viewitems():
             try:
-                planning_method = getattr(planner, method)
-                kw_args['defer'] = False
-                results[index] = planning_method(*args, **kw_args)
+                return future.result()
             except MetaPlanningError as e:
                 results[index] = e
             except PlanningError as e:
                 logger.warning("Planning with {:s} failed: {:s}"
                                .format(planner, e))
                 results[index] = e
-
-        # Call every planners in parallel using a concurrent executor and
-        # return the first non-error result in the ordering when available.
-        from trollius.executor import get_default_executor
-        from trollius.futures import wrap_future
-        from trollius.tasks import as_completed
-
-        executor = kw_args.get('executor') or get_default_executor()
-        futures = [wrap_future(executor.submit(call_planner, planner))
-                   for planner in planners]
-
-        # Each time a planner completes, check if we have a valid result
-        # (a planner found a solution and all higher-ranked planners had
-        # already failed).
-        for _ in as_completed(futures):
-            for result in results:
-                if result is None:
-                    break
-                elif isinstance(result, openravepy.Trajectory):
-                    return result
-                elif not isinstance(result, PlanningError):
-                    logger.warning(
-                        "Planner {:s} returned {} of type {}; "
-                        "expected a trajectory or PlanningError."
-                        .format(str(planner), result, type(result))
-                    )
+        # TODO: if `cancel()` is supported, call it in a `finally` block here.
 
         raise MetaPlanningError("All planners failed.",
                                 dict(zip(all_planners, results)))
+
 
 class FirstSupported(MetaPlanner):
     def __init__(self, *planners):
