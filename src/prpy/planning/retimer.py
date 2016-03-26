@@ -30,6 +30,7 @@
 
 import logging
 import openravepy
+from copy import deepcopy
 from ..util import (CreatePlannerParametersString, CopyTrajectory,
                     SimplifyTrajectory, HasAffineDOFs, IsTimedTrajectory)
 from base import (BasePlanner, PlanningError, PlanningMethod,
@@ -156,11 +157,9 @@ class HauserParabolicSmoother(OpenRAVERetimer):
 
     @PlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
-        from copy import deepcopy
-        if options is None:
-            options = {}
-        new_options = deepcopy(options)
-        new_options['time_limit'] = kw_args.get('timelimit', 3.)
+        new_options = deepcopy(options) if options else dict()
+        if 'timelimit' in kw_args:
+          new_options['time_limit'] = kw_args['timelimit']
         return super(HauserParabolicSmoother, self).RetimeTrajectory(
             robot, path, options=new_options, **kw_args)
 
