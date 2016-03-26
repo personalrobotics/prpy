@@ -196,6 +196,20 @@ def ComputeAinv(N,dof):
                 invA[i*dof+k,j*dof+k] = invA_small[i-1,j-1]
     return invA
     
+def NormalizeVector(vec):
+    """
+    Normalize a vector.
+    This is faster than doing: vec/numpy.linalg.norm(vec)
+
+    @param numpy.array vec: A 1-dimensional vector.
+    @returns numpy.array result: A vector of the same size, where the
+                                 L2 norm of the elements equals 1.
+    """
+    numpy.seterr(divide='ignore', invalid='ignore')
+    magnitude = numpy.sqrt(vec.dot(vec))
+    vec2 = (vec / magnitude)
+    return numpy.nan_to_num(vec2) # convert NaN to zero
+
 def MatrixToTraj(traj_matrix,cs,dof,robot):
     env = robot.GetEnv()
     traj = openravepy.RaveCreateTrajectory(env,'')
@@ -713,6 +727,25 @@ def GeodesicError(t1, t2):
     return numpy.hstack((trans, angle))
 
 
+def AngleBetweenQuaternions(quat1, quat2):
+    """
+    Compute the angle between two quaternions.
+    From 0 to 2pi.
+    """
+    theta = numpy.arccos( 2.0*( quat1.dot(quat2) )**2 - 1.0)
+    return theta
+
+
+def AngleBetweenRotations(rot1, rot2):
+    """
+    Compute the angle between two 3x3 rotation matrices.
+    From 0 to 2pi.
+    """
+    quat1 = openravepy.quatFromRotationMatrix(rot1)
+    quat2 = openravepy.quatFromRotationMatrix(rot2)
+    return AngleBetweenQuaternions(quat1, quat2)
+
+
 def GeodesicDistance(t1, t2, r=1.0):
     '''
     Computes the geodesic distance between two transforms
@@ -724,6 +757,92 @@ def GeodesicDistance(t1, t2, r=1.0):
     error = GeodesicError(t1, t2)
     error[3] = r*error[3]
     return numpy.linalg.norm(error)
+
+
+def GetGeodesicDistanceBetweenTransforms(T0, T1, r=1.0):
+    """
+    Wrapper, to match GetGeodesicDistanceBetweenQuaternions()
+
+    Calculate the geodesic distance between two transforms, being
+    gd = norm( relative translation + r * axis-angle error )
+
+    @param t1 current transform
+    @param t2 goal transform
+    @param r in units of meters/radians converts radians to meters
+    """
+    return GeodesicDistance(T0, T1, r)
+
+
+def GetEuclideanDistanceBetweenPoints(p0, p1):
+    """
+    Calculate the Euclidean distance (L2 norm) between two vectors.
+    """
+    sum = 0.0
+    for i in xrange(len(p0)):
+        sum = sum + (p0[i]-p1[i])*(p0[i]-p1[i])
+    return numpy.sqrt(sum)
+
+
+def GetEuclideanDistanceBetweenTransforms(T0, T1):
+    """
+    Calculate the Euclidean distance between the translational
+    component of two 4x4 transforms.
+    (also called L2 or Pythagorean distance)
+    """
+    p0 = T0[0:3,3] # Get the x,y,z translation from the 4x4 matrix
+    p1 = T1[0:3,3]
+    return GetEuclideanDistanceBetweenPoints(p0, p1)
+
+
+def GetMinDistanceBetweenTransformAndWorkspaceTraj(T, traj, dt=0.01):
+    """
+    Find the location on a workspace trajectory which is closest
+    to the specified transform.
+
+    @param numpy.matrix T: A 4x4 transformation matrix.
+    @param openravepy.Trajectory traj: A timed workspace trajectory.
+    @param float dt: Resolution at which to sample along the trajectory.
+
+    @return (float,float) (min_dist, t_loc, T_loc) The minimum distance,
+                                         the time value along the timed
+                                         trajectory, and the transform.
+    """
+    if not IsTimedTrajectory(traj):
+        raise ValueError("Trajectory must have timing information.")
+
+    if not IsTrajectoryTypeIkParameterizationTransform6D(traj):
+        raise ValueError("Trajectory is not a workspace trajectory, it "
+                         "must have configuration specification of "
+                         "openravepy.IkParameterizationType.Transform6D")
+
+    def _GetError(t):
+        T_curr = openravepy.matrixFromPose(traj.Sample(t)[0:7])
+        error = GetEuclideanDistanceBetweenTransforms(T, T_curr)
+        return error
+
+    min_dist = numpy.inf
+    t_loc = 0.0
+    T_loc = None
+
+    # Iterate over the trajectory
+    t = 0.0
+    duration = traj.GetDuration()
+    while t < duration:
+        error = _GetError(t)
+        if error < min_dist:
+            min_dist = error
+            t_loc = t
+        t = t + dt
+    # Also check the end-point
+    error = _GetError(duration)
+    if error < min_dist:
+        min_dist = error
+        t_loc = t
+
+    T_loc = openravepy.matrixFromPose(traj.Sample(t_loc)[0:7])
+
+    return (min_dist, t_loc, T_loc)
+
 
 def FindCatkinResource(package, relative_path):
     '''
@@ -897,6 +1016,101 @@ def IsTimedTrajectory(trajectory):
     empty_waypoint = numpy.zeros(cspec.GetDOF())
     return cspec.ExtractDeltaTime(empty_waypoint) is not None
 
+
+def IsJointSpaceTrajectory(traj):
+    """
+    Check if trajectory is a joint space trajectory.
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        if traj.GetConfigurationSpecification().GetGroupFromName("joint_values"):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
+def IsWorkspaceTrajectory(traj):
+    """
+    Check if trajectory is a workspace trajectory.
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    return IsTrajectoryTypeIkParameterizationTransform6D(traj)
+
+
+def IsTrajectoryTypeIkParameterization(traj):
+    """
+    Check if trajectory has a configuration specification
+    of type IkParameterization:
+      Transform6d
+      Rotation3D
+      Translation3D
+      Direction3D
+      Ray4D
+      Lookat3D
+      TranslationDirection5D
+      TranslationXY2D
+      TranslationXYOrientation3D
+      TranslationLocalGlobal6D
+      TranslationXAxisAngle4D
+      TranslationYAxisAngle4D
+      TranslationZAxisAngle4D
+      TranslationXAxisAngleZNorm4D
+      TranslationYAxisAngleXNorm4D
+      TranslationZAxisAngleYNorm4D
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        if traj.GetConfigurationSpecification().GetGroupFromName("ikparam_values"):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
+def IsTrajectoryTypeIkParameterizationTransform6D(traj):
+    """
+    Check if trajectory has a configuration specification
+    of type IkParameterization.Transform6D
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        IKP_type = openravepy.IkParameterizationType.Transform6D
+        # The IKP type must be passed as a number
+        group_name = "ikparam_values {0}".format(int(IKP_type))
+        if traj.GetConfigurationSpecification().GetGroupFromName(group_name):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
+def IsTrajectoryTypeIkParameterizationTranslationDirection5D(traj):
+    """
+    Check if trajectory has a configuration specification
+    of type IkParameterization.TranslationDirection5D
+
+    @param openravepy.Trajectory traj: A path or trajectory.
+    @return bool result: Returns True or False.
+    """
+    try:
+        IKP_type = openravepy.IkParameterizationType.TranslationDirection5D
+        group_name = "ikparam_values {0}".format(int(IKP_type))
+        if traj.GetConfigurationSpecification().GetGroupFromName(group_name):
+            return True
+    except openravepy.openrave_exception:
+        pass
+    return False
+
+
 def ComputeEnabledAABB(kinbody):
     """
     Returns the AABB of the enabled links of a KinBody.
@@ -985,6 +1199,82 @@ def ComputeUnitTiming(robot, traj, env=None):
         new_cspec.InsertJointValues(new_waypoint, dof_values, robot, dof_indices, 0)
         new_cspec.InsertDeltaTime(new_waypoint, deltatime)
         new_traj.Insert(i, new_waypoint)
+
+    return new_traj
+
+
+def ComputeGeodesicUnitTiming(traj, env=None, alpha=1.0):
+    """
+    Compute the geodesic unit velocity timing of a workspace path or
+    trajectory, also called a path length parameterization.
+
+    The path length is calculated as the sum of all segment lengths,
+    where each segment length = norm( delta_translation^2 +
+                                           alpha^2*delta_orientation^2 )
+
+    Note: Currently only linear velocity interpolation is supported,
+          however OpenRAVE does allow you to specify quadratic
+          interpolation.
+
+    @param traj: Workspace path or trajectory
+    @param env: Environment to create the output trajectory in, defaults
+                to the same environment as the input trajectory.
+    @param alpha: Weighting for delta orientation.
+    @returns: A workspace trajectory with unit velocity timing.
+    """
+    if not IsTrajectoryTypeIkParameterizationTransform6D(traj):
+        raise ValueError("Trajectory is not a workspace trajectory, it "
+                         "must have configuration specification of "
+                         "openravepy.IkParameterizationType.Transform6D")
+
+    num_waypoints = traj.GetNumWaypoints()
+    if num_waypoints <= 1:
+        raise ValueError("Trajectory needs more than 1 waypoint.")
+
+    from openravepy import RaveCreateTrajectory
+
+    if env is None:
+        env = traj.GetEnv()
+
+    # Create a new workspace trajectory with the same spec
+    # as the old one
+    new_traj = openravepy.RaveCreateTrajectory(env, '')
+    new_cspec = openravepy.IkParameterization.\
+                        GetConfigurationSpecificationFromType(
+                          openravepy.IkParameterizationType.Transform6D,
+                          'linear')
+    new_cspec.AddDeltaTimeGroup()
+    new_traj.Init(new_cspec)
+
+    # Get the current pose of the end effector
+    # Note: OpenRAVE pose is [qx,qy,qz,qw, tx,ty,tz]
+    #       The 8th value is velocity.
+    P_ee_prev = traj.GetWaypoint(0)[range(7)]
+
+    for i in range(num_waypoints):
+        P_ee = traj.GetWaypoint(i)[range(7)] # Get 7 pose values
+
+        # Compute the translation delta
+        p0 = P_ee_prev[4:7] # Get the x,y,z translation
+        p1 = P_ee[4:7]
+        delta_translation = numpy.sqrt(numpy.sum((p0-p1)**2))
+
+        # Compute the orientation delta
+        q0 = P_ee_prev[0:4] # Get qx,qy,qz,qw rotation
+        q1 = P_ee[0:4]
+        delta_angle = AngleBetweenQuaternions(q0, q1)
+
+        dist = numpy.sqrt( delta_translation**2 + (alpha**2)*(delta_angle**2) )
+        if i == 0:
+            deltatime = 0.0
+        else:
+            deltatime = dist
+
+        P_ee_prev = P_ee
+
+        # Insert a new waypoint (1x7 pose, velocity)
+        values = numpy.append(P_ee, [deltatime])
+        new_traj.Insert(i, values)
 
     return new_traj
 

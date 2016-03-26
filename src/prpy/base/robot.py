@@ -34,7 +34,7 @@ from ..clone import Clone, Cloned
 from ..tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence, Tags
 from ..planning.ompl import OMPLSimplifier
-from ..planning.retimer import HauserParabolicSmoother, OpenRAVEAffineRetimer, ParabolicRetimer
+from ..planning.retimer import OpenRAVEAffineRetimer, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
 from ..util import SetTrajectoryTags
 
@@ -71,10 +71,7 @@ class Robot(openravepy.Robot):
         # (joint simplificaiton and retiming).
         self.simplifier = None
         self.retimer = ParabolicRetimer()
-        self.smoother = Sequence(
-            HauserParabolicSmoother(),
-            self.retimer
-        )
+        self.smoother = self.retimer
         self.affine_retimer = OpenRAVEAffineRetimer()
 
     def __dir__(self):
