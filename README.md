@@ -27,14 +27,25 @@ two subclasses:
 
 Each planner has one or more *planning methods*, annotated with either the
 `@LockedPlanningMethod` or `@ClonedPlanningMethod decorator, that look like
-ordinary functions. However, unlike an ordinary function, calling a planning
-method either locks the robot environment or clones the robot's environment
-into a *planning environment* associated with the planner. Planning occurs in
-the locked or cloned environment to allow PrPy to run multiple planners in
-parallel and to paralellize planning and execution.  In general, locked
-planning methods are used for calls that will terminate extremely quickly,
-while cloned planning methods are used for calls that might take a significant
-amount of time.
+ordinary functions. Using these decorators makes other PrPy components
+aware that these methods exist and follow a particular specification that
+allows them to be composed with other PrPy objects automatically.  For
+example, `MetaPlanner`s will report that they can perform planning methods
+that their child motion planners have enumerated via `@PlanningMethod`
+decorators.
+
+`@PlanningMethod` decorators also make sure that calls to planning code are
+executed in a thread-safe manner.  In the case of `@LockedPlanningMethod`,
+this is enforced by locking the calling environment until the planning method
+has completed. In the case of `@ClonedPlanningMethod`, this is enforced by
+cloning the calling environment, and calling the wrapped method with references
+to the cloned environment.  The result of the method is then copied back to the
+calling environment.  `@ClonedPlanningMethod`s can be used to run multiple
+planners in parallel and to parallelize planning and execution.
+
+In general, **locked** planning methods are used for calls that will terminate
+extremely quickly, while **cloned** planning methods are used for calls that
+might take a significant amount of time.
 
 For example, the following code will use OMPL to plan `robot`'s active DOFs
 from their current values to to the `goal_config` configuration:
@@ -117,23 +128,34 @@ of these methods accept planner-specific keyword arguments.
 
 Implementing a custom planner requires extending the `BasePlanner` class and
 decorating one or more methods with the `@LockedPlanningMethod` or
-`@ClonedPlanningMethod` decorator. Extending the `BasePlanner` class constructs
-the planning environment `self.env` and allows PrPy to identify your planner
-as a base planner class, as opposed to a meta-planner. The `@*PlanningMethod`
+`@ClonedPlanningMethod` decorator.
+
+Extending the `BasePlanner` class allows PrPy to identify your planner as a
+base planner class, as opposed to a meta-planner. The `@PlanningMethod`
 decorators handle environment cloning or locking and allows meta-planners to
 query the list of planning methods that the planner supports (e.g. to generate
 docstrings).
 
+Each instance of a `BasePlanner`-derived class constructs a planning
+environment `self.env`.  This environment is uniquely associated with each
+instance of the planner and is what will be used in `@ClonedPlanningMethod`
+calls. Since this environment is persistent and unique, it can also be used
+as a place to cache data or pre-load plugins for planners that have heavyweight
+initialization steps.  However, because of this, each planning instance can
+only execute one `@ClonedPlanningMethod` at a time.  It can still execute
+arbitrary `@LockedPlanningMethod` calls, as long as they are referring to
+robots in different environments.
+
 Please obey the following guidelines:
 
-- Assume that the environment is locked during the entire call.
+- Assume that the planning environment is locked during the entire call.
 - Subclass constructors **must** call `BasePlanner.__init__`.
-- Each `@*PlanningMethod` **must** accept the first argument `robot`, which is a
-  robot in the cloned environment.
-- Each `@*PlanningMethod` **must** accept `**kwargs` to ignore arguments that
+- Each `@PlanningMethod` **must** accept the first argument `robot`, which is a
+  robot in the environment it should be using to perform planning.
+- Each `@PlanningMethod` **must** accept `**kwargs` to ignore arguments that
   are not supported by the planner.
-- Each `@*PlanningMethod` **must** return a `Trajectory` which was created in
-  the cloned environment.
+- Each `@PlanningMethod` **must** return a `Trajectory` which was created in
+  the same environment as the robot it was passed (e.g. `robot.GetEnv()`).
 - When possible, use one of the defacto-standard `@*PlanningMethod` names listed
   below.
 - Raise a `PlanningError` to indicate an expected, but fatal, error (e.g.
