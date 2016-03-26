@@ -45,12 +45,13 @@ class ChiselModule(PerceptionModule):
         self.reset_detection_srv = None
         
         if detection_frame is None:
-            detection_frame='/map'
-#            detection_frame='/head/kinect2_rgb_optical_frame'
+            # By default, the Chisel kinbody is put in map frame
+            #  not camera frame
+            detection_frame='/map' 
         self.detection_frame = detection_frame
 
         if destination_frame is None:
-            destination_frame = "/map"
+            destination_frame = '/map'
         self.destination_frame = destination_frame
         self.reference_link = reference_link
 
@@ -85,6 +86,11 @@ class ChiselModule(PerceptionModule):
             from kinbody_helper import transform_from_or
 
             # Add any ignored bodies to the camera
+            # We need to transform all these bodies from their pose
+            #   in OpenRAVE to the equivalent pose in TF so that
+            #   chisel can perform the appropriate masking
+            #   Then we will transform them all back after the server
+            #   performs the detection
             for b in ignored_bodies:
                 if b not in self.camera_bodies:
                     with env:
@@ -95,6 +101,7 @@ class ChiselModule(PerceptionModule):
                                       reference_link=self.reference_link)
                     self.camera.add_body(b)
                     self.camera_bodies.append(b)
+
             #Reset Chisel
             if self.reset_detection_srv is None:
                 import rospy, chisel_msgs.srv
