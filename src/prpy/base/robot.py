@@ -27,7 +27,7 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-
+import collections
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, exceptions, util
 from ..clone import Clone, Cloned
@@ -42,6 +42,12 @@ logger = logging.getLogger(__name__)
 
 
 class Robot(openravepy.Robot):
+
+    _postprocess_envs = collections.defaultdict(openravepy.Environment)
+    """
+    Mapping from robot environments to plan postprocessing environments.
+    """
+
     def __init__(self, robot_name=None):
         self.actions = None
         self.planner = None
@@ -73,6 +79,13 @@ class Robot(openravepy.Robot):
         self.retimer = ParabolicRetimer()
         self.smoother = self.retimer
         self.affine_retimer = OpenRAVEAffineRetimer()
+
+        # Since we don't want to endlessly create postprocessing environments,
+        # we maintain a map that uniquely associates each OpenRAVE environment
+        # with a given postprocessing environment.  This way, if we re-clone
+        # into a previously used environment, we will not create a new one.
+        self._postprocess_env = Robot._postprocess_envs[
+            openravepy.RaveGetEnvironmentId(self.GetEnv())]
 
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
@@ -164,6 +177,7 @@ class Robot(openravepy.Robot):
         # TODO: Do we really need this in cloned environments?
         self.base_manipulation = openravepy.interfaces.BaseManipulation(self)
         self.task_manipulation = openravepy.interfaces.TaskManipulation(self)
+
 
     def AttachController(self, name, args, dof_indices, affine_dofs, simulated):
         """
@@ -285,11 +299,6 @@ class Robot(openravepy.Robot):
             smooth = tags.get(Tags.SMOOTH, False)
             logger.debug('Detected "%s" tag on trajectory: Setting smooth'
                          ' = True', Tags.SMOOTH)
-
-        # Lazily create an environment for post-processing.
-        # This is faster than creating a new environment for every operation.
-        if not hasattr(self, '_postprocess_env'):
-            self._postprocess_env = openravepy.Environment()
 
         with Clone(self.GetEnv(),
                    clone_env=self._postprocess_env) as cloned_env:
