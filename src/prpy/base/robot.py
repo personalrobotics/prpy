@@ -80,13 +80,6 @@ class Robot(openravepy.Robot):
         self.smoother = self.retimer
         self.affine_retimer = OpenRAVEAffineRetimer()
 
-        # Since we don't want to endlessly create postprocessing environments,
-        # we maintain a map that uniquely associates each OpenRAVE environment
-        # with a given postprocessing environment.  This way, if we re-clone
-        # into a previously used environment, we will not create a new one.
-        self._postprocess_env = Robot._postprocess_envs[
-            openravepy.RaveGetEnvironmentId(self.GetEnv())]
-
     def __dir__(self):
         # We have to manually perform a lookup in InstanceDeduplicator because
         # __methods__ bypass __getattribute__.
@@ -300,8 +293,15 @@ class Robot(openravepy.Robot):
             logger.debug('Detected "%s" tag on trajectory: Setting smooth'
                          ' = True', Tags.SMOOTH)
 
+        # Since we don't want to endlessly create postprocessing environments,
+        # we maintain a map that uniquely associates each OpenRAVE environment
+        # with a given postprocessing environment.  This way, if we re-clone
+        # into a previously used environment, we will not create a new one.
+        postprocess_env = Robot._postprocess_envs[
+            openravepy.RaveGetEnvironmentId(self.GetEnv())]
+
         with Clone(self.GetEnv(),
-                   clone_env=self._postprocess_env) as cloned_env:
+                   clone_env=postprocess_env) as cloned_env:
             cloned_robot = cloned_env.Cloned(self)
 
             # Planners only operate on the active DOFs. We'll set any DOFs
