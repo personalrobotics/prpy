@@ -34,7 +34,13 @@ import logging
 import numpy
 import openravepy
 from .. import util
-from base import BasePlanner, PlanningError, PlanningMethod, Tags
+from base import (
+    BasePlanner,
+    PlanningError,
+    PlanningMethod,
+    Tags,
+    UnsupportedPlanningError
+)
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -125,6 +131,77 @@ class VectorFieldPlanner(BasePlanner):
                                                goal_pose)
             if pose_error < pose_error_tol:
                 return Status.TERMINATE
+            return Status.CONTINUE
+
+        traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
+                                      integration_interval,
+                                      timelimit,
+                                      **kw_args)
+
+        # Flag this trajectory as unconstrained. This overwrites the
+        # constrained flag set by FollowVectorField.
+        util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
+        return traj
+
+    @PlanningMethod
+    def PlanToTSR(self, robot, tsrchains, timelimit=5.0,
+                  pose_error_tol=0.01,
+                  integration_interval=10.0,
+                  **kw_args):
+        """
+        Plan to a goal TSR by following a geodesic loss function
+        in SE(3) via an optimized Jacobian.
+
+        @param robot
+        @param tsrchains a list of TSR chains that define a goal set
+        @param timelimit time limit before giving up
+        @param pose_error_tol in meters
+        @param integration_interval The time interval to integrate over
+        @return traj
+        """
+        with robot.env():
+            manip = robot.GetActiveManipulator()
+
+        # Test for tsrchains that cannot be handled.
+        for tsrchain in tsrchains:
+            if tsrchain.sample_start or tsrchain.constrain:
+                raise UnsupportedPlanningError(
+                    'Cannot handle start or trajectory-wide TSR constraints.')
+        tsrchains = [t for t in tsrchains if t.sample_goal]
+
+        def vf_geodesic():
+            """
+            Define a joint-space vector field, that moves along the
+            geodesic (shortest path) from the start pose to the
+            closest goal pose.
+            """
+            ee = manip.GetEndEffectorTransform()
+            dall, bwall = zip(*[t.distance(ee) for t in tsrchains])
+            minidx = dall.index(min(dall))
+            goal_pose = tsrchains[minidx].to_transform(bwall[minidx])
+
+            twist = util.GeodesicTwist(ee, goal_pose)
+            dqout, tout = util.ComputeJointVelocityFromTwist(
+                robot, twist, joint_velocity_limits=numpy.PINF)
+
+            # Go as fast as possible
+            vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
+            return min(abs(vlimits[i] / dqout[i])
+                       if dqout[i] != 0. else 1.
+                       for i in xrange(vlimits.shape[0])) * dqout
+
+        def CloseEnough():
+            """
+            The termination condition.
+            At each integration step, the geodesic error between the
+            start and TSR is compared. If within threshold,
+            the integration will terminate.
+            """
+            ee = manip.GetEndEffectorTransform()
+            for t in tsrchains:
+                pose_error, _ = t.distance(ee)
+                if pose_error < pose_error_tol:
+                    return Status.TERMINATE
             return Status.CONTINUE
 
         traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
