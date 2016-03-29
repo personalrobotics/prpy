@@ -33,11 +33,9 @@
 import logging
 import numpy
 import openravepy
-import time
 from .. import util
 from base import BasePlanner, PlanningError, PlanningMethod, Tags
 from enum import Enum
-import math
 
 logger = logging.getLogger(__name__)
 
