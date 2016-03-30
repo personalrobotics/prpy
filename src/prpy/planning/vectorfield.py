@@ -543,11 +543,12 @@ class VectorFieldPlanner(BasePlanner):
                         include_start=False) #start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
-                    fn_status_callback(t_check, q_check)
+                    if t_check > nonlocals['t_check']:
+                        fn_status_callback(t_check, q_check)
 
-                    # Record the time of this check so we continue checking at
-                    # DOF resolution the next time the integrator takes a step.
-                    nonlocals['t_check'] = t_check
+                        # Record the time of this check so we continue checking at
+                        # DOF resolution the next time the integrator takes a step.
+                        nonlocals['t_check'] = t_check
 
                 return 0 # Keep going.
             except PlanningError as e:
