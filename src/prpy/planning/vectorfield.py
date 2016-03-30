@@ -159,8 +159,7 @@ class VectorFieldPlanner(BasePlanner):
         @param integration_interval The time interval to integrate over
         @return traj
         """
-        with robot.env():
-            manip = robot.GetActiveManipulator()
+        manip = robot.GetActiveManipulator()
 
         # Test for tsrchains that cannot be handled.
         for tsrchain in tsrchains:
@@ -201,7 +200,7 @@ class VectorFieldPlanner(BasePlanner):
             for t in tsrchains:
                 pose_error, _ = t.distance(ee)
                 if pose_error < pose_error_tol:
-                    return Status.TERMINATE
+                    return Status.CACHE_AND_TERMINATE
             return Status.CONTINUE
 
         traj = self.FollowVectorField(robot, vf_geodesic, CloseEnough,
