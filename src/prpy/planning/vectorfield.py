@@ -159,6 +159,8 @@ class VectorFieldPlanner(BasePlanner):
         @param integration_interval The time interval to integrate over
         @return traj
         """
+        import time
+        algo_start = time.time()
         manip = robot.GetActiveManipulator()
 
         # Test for tsrchains that cannot be handled.
@@ -174,17 +176,25 @@ class VectorFieldPlanner(BasePlanner):
             geodesic (shortest path) from the start pose to the
             closest goal pose.
             """
+            #Time spent in vf (overall): 2.54017210007 (of 23.9959440231)
+ 
+            #Start of min_tsr
             ee = manip.GetEndEffectorTransform()
             dall, bwall = zip(*[t.distance(ee) for t in tsrchains])
             minidx = dall.index(min(dall))
             goal_pose = tsrchains[minidx].to_transform(bwall[minidx])
+            #End of min_tsr. Total time: 2.453 (of total 23.969673872)
 
+            #Start of twist
             twist = util.GeodesicTwist(ee, goal_pose)
             dqout, tout = util.ComputeJointVelocityFromTwist(
                 robot, twist, joint_velocity_limits=numpy.PINF)
 
             # Go as fast as possible
             vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
+            #End of twist. Total time 0.187029361725 (of total 24.511950016)
+  
+            #Return value Takes 0.00241327285767 (of 24.9800179005) 
             return min(abs(vlimits[i] / dqout[i])
                        if dqout[i] != 0. else 1.
                        for i in xrange(vlimits.shape[0])) * dqout
@@ -196,6 +206,8 @@ class VectorFieldPlanner(BasePlanner):
             start and TSR is compared. If within threshold,
             the integration will terminate.
             """
+            #Total Function time: 14.6328074932 (of 23.8116400242)
+                #Most of if is in calculating that distance
             ee = manip.GetEndEffectorTransform()
             for t in tsrchains:
                 pose_error, _ = t.distance(ee)
@@ -211,6 +223,8 @@ class VectorFieldPlanner(BasePlanner):
         # Flag this trajectory as unconstrained. This overwrites the
         # constrained flag set by FollowVectorField.
         util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
+        algo_end = time.time()
+        print 'Planning Time {}'.format(algo_end-algo_start)
         return traj
 
     @PlanningMethod
@@ -611,16 +625,21 @@ class VectorFieldPlanner(BasePlanner):
                 else:
                     # TODO: This should start at t_check. Unfortunately, a bug
                     # in GetCollisionCheckPts causes this to enter an infinite
-                    # loop.
+                    # loop. For now it will generate points for the entire path
                     checks = GetCollisionCheckPts(robot, path,
                                                   include_start=False)
 
                 for t_check, q_check in checks:
-                    fn_status_callback(t_check, q_check)
+                    # To hack around the GetCollisionCheckPts bug, we will only 
+                    # perform a callback on the points that have not been 
+                    # collision checked. TODO (Rachel), check if should be 
+                    # > or >= 
+                    if t_check > nonlocals['t_check']:
+                        fn_status_callback(t_check, q_check)
 
-                    # Record the time of this check so we continue checking at
-                    # DOF resolution the next time the integrator takes a step.
-                    nonlocals['t_check'] = t_check
+                        # Record the time of this check so we continue checking at
+                        # DOF resolution the next time the integrator takes a step.
+                        nonlocals['t_check'] = t_check
 
                 return 0  # Keep going.
             except PlanningError as e:
