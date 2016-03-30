@@ -211,8 +211,6 @@ class VectorFieldPlanner(BasePlanner):
         # Flag this trajectory as unconstrained. This overwrites the
         # constrained flag set by FollowVectorField.
         util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
-        algo_end = time.time()
-        print 'Planning Time {}'.format(algo_end-algo_start)
         return traj
 
     @PlanningMethod
@@ -620,8 +618,7 @@ class VectorFieldPlanner(BasePlanner):
                 for t_check, q_check in checks:
                     # To hack around the GetCollisionCheckPts bug, we will only 
                     # perform a callback on the points that have not been 
-                    # collision checked. TODO (Rachel), check if should be 
-                    # > or >= 
+                    # collision checked.  
                     if t_check > nonlocals['t_check']:
                         fn_status_callback(t_check, q_check)
 
