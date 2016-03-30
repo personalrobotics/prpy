@@ -200,15 +200,14 @@ class SuccessPlanner(MockPlanner):
         from openravepy import RaveCreateTrajectory
 
         MockPlanner.__init__(self, delay=delay)
-        
+
         with self.env:
             # Clone the template trajectory into the planning environment.
             self.traj = RaveCreateTrajectory(self.env, template_traj.GetXMLId())
             self.traj.Clone(template_traj, 0)
 
     @PlanningMethod
-    def PlanTest(self, robot, defer=False):
-        assert not defer
+    def PlanTest(self, robot):
 
         def Success_impl(robot):
             import numpy
@@ -226,8 +225,7 @@ class SuccessPlanner(MockPlanner):
 
 class FailPlanner(MockPlanner):
     @PlanningMethod
-    def PlanTest(self, robot, defer=False):
-        assert not defer
+    def PlanTest(self, robot):
 
         def Failure_impl(robot):
             from prpy.planning import PlanningError

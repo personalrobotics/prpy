@@ -108,7 +108,7 @@ class Clone(object):
                                     ' while in collision.'
                                     .format(robot.GetName())
                                 )
-                            cloned_robot = self.clone_env.Cloned(robot)
+                            cloned_robot = Cloned(robot, into=self.clone_env)
                             cloned_robot.RegrabAll()
 
             # Required for InstanceDeduplicator to call CloneBindings for

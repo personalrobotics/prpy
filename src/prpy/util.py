@@ -291,6 +291,7 @@ def CopyTrajectory(traj, env=None):
     copy_traj = openravepy.RaveCreateTrajectory(env or traj.GetEnv(),
                                                 traj.GetXMLId())
     copy_traj.Clone(traj, 0)
+    copy_traj.SetDescription(traj.GetDescription())
     return copy_traj
 
 

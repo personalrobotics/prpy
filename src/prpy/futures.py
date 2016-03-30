@@ -31,13 +31,17 @@
 
 import logging
 import threading
-from .exceptions import InternalError
 
 logger = logging.getLogger(__name__)
 
 
 class FutureError(Exception):
     """ An error returned by a prpy.futures.Future. """
+    pass
+
+
+class InternalError(FutureError):
+    """ A future had an invalid internal state. """
     pass
 
 
