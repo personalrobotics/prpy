@@ -33,7 +33,6 @@ from prpy.util import SetTrajectoryTags
 from prpy.planning.base import (
     BasePlanner,
     PlanningError,
-    LockedPlanningMethod,
     ClonedPlanningMethod,
     Tags
 )
