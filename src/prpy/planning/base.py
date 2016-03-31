@@ -330,7 +330,7 @@ class Ranked(MetaPlanner):
 
     def plan(self, method, args, kw_args):
         all_planners = self._planners
-        futures = dict()
+        futures = []
         results = [None] * len(self._planners)
 
         # Helper function to call a planner and return its result.
@@ -348,12 +348,12 @@ class Ranked(MetaPlanner):
                     .format(planner, method))
                 continue
             else:
-                futures[index] = defer(call_planner, args=(planner,))
+                futures.append((index, defer(call_planner, args=(planner,))))
 
         # Each time a planner completes, check if we have a valid result
         # (a planner found a solution and all higher-ranked planners had
         # already failed).
-        for index, future in futures.viewitems():
+        for index, future in futures:
             try:
                 return future.result()
             except MetaPlanningError as e:

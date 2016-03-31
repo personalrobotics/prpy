@@ -370,7 +370,6 @@ class Robot(openravepy.Robot):
 
         # Copy the trajectory into the output environment.
         output_traj = CopyTrajectory(traj, env=self.GetEnv())
-        output_traj.SetDescription(path.GetDescription())
         return output_traj
 
     def ExecutePath(self, path, **kwargs):
