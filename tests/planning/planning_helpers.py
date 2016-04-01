@@ -1,5 +1,6 @@
 import numpy
-from prpy.planning.base import BasePlanner, PlanningMethod
+from prpy.planning.base import BasePlanner, ClonedPlanningMethod
+
 
 class BasePlannerTest(object):
     is_setup = False
@@ -17,7 +18,6 @@ class BasePlannerTest(object):
         -2.61799387,  0.66440338,  0.19853743,  2.00944286, -0.08639925,
         -0.69750467,  1.31656153
     ])
-
 
     config_feasible_goal = numpy.array([
         -0.84085883,  1.44573701,  0.20000000,  1.72620231, -0.81124757,
@@ -206,7 +206,7 @@ class SuccessPlanner(MockPlanner):
             self.traj = RaveCreateTrajectory(self.env, template_traj.GetXMLId())
             self.traj.Clone(template_traj, 0)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanTest(self, robot):
 
         def Success_impl(robot):
@@ -224,7 +224,7 @@ class SuccessPlanner(MockPlanner):
 
 
 class FailPlanner(MockPlanner):
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanTest(self, robot):
 
         def Failure_impl(robot):

@@ -33,11 +33,9 @@
 import logging
 import numpy
 import openravepy
-import time
 from .. import util
-from base import BasePlanner, PlanningError, PlanningMethod, Tags
+from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 from enum import Enum
-import math
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +79,10 @@ class VectorFieldPlanner(BasePlanner):
     def __str__(self):
         return 'VectorFieldPlanner'
 
-
-
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               pose_error_tol=0.01,
-                              integration_interval = 10.0,
+                              integration_interval=10.0,
                               **kw_args):
         """
         Plan to an end effector pose by following a geodesic loss function
@@ -139,12 +135,12 @@ class VectorFieldPlanner(BasePlanner):
         util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
         return traj
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 position_tolerance=0.01,
                                 angular_tolerance=0.15,
-                                integration_interval = 10.0,
+                                integration_interval=10.0,
                                 **kw_args):
         """
         Plan to a desired end-effector offset with move-hand-straight
@@ -183,7 +179,7 @@ class VectorFieldPlanner(BasePlanner):
             Function defining a joint-space vector field.
             """
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
-                                            Tstart)
+                                       Tstart)
             twist[0:3] = direction
 
             dqout, _ = util.ComputeJointVelocityFromTwist(
@@ -232,16 +228,15 @@ class VectorFieldPlanner(BasePlanner):
                                       timelimit, 
                                       **kw_args)
 
-
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanWorkspacePath(self, robot, traj,
                           timelimit=5.0,
                           position_tolerance=0.01,
                           angular_tolerance=0.15,
-                          t_step = 0.001,
+                          t_step=0.001,
                           Kp_ff=None,
                           Kp_e=None,
-                          integration_interval = 10.0,
+                          integration_interval=10.0,
                           **kw_args):
         """
         Plan a configuration space path given a workspace path.
@@ -422,8 +417,7 @@ class VectorFieldPlanner(BasePlanner):
                                       integration_interval,
                                       timelimit, **kw_args)
 
-
-    @PlanningMethod
+    @ClonedPlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
                           integration_time_interval=10.0,
                           timelimit=5.0,
@@ -604,4 +598,3 @@ class VectorFieldPlanner(BasePlanner):
             }, append=True
         )
         return output_path
-

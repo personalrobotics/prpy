@@ -91,10 +91,41 @@ class MetaPlanningError(PlanningError):
     # TODO: Print the inner exceptions.
 
 
-class PlanningMethod(object):
+class LockedPlanningMethod(object):
+    """
+    Decorate a planning method that locks the calling environment.
+    """
     def __init__(self, func):
         self.func = func
 
+    def __call__(self, instance, robot, *args, **kw_args):
+        with robot.GetEnv():
+            # Perform the actual planning operation.
+            traj = self.func(instance, robot, *args, **kw_args)
+
+            # Tag the trajectory with the planner and planning method
+            # used to generate it. We don't overwrite these tags if
+            # they already exist.
+            tags = GetTrajectoryTags(traj)
+            tags.setdefault(Tags.PLANNER, instance.__class__.__name__)
+            tags.setdefault(Tags.METHOD, self.func.__name__)
+            SetTrajectoryTags(traj, tags, append=False)
+
+            return traj
+
+    def __get__(self, instance, instancetype):
+        # Bind the self reference and use update_wrapper to propagate the
+        # function's metadata (e.g. name and docstring).
+        wrapper = functools.partial(self.__call__, instance)
+        functools.update_wrapper(wrapper, self.func)
+        wrapper.is_planning_method = True
+        return wrapper
+
+
+class ClonedPlanningMethod(LockedPlanningMethod):
+    """
+    Decorate a planning method that clones the calling environment.
+    """
     def __call__(self, instance, robot, *args, **kw_args):
         env = robot.GetEnv()
 
@@ -110,10 +141,11 @@ class PlanningMethod(object):
             joint_values[1] = cloned_robot.GetActiveDOFValues()
 
             # Check for mismatches in the cloning and hackily reset them.
-            # (This is due to a possible bug in OpenRAVE environment cloning where in
-            # certain situations, the Active DOF ordering and values do not match the
-            # parent environment.  It seems to be exacerbated by multirotation joints,
-            # but the exact cause and repeatability is unclear at this point.)
+            # (This is due to a possible bug in OpenRAVE environment cloning
+            # where in certain situations, the Active DOF ordering and values
+            # do not match the parent environment.  It seems to be exacerbated
+            # by multirotation joints, but the exact cause and repeatability
+            # is unclear at this point.)
             if not numpy.array_equal(joint_indices[0], joint_indices[1]):
                 logger.warning("Cloned Active DOF index mismatch: %s != %s",
                                str(joint_indices[0]),
@@ -126,27 +158,16 @@ class PlanningMethod(object):
                                str(joint_values[1]))
                 cloned_robot.SetActiveDOFValues(joint_values[0])
 
-            # Perform the actual planning operation.
-            planner_traj = self.func(instance, cloned_robot,
-                                     *args, **kw_args)
+            traj = super(ClonedPlanningMethod, self).__call__(
+                instance, cloned_robot, *args, **kw_args)
+            return CopyTrajectory(traj, env=env)
 
-            # Tag the trajectory with the planner and planning method
-            # used to generate it. We don't overwrite these tags if
-            # they already exist.
-            tags = GetTrajectoryTags(planner_traj)
-            tags.setdefault(Tags.PLANNER, instance.__class__.__name__)
-            tags.setdefault(Tags.METHOD, self.func.__name__)
-            SetTrajectoryTags(planner_traj, tags, append=False)
 
-            return CopyTrajectory(planner_traj, env=env)
-
-    def __get__(self, instance, instancetype):
-        # Bind the self reference and use update_wrapper to propagate the
-        # function's metadata (e.g. name and docstring).
-        wrapper = functools.partial(self.__call__, instance)
-        functools.update_wrapper(wrapper, self.func)
-        wrapper.is_planning_method = True
-        return wrapper
+class PlanningMethod(ClonedPlanningMethod):
+    def __init__(self, func):
+        logger.warn("Please explicitly declare a ClonedPlanningMethod "
+                    "instead of using PlanningMethod.")
+        super(ClonedPlanningMethod, self).__init__(func)
 
 
 class Planner(object):
