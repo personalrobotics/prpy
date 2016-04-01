@@ -32,10 +32,9 @@ import collections
 import logging
 import numpy
 import openravepy
-from .. import tsr
 from ..util import SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  PlanningMethod, Tags)
+                  ClonedPlanningMethod, Tags)
 import prpy.tsr
 
 logger = logging.getLogger(__name__)
@@ -192,7 +191,7 @@ class CHOMPPlanner(BasePlanner):
         logger.warning('ComputeDistanceField is deprecated. Distance fields are'
                        ' now implicity created by DistanceFieldManager.')
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def OptimizeTrajectory(self, robot, traj, lambda_=100.0, n_iter=50,
                            **kw_args):
         self.distance_fields.sync(robot)
@@ -215,7 +214,7 @@ class CHOMPPlanner(BasePlanner):
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15,
                             **kw_args):
         """
@@ -237,7 +236,7 @@ class CHOMPPlanner(BasePlanner):
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0,
                               n_iter=100, goal_tolerance=0.01, **kw_args):
         """
@@ -293,7 +292,7 @@ class CHOMPPlanner(BasePlanner):
 
     # JK - Disabling. This is not working reliably.
     '''
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, lambda_=100.0, n_iter=100,
                   goal_tolerance=0.01, **kw_args):
         """

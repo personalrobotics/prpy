@@ -33,7 +33,7 @@ import numpy
 import openravepy
 from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  PlanningMethod, Tags)
+                  ClonedPlanningMethod, Tags)
 from openravepy import PlannerStatus
 from .cbirrt import SerializeTSRChain
 
@@ -58,7 +58,7 @@ class OMPLPlanner(BasePlanner):
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OMPL. This will invoke the OMPL
@@ -69,7 +69,7 @@ class OMPLPlanner(BasePlanner):
         """
         return self._Plan(robot, goal=goal, **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, **kw_args):
         """
         Plan using the given set of TSR chains with OMPL.
@@ -159,7 +159,7 @@ class RRTConnect(OMPLPlanner):
                          ompl_range)
         return ompl_args
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
         """
         Plan to a desired configuration with OMPL. This will invoke the OMPL
@@ -171,7 +171,7 @@ class RRTConnect(OMPLPlanner):
         ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
         return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
         """
         Plan using the given TSR chains with OMPL.
@@ -198,7 +198,7 @@ class OMPLSimplifier(BasePlanner):
     def __str__(self):
         return 'OMPL Simplifier'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def ShortcutPath(self, robot, path, timeout=1., **kwargs):
         # The planner operates in-place, so we need to copy the input path. We
         # also need to copy the trajectory into the planning environment.

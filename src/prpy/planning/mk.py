@@ -30,8 +30,8 @@
 
 import logging, numpy, openravepy, time
 from ..util import SetTrajectoryTags
-from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  PlanningMethod, Tags)
+from base import (BasePlanner, PlanningError,
+                  ClonedPlanningMethod, Tags)
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ class MKPlanner(BasePlanner):
 
         return numpy.dot(jacobian_pinv, pose_error) + numpy.dot(nullspace_projector, nullspace_goal)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, max_distance=None,
                                 nullspace=JointLimitAvoidance, timelimit=5.0, step_size=0.001,
                                 position_tolerance=0.01, angular_tolerance=0.15, **kw_args):
