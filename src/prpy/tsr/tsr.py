@@ -335,10 +335,12 @@ class TSR(object):
 
         return numpy.hstack((xyzcheck, rotcheck))
 
-    def distance(self, trans):
+    def distance(self, trans, factr=1e9, epsilon=1e-09):
         """
         Computes the Geodesic Distance from the TSR to a transform
         @param trans 4x4 transform
+        @param factr iteration stopping condition
+        @param epsilon step size for the gradient
         @return dist Geodesic distance to TSR
         @return bwopt Closest Bw value to trans
         """
@@ -357,7 +359,8 @@ class TSR(object):
 
         bwopt, dist, info = scipy.optimize.fmin_l_bfgs_b(
                                 objective, bwinit, fprime=None,
-                                args=(),
+                                args=(), factr=factr, 
+                                epsilon=epsilon,
                                 bounds=bwbounds, approx_grad=True)
         return dist, bwopt
 
@@ -612,10 +615,12 @@ class TSRChain(object):
         """
         return self.to_transform(self.sample_xyzrpy(xyzrpy_list))
 
-    def distance(self, trans):
+    def distance(self, trans, factr=1e9, epsilon=1e-09):
         """
         Computes the Geodesic Distance from the TSR chain to a transform
         @param trans 4x4 transform
+        @param factr iteration stopping condition
+        @param epsilon step size for the gradient
         @return dist Geodesic distance to TSR
         @return bwopt Closest Bw value to trans output as a list of xyzrpy
         """
@@ -635,7 +640,8 @@ class TSRChain(object):
 
         bwopt, dist, info = scipy.optimize.fmin_l_bfgs_b(
                                 objective, bwinit, fprime=None,
-                                args=(),
+                                args=(), factr=factr, 
+                                epsilon=epsilon,
                                 bounds=bwbounds, approx_grad=True)
         return dist, bwopt.reshape(len(self.TSRs), 6)
 
