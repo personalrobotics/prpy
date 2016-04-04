@@ -615,10 +615,11 @@ class TSRChain(object):
         """
         return self.to_transform(self.sample_xyzrpy(xyzrpy_list))
 
-    def distance(self, trans, factr=1e9, epsilon=1e-09):
+    def distance(self, trans, bwinit=None, factr=1e9, epsilon=1e-09):
         """
         Computes the Geodesic Distance from the TSR chain to a transform
         @param trans 4x4 transform
+        @param bwinit Initial guess for closest Bw value as xyzrpy list
         @param factr iteration stopping condition
         @param epsilon step size for the gradient
         @return dist Geodesic distance to TSR
@@ -631,16 +632,19 @@ class TSRChain(object):
             tsr_trans = self.to_transform(xyzrpy_stack)
             return prpy.util.GeodesicDistance(tsr_trans, trans)
 
-        bwinit = []
+        if bwinit is None:
+            bwinit = []
+            initialized = False
         bwbounds = []
         for idx in range(len(self.TSRs)):
             Bw = self.TSRs[idx].Bw
-            bwinit.extend((Bw[:, 0] + Bw[:, 1])/2)
+            if not initialized:
+                bwinit.extend((Bw[:, 0] + Bw[:, 1])/2)
             bwbounds.extend([(Bw[i, 0], Bw[i, 1]) for i in range(6)])
 
         bwopt, dist, info = scipy.optimize.fmin_l_bfgs_b(
                                 objective, bwinit, fprime=None,
-                                args=(), factr=factr, 
+                                args=(), factr=factr,
                                 epsilon=epsilon,
                                 bounds=bwbounds, approx_grad=True)
         return dist, bwopt.reshape(len(self.TSRs), 6)
