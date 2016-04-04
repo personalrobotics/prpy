@@ -125,17 +125,19 @@ class VnccModule(PerceptionModule):
         from prpy.perception.base import PerceptionException
 
         if obj_name not in self.kinbody_to_query_map:
-            raise PerceptionException('The VNCC module cannot detect object %s', obj_name)
+            raise PerceptionException(
+                'The VNCC module cannot detect object {:s}'.format(obj_name))
 
         query_name = self.kinbody_to_query_map[obj_name]
         obj_pose = self._GetDetection(query_name)
         if obj_pose is None:
-            raise PerceptionException('Failed to detect objects %s', obj_name)
+            raise PerceptionException(
+                'Failed to detect object {:s}'.format(obj_name))
             
         env = robot.GetEnv()
         if env.GetKinBody(obj_name) is None:
             from prpy.rave import add_object
-            kinbody_file = '%s.kinbody.xml' % obj_name
+            kinbody_file = '{:s}.kinbody.xml'.format(obj_name)
             new_body = add_object(
                 env,
                 obj_name,

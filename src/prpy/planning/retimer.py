@@ -210,3 +210,24 @@ class OpenRAVEAffineRetimer(BasePlanner):
                                 str(status)))
 
         return output_traj
+
+
+class OptimizingPlannerSmoother(BasePlanner):
+    
+    def __init__(self, optimizing_planner, **kwargs):
+        super(OptimizingPlannerSmoother, self).__init__()
+        self.planner = optimizing_planner
+        self.saved_kwargs = kwargs
+
+    def __str__(self):
+        return 'OptimizingPlannerSmoother({})'.format(str(self.planner))
+    
+    @PlanningMethod
+    def RetimeTrajectory(self, robot, path, options=None, **kwargs):
+        logger.warning(
+            'OptimizingPlannerSmoother is very experimental!')
+        this_kwargs = dict(kwargs)
+        this_kwargs.update(self.saved_kwargs)
+        traj = self.planner.OptimizeTrajectory(robot, path, **this_kwargs)
+        return traj
+        
