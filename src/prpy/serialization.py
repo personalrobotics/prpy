@@ -41,13 +41,20 @@ class ReturnTransformQuaternionStateSaver(object):
 
 
 # Serialization.
-def serialize(obj, database):
+def serialize(obj, database=None):
+    """
+    Serialize an object
+    @param obj The object to serialize
+    @param database A SerializationDatabase object. If not None,
+    all filenames will be serialized through this database. Otherwise,
+    full filepaths will be saved into the serialized object
+    """
     NoneType = type(None)
 
     if isinstance(obj, (int, float, basestring, NoneType)):
         return obj
     elif isinstance(obj, (list, tuple)):
-        return [ serialize(x, databse) for x in obj ]
+        return [ serialize(x, database) for x in obj ]
     elif isinstance(obj, dict):
         obj = {serialize(k, database): serialize(v, database)
                 for k, v in obj.iteritems()}
@@ -61,7 +68,7 @@ def serialize(obj, database):
     elif isinstance(obj, Environment):
         return {
             TYPE_KEY: Environment.__name__,
-            'data': serialize_environment(obj)
+            'data': serialize_environment(obj, database)
         }
     elif isinstance(obj, KinBody):
         return {
@@ -109,29 +116,50 @@ def serialize(obj, database):
     else:
         raise UnsupportedTypeSerializationException(obj)
 
-def serialize_environment(env, database):
+def serialize_environment(env, database=None):
+    """
+    Serialize all bodies in the environment.
+    @param env The OpenRAVE environment
+    @param database A SerializationDatabase object. If not None,
+    all filenames will be serialized through this database. Otherwise,
+    full filepaths will be saved into the serialized object
+    """
     return {
         'bodies': [ serialize_kinbody(body, database) for body in env.GetBodies() ],
     }
 
-# def serialize_environment_file(env, path, writer=None, database=None):
-#     if writer is None:
-#         writer = json.dump
+def serialize_environment_file(env, path, writer=None, database=None):
+    """
+    Serialize the environment and save the resulting serialization
+    to the given file
+    @param env The OpenRAVE environment
+    @param path The path to save the serialized environment to
+    @param writer The writer to use to save the serialized environment to file 
+    (default: json.dump)
+    @param database A SerializationDatabase object. If not None,
+    all filenames will be serialized through this database. Otherwise,
+    full filepaths will be saved into the serialized object
+    """
+    if writer is None:
+        writer = json.dump
 
-#     if database is None:
-#         from serialization_database import SerializationDatabase
-#         database = SerializationDatabase(path)
+    data = serialize_environment(env, database)
 
-#     data = serialize_environment(env, database)
+    if path is not None:
+        with open(path, 'wb') as output_file:
+            writer(data, output_file)
+            serialization_logger.debug('Wrote environment to "%s".', path)
 
-#     if path is not None:
-#         with open(path, 'wb') as output_file:
-#             writer(data, output_file)
-#             serialization_logger.debug('Wrote environment to "%s".', path)
-
-#     return data
+    return data
 
 def serialize_kinbody(body, database):
+    """
+    Serialize an object
+    @param obj The object to serialize
+    @param database A SerializationDatabase object. If not None,
+    all filenames will be serialized through this database. Otherwise,
+    full filepaths will be saved into the serialized object
+    """
     LinkTransformation = openravepy.KinBody.SaveParameters.LinkTransformation
 
     with body.CreateKinBodyStateSaver(LinkTransformation):
@@ -141,15 +169,11 @@ def serialize_kinbody(body, database):
         all_joints = []
         all_joints.extend(body.GetJoints())
         all_joints.extend(body.GetPassiveJoints())
-
-        uri_filenames = body.GetURI()
-        uri_paths = [serialize_path(path, database) 
-                     for path in uri_filenames.split() if len(path) > 0]
-
+        
         data = {
             'is_robot': body.IsRobot(),
             'name': body.GetName(),
-            'uri': ' '.join(uri_paths),
+            'uri': serialize_path(body.GetURI(), database),
             'links': [serialize_link(l, database) for l in body.GetLinks()],
             'joints': [serialize_joint(j, database) for j in all_joints]
         }
@@ -237,15 +261,17 @@ def serialize_transform(t):
 def serialize_path(path, database):
     import os, openravepy
     path = path if os.path.exists(path) else openravepy.RaveFindLocalFile(path)
-    if os.path.exists(path):
+    if database and os.path.exists(path):
         return database.save(path)
     return path
 
 def deserialize_path(path, database):
-    try:
-        return database.get_path(path)
-    except IOError:
-        return None
+    if database:
+        try:
+            return database.get_path(path)
+        except IOError:
+            return path
+    return path
 
 # Deserialization.
 def _deserialize_internal(env, data, data_type, database):

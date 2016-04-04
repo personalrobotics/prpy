@@ -9,6 +9,7 @@ class SerializationDatabase(object):
         @param path A directory to copy and store all files serialized
         through this database
         """
+        # TODO: Create the path if it doesn't exist?
         self.path = path
 
     def get_key(self, source_path, extension=None):
@@ -73,20 +74,3 @@ class SerializationDatabase(object):
             source_content = source_file.read()
 
         return hashlib.md5(source_content).hexdigest()
-
-# def serialize_kinbody(kinbody, database):
-#     filenames = robot.GetURI()
-#     if not filenames:
-#         raise ValueError(
-#             'Unable to serialize KinBody with empty GetXMLFileName().')
-
-#     return {
-#         'XMLId': kinbody.GetXMLId(),
-#         'URI': [database.save(path) for path in filenames.split()],
-#         'KinematicsGeometryHash': kinbody.GetKinematicsGeometryHash(),
-#         'RobotStructureHash': kinbody.GetRobotStructureHash(),
-#     }
-
-
-#     for 
-
