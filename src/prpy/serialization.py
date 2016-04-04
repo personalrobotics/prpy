@@ -109,25 +109,29 @@ def serialize(obj, database):
     else:
         raise UnsupportedTypeSerializationException(obj)
 
-def serialize_environment(env):
+def serialize_environment(env, database):
     return {
-        'bodies': [ serialize_kinbody(body) for body in env.GetBodies() ],
+        'bodies': [ serialize_kinbody(body, database) for body in env.GetBodies() ],
     }
 
-def serialize_environment_file(env, path, writer=None):
-    if writer is None:
-        writer = json.dump
+# def serialize_environment_file(env, path, writer=None, database=None):
+#     if writer is None:
+#         writer = json.dump
 
-    data = serialize_environment(env)
+#     if database is None:
+#         from serialization_database import SerializationDatabase
+#         database = SerializationDatabase(path)
 
-    if path is not None:
-        with open(path, 'wb') as output_file:
-            writer(data, output_file)
-            serialization_logger.debug('Wrote environment to "%s".', path)
+#     data = serialize_environment(env, database)
 
-    return data
+#     if path is not None:
+#         with open(path, 'wb') as output_file:
+#             writer(data, output_file)
+#             serialization_logger.debug('Wrote environment to "%s".', path)
 
-def serialize_kinbody(body):
+#     return data
+
+def serialize_kinbody(body, database):
     LinkTransformation = openravepy.KinBody.SaveParameters.LinkTransformation
 
     with body.CreateKinBodyStateSaver(LinkTransformation):
@@ -138,25 +142,28 @@ def serialize_kinbody(body):
         all_joints.extend(body.GetJoints())
         all_joints.extend(body.GetPassiveJoints())
 
+        uri_filenames = body.GetURI()
+        uri_paths = [serialize_path(path, database) 
+                     for path in uri_filenames.split() if len(path) > 0]
+
         data = {
             'is_robot': body.IsRobot(),
             'name': body.GetName(),
-            'uri': body.GetXMLFilename(),
-            'links': map(serialize_link, body.GetLinks()),
-            'joints': map(serialize_joint, all_joints),
+            'uri': ' '.join(uri_paths),
+            'links': [serialize_link(l, database) for l in body.GetLinks()],
+            'joints': [serialize_joint(j, database) for j in all_joints]
         }
 
-
         if body.IsRobot():
-            data.update(serialize_robot(body))
+            data.update(serialize_robot(body, database))
 
     data['kinbody_state'] = serialize_kinbody_state(body)
 
     return data
 
-def serialize_robot(robot):
+def serialize_robot(robot, database):
     return {
-        'manipulators': map(serialize_manipulator, robot.GetManipulators()),
+        'manipulators': [serialize_manipulator(m, database) for m in robot.GetManipulators()],
         'robot_state': serialize_robot_state(robot),
     }
 
@@ -182,53 +189,63 @@ def serialize_robot_state(body):
     data['grabbed_bodies'] = map(serialize_grabbed_info, body.GetGrabbedInfo())
     return data
 
-def serialize_link(link):
-    data = { 'info': serialize_link_info(link.UpdateAndGetInfo()) }
+def serialize_link(link, database):
+    data = { 'info': serialize_link_info(link.UpdateAndGetInfo(), database) }
 
     # Bodies loaded from ".kinbody.xml" do not have GeometryInfo's listed in
     # their LinkInfo class. We manually read them from GetGeometries().
     # TODO: This may not correctly preserve non-active geometry groups.
     data['info']['_vgeometryinfos'] = [
-        serialize_geometry_info(geometry.GetInfo()) \
+        serialize_geometry_info(geometry.GetInfo(), database) \
         for geometry in link.GetGeometries()
     ]
     return data
 
-def serialize_joint(joint):
+def serialize_joint(joint, database):
     # joint.UpdateInfo() applies an incorrect offset to the joint. This seems
     # to be a bug - DO NOT call it.
-    return { 'info': serialize_joint_info(joint.GetInfo()) }
+    return { 'info': serialize_joint_info(joint.GetInfo(), database) }
 
-def serialize_manipulator(manipulator):
-    return { 'info': serialize_manipulator_info(manipulator.GetInfo()) }
+def serialize_manipulator(manipulator, database):
+    return { 'info': serialize_manipulator_info(manipulator.GetInfo(), database) }
 
-def serialize_with_map(obj, attribute_map):
+def serialize_with_map(obj, database, attribute_map):
     return {
-        key: serialize_fn(getattr(obj, key))
+        key: serialize_fn(getattr(obj, key), database)
         for key, (serialize_fn, _) in attribute_map.iteritems()
     }
 
-def serialize_link_info(link_info):
-    return serialize_with_map(link_info, LINK_INFO_MAP)
+def serialize_link_info(link_info, database):
+    return serialize_with_map(link_info, database, LINK_INFO_MAP)
     
-def serialize_joint_info(joint_info):
-    return serialize_with_map(joint_info, JOINT_INFO_MAP)
+def serialize_joint_info(joint_info, database):
+    return serialize_with_map(joint_info, database, JOINT_INFO_MAP)
 
-def serialize_manipulator_info(manip_info):
-    return serialize_with_map(manip_info, MANIPULATOR_INFO_MAP)
+def serialize_manipulator_info(manip_info, database):
+    return serialize_with_map(manip_info, database, MANIPULATOR_INFO_MAP)
 
-def serialize_geometry_info(geom_info):
-    return serialize_with_map(geom_info, GEOMETRY_INFO_MAP)
+def serialize_geometry_info(geom_info, database):
+    return serialize_with_map(geom_info, database, GEOMETRY_INFO_MAP)
 
-def serialize_grabbed_info(grabbed_info):
-    return serialize_with_map(grabbed_info, GRABBED_INFO_MAP)
+def serialize_grabbed_info(grabbed_info, database):
+    return serialize_with_map(grabbed_info, database, GRABBED_INFO_MAP)
 
 def serialize_transform(t):
     with ReturnTransformQuaternionStateSaver(True):
         return t.tolist()
 
-def serialize_path(path):
+def serialize_path(path, database):
+    import os, openravepy
+    path = path if os.path.exists(path) else openravepy.RaveFindLocalFile(path)
+    if os.path.exists(path):
+        return database.save(path)
     return path
+
+def deserialize_path(path, database):
+    try:
+        return database.get_path(path)
+    except IOError:
+        return None
 
 # Deserialization.
 def _deserialize_internal(env, data, data_type, database):
@@ -340,15 +357,13 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None,
         deserialization_logger.debug('Deserialized body "%s".', body.GetName())
         deserialized_bodies.append((body, body_data))
 
-    """
     # Restore state. We do this in a second pass to insure that any bodies that
     # are grabbed already exist.
     for body, body_data in deserialized_bodies:
-        deserialize_kinbody_state(body, body_data['kinbody_state'])
+        deserialize_kinbody_state(body, body_data['kinbody_state'], database)
 
         if body.IsRobot():
-            deserialize_robot_state(body, body_data['robot_state'])
-    """
+            deserialize_robot_state(body, body_data['robot_state'], database)
 
     return env
 
@@ -389,12 +404,10 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True,
     kinbody.SetName(name or data['name'])
     env.Add(kinbody, anonymous)
 
-    """
     if state:
-        deserialize_kinbody_state(kinbody, data['kinbody_state'])
+        deserialize_kinbody_state(kinbody, data['kinbody_state'], database)
         if kinbody.IsRobot():
-            deserialize_robot_state(kinbody, data['robot_state'])
-    """
+            deserialize_robot_state(kinbody, data['robot_state'], database)
 
     return kinbody
 
@@ -404,6 +417,7 @@ def deserialize_kinbody_state(body, data, database):
 
     for key, (_, set_fn) in KINBODY_STATE_MAP.iteritems():
         try:
+            print key
             set_fn(body, data[key])
         except Exception as e:
             deserialization_logger.error(
@@ -413,7 +427,7 @@ def deserialize_kinbody_state(body, data, database):
             raise
 
     body.SetLinkTransformations(
-        [deserialize_transform(datum, database)
+        [deserialize_transform(datum)
          for datum in data['link_transforms']],
         data['dof_branches']
     )
@@ -474,31 +488,34 @@ def deserialize_grabbed_info(data, database):
     return deserialize_with_map(Robot.GrabbedInfo(), data, database,
             GRABBED_INFO_MAP)
 
-def deserialize_transform(data, database):
+def deserialize_transform(data):
     return numpy.array(data)
 
 # Schema.
 mesh_environment = Environment()
 identity = lambda x: x
 str_identity = (
-    lambda x: x,
-    lambda x: x.encode()
+    lambda x, _: x,
+    lambda x, _: x.encode()
 )
 both_identity = (
-    lambda x: x,
-    lambda x: x
+    lambda x, _: x,
+    lambda x, _: x
 )
 numpy_identity = (
-    lambda x: x.tolist(),
-    lambda x: numpy.array(x)
+    lambda x, _: x.tolist(),
+    lambda x, _: numpy.array(x)
 )
 transform_identity = (
-    serialize_transform,
-    deserialize_transform
+    lambda x, _: serialize_transform(x),
+    lambda x, _: deserialize_transform(x)
 )
 
 # TODO: Change this to use the database.
-path_identity = str_identity
+path_identity = (
+    lambda x, db: serialize_path(x, db),
+    lambda x, db: deserialize_path(x, db)    
+)
 
 KINBODY_STATE_MAP = {
     'description': (
@@ -541,6 +558,10 @@ KINBODY_STATE_MAP = {
         lambda x: x.GetDOFTorqueLimits().tolist(),
         lambda x, value: x.SetDOFTorqueLimits(value),
     ),
+    'dof_positions': (
+        lambda x: x.GetDOFValues().tolist(),
+        lambda x, value: x.SetDOFValues(value)
+    ),
     # TODO: What about link accelerations and geometry groups?
 }
 ROBOT_STATE_MAP = {
@@ -550,8 +571,8 @@ ROBOT_STATE_MAP = {
         lambda x, value: x.SetActiveDOFs(value)
     ),
     'active_manipulator': (
-        lambda x: x.GetActiveManipulator().GetName(),
-        lambda x, value: x.SetActiveManipulator(value),
+        lambda x: x.GetActiveManipulator().GetName() if x.GetActiveManipulator() is not None else '',
+        lambda x, value: x.SetActiveManipulator(value)
     ),
 }
 LINK_INFO_MAP = {
@@ -566,8 +587,8 @@ LINK_INFO_MAP = {
     '_tMassFrame': transform_identity,
     '_vForcedAdjacentLinks': both_identity,
     '_vgeometryinfos': (
-        lambda x: map(serialize_geometry_info, x),
-        lambda x: map(deserialize_geometry_info, x),
+        lambda x, db: [serialize_geometry_info(gi, db) for gi in x],
+        lambda x, db: [deserialize_geometry_info(gi, db) for gi in x],
     ),
     '_vinertiamoments': numpy_identity,
 }
@@ -581,13 +602,13 @@ JOINT_INFO_MAP = {
     '_mapStringParameters': both_identity, # TODO
     '_name': str_identity,
     '_type': (
-        lambda x: x.name,
-        lambda x: KinBody.JointType.names[x]
+        lambda x, _: x.name,
+        lambda x, _: KinBody.JointType.names[x]
     ),
     '_vanchor': numpy_identity,
     '_vaxes': (
-        lambda x: [ xi.tolist() for xi in x ],
-        lambda x: map(numpy.array, x)
+        lambda x, _: [ xi.tolist() for xi in x ],
+        lambda x, _: map(numpy.array, x)
     ),
     '_vcurrentvalues': numpy_identity,
     '_vhardmaxvel': numpy_identity,
@@ -610,8 +631,8 @@ GEOMETRY_INFO_MAP = {
     '_filenamerender': path_identity,
     '_t': transform_identity,
     '_type': (
-        lambda x: x.name,
-        lambda x: GeometryType.names[x]
+        lambda x, _: x.name,
+        lambda x, _: GeometryType.names[x]
     ),
     '_vAmbientColor': numpy_identity,
     '_vCollisionScale': numpy_identity,
