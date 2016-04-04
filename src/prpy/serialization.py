@@ -57,7 +57,7 @@ def serialize(obj, database=None):
         return [ serialize(x, database) for x in obj ]
     elif isinstance(obj, dict):
         obj = {serialize(k, database): serialize(v, database)
-                for k, v in obj.iteritems()}
+                 for k, v in obj.iteritems()}
         obj[TYPE_KEY] = dict.__name__
         return obj
     elif isinstance(obj, ndarray):
@@ -340,7 +340,7 @@ def _deserialize_internal(env, data, data_type, database):
     else:
         raise UnsupportedTypeDeserializationException(data_type)
 
-def deserialize(env, data, database):
+def deserialize(env, data, database=None):
     if isinstance(data, unicode):
         return data.encode()
     elif isinstance(data, list):
