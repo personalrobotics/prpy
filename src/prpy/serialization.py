@@ -41,22 +41,22 @@ class ReturnTransformQuaternionStateSaver(object):
 
 
 # Serialization.
-def serialize(obj):
-
+def serialize(obj, database):
     NoneType = type(None)
 
     if isinstance(obj, (int, float, basestring, NoneType)):
         return obj
     elif isinstance(obj, (list, tuple)):
-        return [ serialize(x) for x in obj ]
+        return [ serialize(x, databse) for x in obj ]
     elif isinstance(obj, dict):
-        obj = { serialize(k): serialize(v) for k, v in obj.iteritems() }
+        obj = {serialize(k, database): serialize(v, database)
+                for k, v in obj.iteritems()}
         obj[TYPE_KEY] = dict.__name__
         return obj
     elif isinstance(obj, ndarray):
         return {
             TYPE_KEY: ndarray.__name__,
-            'data': serialize(obj.tolist())
+            'data': serialize(obj.tolist(), database)
         }
     elif isinstance(obj, Environment):
         return {
@@ -227,12 +227,14 @@ def serialize_transform(t):
     with ReturnTransformQuaternionStateSaver(True):
         return t.tolist()
 
-# Deserialization.
-def _deserialize_internal(env, data, data_type):
+def serialize_path(path):
+    return path
 
+# Deserialization.
+def _deserialize_internal(env, data, data_type, database):
     if data_type == dict.__name__:
         return {
-            deserialize(env, k): deserialize(env, v)
+            deserialize(env, k, database): deserialize(env, v, database)
             for k, v in data.iteritems()
             if k != TYPE_KEY
         }
@@ -295,17 +297,18 @@ def _deserialize_internal(env, data, data_type):
     else:
         raise UnsupportedTypeDeserializationException(data_type)
 
-def deserialize(env, data):
+def deserialize(env, data, database):
     if isinstance(data, unicode):
         return data.encode()
     elif isinstance(data, list):
-        return [ deserialize(env, x) for x in data ]
+        return [ deserialize(env, x, database) for x in data ]
     elif isinstance(data, dict):
-        return _deserialize_internal(env, data, data.get(TYPE_KEY))
+        return _deserialize_internal(env, data, data.get(TYPE_KEY), database)
     else:
         return data
 
-def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
+def deserialize_environment(data, env=None, purge=False, reuse_bodies=None,
+                            database=None):
     if env is None:
         env = Environment()
 
@@ -331,7 +334,8 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
     for body_data in data['bodies']:
         body = reuse_bodies_dict.get(body_data['name'], None)
         if body is None:
-            body = deserialize_kinbody(env, body_data, state=False)
+            body = deserialize_kinbody(env, body_data, state=False,
+                database=database)
 
         deserialization_logger.debug('Deserialized body "%s".', body.GetName())
         deserialized_bodies.append((body, body_data))
@@ -348,25 +352,26 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
 
     return env
 
-def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
+def deserialize_kinbody(env, data, name=None, anonymous=False, state=True,
+                        database=None):
     deserialization_logger.debug('Deserializing %s "%s".',
         'Robot' if data['is_robot'] else 'KinBody',
         data['name']
     )
 
     link_infos = [
-        deserialize_link_info(link_data['info']) \
+        deserialize_link_info(link_data['info'], database)
         for link_data in data['links']
     ]
     joint_infos = [
-        deserialize_joint_info(joint_data['info']) \
+        deserialize_joint_info(joint_data['info'], database)
         for joint_data in data['joints']
     ]
 
     if data['is_robot']:
         # TODO: Also load sensors.
         manipulator_infos = [
-            deserialize_manipulator_info(manipulator_data['info']) \
+            deserialize_manipulator_info(manipulator_data['info'], database)
             for manipulator_data in data['manipulators']
         ]
         sensor_infos = []
@@ -393,7 +398,7 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
 
     return kinbody
 
-def deserialize_kinbody_state(body, data):
+def deserialize_kinbody_state(body, data, database):
     deserialization_logger.debug('Deserializing "%s" KinBody state.',
         body.GetName())
 
@@ -408,11 +413,12 @@ def deserialize_kinbody_state(body, data):
             raise
 
     body.SetLinkTransformations(
-        map(deserialize_transform, data['link_transforms']),
+        [deserialize_transform(datum, database)
+         for datum in data['link_transforms']],
         data['dof_branches']
     )
 
-def deserialize_robot_state(body, data):
+def deserialize_robot_state(body, data, database):
     deserialization_logger.debug('Deserializing "%s" Robot state.',
         body.GetName())
 
@@ -422,7 +428,7 @@ def deserialize_robot_state(body, data):
     env = body.GetEnv()
 
     for grabbed_info_dict in data['grabbed_bodies']:
-        grabbed_info = deserialize_grabbed_info(grabbed_info_dict)
+        grabbed_info = deserialize_grabbed_info(grabbed_info_dict, database)
 
         robot_link = body.GetLink(grabbed_info._robotlinkname)
         robot_links_to_ignore = grabbed_info._setRobotLinksToIgnore
@@ -434,24 +440,27 @@ def deserialize_robot_state(body, data):
 
         body.Grab(grabbed_body, robot_link, robot_links_to_ignore)
 
-def deserialize_with_map(obj, data, attribute_map):
+def deserialize_with_map(obj, data, database, attribute_map):
     for key, (_, deserialize_fn) in attribute_map.iteritems():
-        setattr(obj, key, deserialize_fn(data[key]))
+        setattr(obj, key, deserialize_fn(data[key], database))
 
     return obj
 
-def deserialize_link_info(data):
-    return deserialize_with_map(KinBody.LinkInfo(), data, LINK_INFO_MAP)
+def deserialize_link_info(data, database):
+    return deserialize_with_map(KinBody.LinkInfo(), data, database,
+            LINK_INFO_MAP)
     
-def deserialize_joint_info(data):
-    return deserialize_with_map(KinBody.JointInfo(), data, JOINT_INFO_MAP)
+def deserialize_joint_info(data, database):
+    return deserialize_with_map(KinBody.JointInfo(), data, database,
+            JOINT_INFO_MAP)
 
-def deserialize_manipulator_info(data):
-    return deserialize_with_map(Robot.ManipulatorInfo(), data, MANIPULATOR_INFO_MAP)
+def deserialize_manipulator_info(data, database):
+    return deserialize_with_map(Robot.ManipulatorInfo(), data, database,
+            MANIPULATOR_INFO_MAP)
 
-def deserialize_geometry_info(data):
+def deserialize_geometry_info(data, database):
     geom_info = deserialize_with_map(
-        KinBody.GeometryInfo(), data, GEOMETRY_INFO_MAP)
+        KinBody.GeometryInfo(), data, database, GEOMETRY_INFO_MAP)
 
     # OpenRAVE only has a ReadTrimeshURI method on Environment. We create a
     # static, dummy environment (mesh_environment) just to load meshes.
@@ -461,10 +470,11 @@ def deserialize_geometry_info(data):
 
     return geom_info
 
-def deserialize_grabbed_info(data):
-    return deserialize_with_map(Robot.GrabbedInfo(), data, GRABBED_INFO_MAP)
+def deserialize_grabbed_info(data, database):
+    return deserialize_with_map(Robot.GrabbedInfo(), data, database,
+            GRABBED_INFO_MAP)
 
-def deserialize_transform(data):
+def deserialize_transform(data, database):
     return numpy.array(data)
 
 # Schema.
@@ -487,6 +497,8 @@ transform_identity = (
     deserialize_transform
 )
 
+# TODO: Change this to use the database.
+path_identity = str_identity
 
 KINBODY_STATE_MAP = {
     'description': (
@@ -594,8 +606,8 @@ GEOMETRY_INFO_MAP = {
     '_bModifiable': both_identity,
     '_bVisible': both_identity,
     '_fTransparency': both_identity,
-    '_filenamecollision': str_identity,
-    '_filenamerender': str_identity,
+    '_filenamecollision': path_identity,
+    '_filenamerender': path_identity,
     '_t': transform_identity,
     '_type': (
         lambda x: x.name,
