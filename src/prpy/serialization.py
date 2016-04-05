@@ -443,7 +443,6 @@ def deserialize_kinbody_state(body, data, database):
 
     for key, (_, set_fn) in KINBODY_STATE_MAP.iteritems():
         try:
-            print key
             set_fn(body, data[key])
         except Exception as e:
             deserialization_logger.error(

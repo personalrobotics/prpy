@@ -18,7 +18,7 @@ openravepy.RaveInitialize(True)
 openravepy.misc.InitOpenRAVELogging()
 openravepy.RaveSetDebugLevel(openravepy.DebugLevel.Fatal)
 
-class SerializationTests(object):#unittest.TestCase):
+class SerializationTests(unittest.TestCase):
     """
     Tests of the prpy serialization functionality
     """
@@ -27,32 +27,61 @@ class SerializationTests(object):#unittest.TestCase):
         self.env.Load('wamtest1.env.xml')
         self.robot = self.env.GetRobot('BarrettWAM')
         self.manipulator = self.robot.GetManipulator('arm')
-
+        
         # Remove the whiteboard, it has multiple unnamed links 
         wnb = self.env.GetKinBody('whiteboard')
         self.env.Remove(wnb)
+
+        # Remove ketchup - it has linked iv files
+        for b in self.env.GetBodies():
+            if 'ketchup' in b.GetURI():
+                self.env.Remove(b)
         
+        # Random dof values
+        lower, upper = self.robot.GetDOFLimits()
+        import random
+        dof_values = [l + random.random()*(u-l) for l,u in zip(lower,upper)]
+        self.robot.SetDOFValues(dof_values)
 
     def test_RobotSerialization(self):
         from prpy.serialization import serialize, serialize_environment
         from prpy.serialization import deserialize, deserialize_environment
-        env_dict = serialize_environment(self.env)
-        robot_dict = serialize(self.robot)
+        from prpy.serialization_database import SerializationDatabase
+        db = SerializationDatabase('/tmp')
 
-        env_new = deserialize_environment(env_dict)
-        robot_new = deserialize(env_new, robot_dict)
+        env_dict = serialize_environment(self.env, database=db)
+        robot_dict = serialize(self.robot, database=db)
 
-        self.assertEqual(self.robot.GetKinematicsGeometryHash(),
-                         robot_new.GetKinematicsGeometryHash())
-        self.assertEqual(self.robot.GetRobotStructureHash(),
-                         robot_new.GetRobotStructureHash())
-        
+        env_new = deserialize_environment(env_dict, database=db)
+        robot_new = deserialize(env_new, robot_dict, database=db)
+
+        # Joints
+        self.assertItemsEqual([j.GetName() for j in self.robot.GetJoints()],
+                         [j.GetName() for j in robot_new.GetJoints()])
+
+        # Links
+        self.assertItemsEqual([l.GetName() for l in self.robot.GetLinks()],
+                         [l.GetName() for l in robot_new.GetLinks()])
+
+#        self.assertEqual(self.robot.GetKinematicsGeometryHash(),
+#                         robot_new.GetKinematicsGeometryHash())
+#        self.assertEqual(self.robot.GetRobotStructureHash(),
+#                         robot_new.GetRobotStructureHash())
+
+        # Manipulator hashes
         for manip1 in self.robot.GetManipulators():
             manip2 = robot_new.GetManipulator(manip1.GetName())
             self.assertEqual(manip1.GetKinematicsStructureHash(),
                              manip2.GetKinematicsStructureHash())
+            
 
-        self.assertEqual([j.GetName() for j in self.robot.GetJoints()],
-                         [j.GetName() for j in robot_new.GetJoints()])
+        # DOF values
+        old_vals = self.robot.GetDOFValues()
+        new_vals = robot_new.GetDOFValues()
+        self.assertEqual(len(old_vals), len(new_vals))
+        for idx in range(len(old_vals)):
+            self.assertAlmostEqual(old_vals[idx], new_vals[idx])
 
-        
+
+if __name__ == '__main__':
+    unittest.main()
