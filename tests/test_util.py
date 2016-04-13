@@ -655,6 +655,441 @@ class Tests(unittest.TestCase):
                                                 err_msg=error, verbose=True)
 
 
+    # NormalizeVector()
+
+    def test_NormalizeVector_one(self):
+        vec1 = numpy.array([1.0,1.0,2.0])
+        value1 = prpy.util.NormalizeVector(vec1)
+        expected_value1 = numpy.array([0.4082482, 0.4082482, 0.8164965])
+        error = 'The normalized vector ' + str(value1) + \
+                ' doesnt match the expected vector ' + str(expected_value1)
+        numpy.testing.assert_array_almost_equal(value1, expected_value1, \
+                                                decimal=7, err_msg=error, \
+                                                verbose=True)
+
+    def test_NormalizeVector_two(self):
+        vec2 = numpy.array([1.0,0.0,2.0])
+        value2 = prpy.util.NormalizeVector(vec2)
+        expected_value2 = numpy.array([0.4472136, 0.0, 0.8944271])
+        error = 'The normalized vector ' + str(value2) + \
+                ' doesnt match the expected vector ' + str(expected_value2)
+        numpy.testing.assert_array_almost_equal(value2, expected_value2, \
+                                                decimal=7, err_msg=error, \
+                                                verbose=True)
+
+
+    # AngleBetweenQuaternions()
+
+    def test_AngleBetweenQuaternions_one(self):
+        # These quaternions are of the form [qw,qx,qy,qz]
+        quat1 = numpy.array([1.0, 0.0, 0.0, 0.0])
+        # Quaternion, rotation of pi/4 around x-axis
+        quat2 = numpy.array([0.9238915, 0.38265454, 0.0, 0.0])
+
+        angle1 = prpy.util.AngleBetweenQuaternions(quat1, quat2)
+        expected_angle1 = numpy.pi/4.0
+        error = 'The angle ' + str(angle1) + \
+                ' doesnt match the expected angle ' + str(expected_angle1)
+        numpy.testing.assert_almost_equal(angle1, expected_angle1, \
+                                          decimal=3, err_msg=error, \
+                                          verbose=True)
+
+    def test_AngleBetweenQuaternions_two(self):
+        # These quaternions are of the form [qw,qx,qy,qz]
+        quat1 = numpy.array([1.0, 0.0, 0.0, 0.0])
+        # Quaternion, rotation of pi/2 around y-axis
+        quat3 = numpy.array([0.70710678, 0.0, 0.70710678, 0.0])
+
+        angle2 = prpy.util.AngleBetweenQuaternions(quat1, quat3)
+        expected_angle2 = numpy.pi/2.0
+        error = 'The angle ' + str(angle2) + \
+                ' doesnt match the expected angle ' + str(expected_angle2)
+        numpy.testing.assert_almost_equal(angle2, expected_angle2, \
+                                          decimal=3, err_msg=error, \
+                                          verbose=True)
+
+
+    # AngleBetweenRotations()
+
+    def test_AngleBetweenRotations_one(self):
+        R1 = numpy.array([[1.0,0.0,0.0],
+                          [0.0,1.0,0.0],
+                          [0.0,0.0,1.0]])
+
+        # Rotation matrix, pi/4 around x-axis
+        R2 = numpy.array([[1.0,0.0,   0.0],
+                          [0.0,0.707,-0.707],
+                          [0.0,0.707, 0.707]])
+
+        angle1 = prpy.util.AngleBetweenRotations(R1,R2)
+        expected_angle1 = numpy.pi/4.0
+        error = 'The angle ' + str(angle1) + \
+                ' doesnt match the expected angle ' + str(expected_angle1)
+        numpy.testing.assert_almost_equal(angle1, expected_angle1, \
+                                          decimal=3, err_msg=error, \
+                                          verbose=True)
+
+    def test_AngleBetweenRotations_two(self):
+        R1 = numpy.array([[1.0,0.0,0.0],
+                          [0.0,1.0,0.0],
+                          [0.0,0.0,1.0]])
+
+        # Rotation matrix, pi/2 around y-axis
+        R3 = numpy.array([[ 0.0,0.0,1.0],
+                          [ 0.0,1.0,0.0],
+                          [-1.0,0.0,0.0]])
+
+        angle2 = prpy.util.AngleBetweenRotations(R1,R3)
+        expected_angle2 = numpy.pi/2.0
+        error = 'The angle ' + str(angle2) + \
+                ' doesnt match the expected angle ' + str(expected_angle2)
+        numpy.testing.assert_almost_equal(angle2, expected_angle2, \
+                                          decimal=3, err_msg=error, \
+                                          verbose=True)
+
+
+    # GetEuclideanDistanceBetweenPoints()
+
+    def test_GetEuclideanDistanceBetweenPoints_one(self):
+        p0 = numpy.array([0.0,0.0,0.0])
+        p1 = numpy.array([1.0,1.0,2.0])
+
+        value1 = prpy.util.GetEuclideanDistanceBetweenPoints(p0, p1)
+        expected_value1 = 2.44948974
+        error = 'The euclidean distance ' + str(value1) + \
+                ' doesnt match the expected distance ' + str(expected_value1)
+        numpy.testing.assert_almost_equal(value1, expected_value1, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+
+    # GetEuclideanDistanceBetweenTransforms()
+
+    def test_GetEuclideanDistanceBetweenTransforms_one(self):
+        T0 = numpy.array([[1.0,0.0,0.0,0.0],
+                          [0.0,1.0,0.0,0.0],
+                          [0.0,0.0,1.0,0.0],
+                          [0.0,0.0,0.0,1.0]])
+        T1 = numpy.array([[1.0,0.0,0.0,2.0],
+                          [0.0,1.0,0.0,3.0],
+                          [0.0,0.0,1.0,9.0],
+                          [0.0,0.0,0.0,1.0]])
+
+        value1 = prpy.util.GetEuclideanDistanceBetweenTransforms(T0,T1)
+        expected_value1 = 9.69535971
+        error = 'The euclidean distance ' + str(value1) + \
+                ' doesnt match the expected distance ' + str(expected_value1)
+        numpy.testing.assert_almost_equal(value1, expected_value1, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+
+    # GetGeodesicDistanceBetweenTransforms()
+
+    def test_GetGeodesicDistanceBetweenTransforms_one(self):
+        T0 = numpy.array([[1.0,0.0,0.0,0.0],
+                          [0.0,1.0,0.0,0.0],
+                          [0.0,0.0,1.0,0.0],
+                          [0.0,0.0,0.0,1.0]])
+        T1 = numpy.array([[1.0,0.0,0.0,5.0],
+                          [0.0,1.0,0.0,5.0],
+                          [0.0,0.0,1.0,2.0],
+                          [0.0,0.0,0.0,1.0]])
+
+        value1 = prpy.util.GetGeodesicDistanceBetweenTransforms(T0,T1,r=1.0)
+        expected_value1 = 7.34846922
+        error = 'The geodesic distance ' + str(value1) + \
+                ' doesnt match the expected distance ' + str(expected_value1)
+        numpy.testing.assert_almost_equal(value1, expected_value1, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+    def test_GetGeodesicDistanceBetweenTransforms_two(self):
+        T0 = numpy.array([[1.0,0.0,0.0,0.0],
+                          [0.0,1.0,0.0,0.0],
+                          [0.0,0.0,1.0,0.0],
+                          [0.0,0.0,0.0,1.0]])
+        T2 = numpy.array([[ 0.0,0.0,1.0,5.0],
+                          [ 0.0,1.0,0.0,5.0],
+                          [-1.0,0.0,0.0,2.0],
+                          [ 0.0,0.0,0.0,1.0]])
+
+        value2 = prpy.util.GetGeodesicDistanceBetweenTransforms(T0,T2,r=1.0)
+        expected_value2 = 7.51447942
+        error = 'The geodesic distance ' + str(value2) + \
+                ' doesnt match the expected distance ' + str(expected_value2)
+        numpy.testing.assert_almost_equal(value2, expected_value2, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+
+    # IsJointSpaceTrajectory()
+
+    def test_IsJointSpaceTrajectory_true(self):
+        # Create a joint-space trajectory
+        qtraj = openravepy.RaveCreateTrajectory(self.env, '')
+        cspec = self.robot.GetActiveConfigurationSpecification('linear')
+        new_waypoint = numpy.zeros(cspec.GetDOF()) # Create a waypoint
+        dof_values = [1.0,1.0,1.0,1.0,1.0,1.0,1.0]
+        dof_indices = self.robot.GetActiveDOFIndices()
+        cspec.InsertJointValues(new_waypoint, dof_values, self.robot,
+                                dof_indices, False)
+        qtraj.Init(cspec)
+        qtraj.Insert(0, new_waypoint.ravel())
+        result1 = prpy.util.IsJointSpaceTrajectory(qtraj)
+        numpy.testing.assert_equal(result1, True)
+
+    def test_IsJointSpaceTrajectory_false(self):
+        # Create a workspace trajectory
+        workspace_traj = openravepy.RaveCreateTrajectory(self.env, '')
+        spec = openravepy.IkParameterization.\
+                    GetConfigurationSpecificationFromType(
+                        openravepy.IkParameterizationType.Transform6D,'linear')
+        workspace_traj.Init(spec)
+        # Insert a waypoint, being the pose of the end effector
+        # Note: IKParametrization pose is [qx,qy,qz,qw, tx,ty,tz]
+        Pose_ee = numpy.array([0.0,0.0,0.0,1.0, 0.0,0.0,0.0])
+        workspace_traj.Insert(0, Pose_ee)
+        result2 = prpy.util.IsJointSpaceTrajectory(workspace_traj)
+        numpy.testing.assert_equal(result2, False)
+
+
+    # IsWorkspaceTrajectory()
+
+    def test_IsWorkspaceTrajectory_false(self):
+        # Create a joint-space trajectory
+        qtraj = openravepy.RaveCreateTrajectory(self.env, '')
+        cspec = self.robot.GetActiveConfigurationSpecification('linear')
+        new_waypoint = numpy.zeros(cspec.GetDOF()) # Create a waypoint
+        dof_values = [1.0,1.0,1.0,1.0,1.0,1.0,1.0]
+        dof_indices = self.robot.GetActiveDOFIndices()
+        cspec.InsertJointValues(new_waypoint, dof_values, self.robot,
+                                dof_indices, False)
+        qtraj.Init(cspec)
+        qtraj.Insert(0, new_waypoint.ravel())
+        result1 = prpy.util.IsWorkspaceTrajectory(qtraj)
+        numpy.testing.assert_equal(result1, False)
+
+    def test_IsWorkspaceTrajectory_true(self):
+        # Create a workspace trajectory of type IKP_Transform6D
+        workspace_traj = openravepy.RaveCreateTrajectory(self.env, '')
+        spec = openravepy.IkParameterization.\
+                    GetConfigurationSpecificationFromType(
+                        openravepy.IkParameterizationType.Transform6D,'linear')
+        workspace_traj.Init(spec)
+        # Insert a waypoint, being the pose of the end effector
+        # Note: IKParametrization pose is [qx,qy,qz,qw, tx,ty,tz]
+        Pose_ee = numpy.array([0.0,0.0,0.0,1.0, 0.0,0.0,0.0])
+        workspace_traj.Insert(0, Pose_ee)
+        result2 = prpy.util.IsWorkspaceTrajectory(workspace_traj)
+        numpy.testing.assert_equal(result2, True)
+
+
+    # IsTrajectoryTypeIkParameterization()
+
+    def test_IsTrajectoryTypeIkParameterization_false(self):
+        # Create a joint-space trajectory
+        qtraj = openravepy.RaveCreateTrajectory(self.env, '')
+        cspec = self.robot.GetActiveConfigurationSpecification('linear')
+        new_waypoint = numpy.zeros(cspec.GetDOF()) # Create a waypoint
+        dof_values = [1.0,1.0,1.0,1.0,1.0,1.0,1.0]
+        dof_indices = self.robot.GetActiveDOFIndices()
+        cspec.InsertJointValues(new_waypoint, dof_values, self.robot,
+                                dof_indices, False)
+        qtraj.Init(cspec)
+        qtraj.Insert(0, new_waypoint.ravel())
+        result1 = prpy.util.IsTrajectoryTypeIkParameterization(qtraj)
+        numpy.testing.assert_equal(result1, False)
+
+    def test_IsTrajectoryTypeIkParameterization_Transform6D(self):
+        # Create a trajectory of type IKP_Transform6D
+        workspace_traj = openravepy.RaveCreateTrajectory(self.env, '')
+        spec = openravepy.IkParameterization.\
+                        GetConfigurationSpecificationFromType(
+                              openravepy.IkParameterizationType.Transform6D,
+                              'linear')
+        workspace_traj.Init(spec)
+        # Insert a waypoint, being the pose of the end effector
+        # Note: IKParametrization pose is [qx,qy,qz,qw, tx,ty,tz]
+        Pose_ee = numpy.array([0.0,0.0,0.0,1.0, 0.0,0.0,0.0])
+        workspace_traj.Insert(0, Pose_ee)
+        result2 = prpy.util.IsTrajectoryTypeIkParameterization(workspace_traj)
+        numpy.testing.assert_equal(result2, True)
+
+    def test_IsTrajectoryTypeIkParameterization_TranslationDirection5D(self):
+        # Create a trajectory of type IKP_TranslationDirection5D
+        workspace_traj = openravepy.RaveCreateTrajectory(self.env, '')
+        spec = openravepy.IkParameterization.\
+                   GetConfigurationSpecificationFromType(
+                      openravepy.IkParameterizationType.TranslationDirection5D,
+                      'linear')
+        workspace_traj.Init(spec)
+        # Insert a waypoint, being the 5D pose of the end effector
+        Pose_ee = numpy.array([0.0,0.0,0.0, 0.0,0.0,0.0]) # 5 DOF
+        workspace_traj.Insert(0, Pose_ee)
+        result2 = prpy.util.IsTrajectoryTypeIkParameterization(workspace_traj)
+        numpy.testing.assert_equal(result2, True)
+
+
+    # IsTrajectoryTypeIkParameterizationTransform6D()
+
+    def test_IsTrajectoryTypeIkParameterizationTransform6D(self):
+        # Create a trajectory of type IKP_Transform6D
+        workspace_traj = openravepy.RaveCreateTrajectory(self.env, '')
+        spec = openravepy.IkParameterization.\
+                    GetConfigurationSpecificationFromType(
+                        openravepy.IkParameterizationType.Transform6D,'linear')
+        workspace_traj.Init(spec)
+        # Insert a waypoint, being the pose of the end effector
+        # Note: IKParametrization pose is [qx,qy,qz,qw, tx,ty,tz]
+        Pose_ee = numpy.array([0.0,0.0,0.0,1.0, 0.0,0.0,0.0])
+        workspace_traj.Insert(0, Pose_ee)
+        result = prpy.util.IsTrajectoryTypeIkParameterizationTransform6D(workspace_traj)
+        numpy.testing.assert_equal(result, True)
+
+
+    # IsTrajectoryTypeIkParameterizationTranslationDirection5D()
+
+    def test_IsTrajectoryTypeIkParameterizationTranslationDirection5D(self):
+
+        # Create a trajectory of type IKP_TranslationDirection5D
+        workspace_traj = openravepy.RaveCreateTrajectory(self.env, '')
+        spec = openravepy.IkParameterization.\
+                   GetConfigurationSpecificationFromType(
+                      openravepy.IkParameterizationType.TranslationDirection5D,
+                      'linear')
+        workspace_traj.Init(spec)
+        # Insert a waypoint, being the 5D pose of the end effector
+        Pose_ee = numpy.array([0.0,0.0,0.0, 0.0,0.0,0.0]) # 5 DOF
+        workspace_traj.Insert(0, Pose_ee)
+        result = prpy.util.IsTrajectoryTypeIkParameterizationTranslationDirection5D(workspace_traj)
+        numpy.testing.assert_equal(result, True)
+
+
+    # ComputeGeodesicUnitTiming()
+
+    def test_ComputeGeodesicUnitTiming(self):
+
+        def _CreateWorkspaceTrajectory(env, transforms_list):
+            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            spec = openravepy.IkParameterization.\
+                      GetConfigurationSpecificationFromType(
+                        openravepy.IkParameterizationType.Transform6D,'linear')
+            traj.Init(spec)
+            for i in xrange(0, len(transforms_list)):
+                traj.Insert(i, openravepy.poseFromMatrix(transforms_list[i]))
+            return traj
+
+        T0 = numpy.eye(4)
+        T1 = numpy.array([[1.0,0.0,   0.0,   1.0],
+                          [0.0,0.707,-0.707, 0.0],
+                          [0.0,0.707, 0.707, 1.0],
+                          [0.0,0.0,   0.0,   1.0]])
+        T2 = numpy.eye(4)
+        T2[0:3,3] = [1,1,1]
+
+        T_list = []
+        T_list.append(T0)
+        T_list.append(T1)
+        T_list.append(T2)
+
+        # Create a workspace trajectory of 3 end-effector transforms
+        workspace_traj = _CreateWorkspaceTrajectory(self.env, T_list)
+
+        # Initially the trajectory has zero duration
+        value1 = workspace_traj.GetDuration()
+        expected_value1 = 0.0
+        error = 'The trajectory duration ' + str(value1) + \
+                ' doesnt match the expected duration ' + str(expected_value1)
+        numpy.testing.assert_almost_equal(value1, expected_value1, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+        # After timing with weighting=0.0, the expected geodesic distance is
+        # just the euclidean distance = 1.414 + 1.0 = 2.414
+        workspace_traj = prpy.util.ComputeGeodesicUnitTiming(workspace_traj,
+                                                             env=None,
+                                                             alpha=0.0)
+        value2 = workspace_traj.GetDuration()
+        expected_value2 = 2.41421356
+        error = 'The trajectory duration ' + str(value2) + \
+                ' doesnt match the expected duration ' + str(expected_value2)
+        numpy.testing.assert_almost_equal(value2, expected_value2, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+        # After timing with weighting=1.0, the expected geodesic distance is
+        # the norm of the euclidean & orientational distances
+        workspace_traj = prpy.util.ComputeGeodesicUnitTiming(workspace_traj,
+                                                             env=None,
+                                                             alpha=1.0)
+        value3 = workspace_traj.GetDuration()
+        expected_value3 = 2.88915342
+        error = 'The trajectory duration ' + str(value3) + \
+                ' doesnt match the expected duration ' + str(expected_value3)
+        numpy.testing.assert_almost_equal(value3, expected_value3, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+
+    # GetMinDistanceBetweenTransformAndWorkspaceTraj()
+
+    def test_GetMinDistanceBetweenTransformAndWorkspaceTraj(self):
+        T0 = numpy.eye(4)
+
+        T1 = numpy.eye(4)
+        T1[0:3,3] = [5,0,0]
+
+        T_list = []
+        T_list.append(T0)
+        T_list.append(T1)
+
+        # Create a workspace trajectory being a straight line
+        workspace_traj = openravepy.RaveCreateTrajectory(self.env, '')
+        spec = openravepy.IkParameterization.\
+                    GetConfigurationSpecificationFromType(
+                        openravepy.IkParameterizationType.Transform6D,'linear')
+        workspace_traj.Init(spec)
+        for i in xrange(0, len(T_list)):
+            workspace_traj.Insert(i, openravepy.poseFromMatrix(T_list[i]))
+
+        workspace_traj = prpy.util.ComputeGeodesicUnitTiming(workspace_traj)
+
+        T2 = numpy.eye(4)
+        T2[0:3,3] = [0.5,2.0,0.0]
+
+        # Find the position on the workspace trajectory which
+        # is closest to the specified pose
+        (min_dist, t_loc, T_loc) = prpy.util.GetMinDistanceBetweenTransformAndWorkspaceTraj(T2, workspace_traj, dt=0.001)
+
+        # The distance should equal 2
+        expected_min_dist = 2.0
+        error = 'The minimum distance ' + str(min_dist) + \
+                ' doesnt match the expected distance' + str(expected_min_dist)
+        numpy.testing.assert_almost_equal(min_dist, expected_min_dist, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+        # The position on the workspace trajectory is half-way
+        # along, which is where t = 0.5
+        expected_t_loc = 0.5
+        error = 'The t value on the trajectory ' + str(t_loc) + \
+                ' doesnt match the expected value ' + str(expected_t_loc)
+        numpy.testing.assert_almost_equal(t_loc, expected_t_loc, \
+                                          decimal=7, err_msg=error, \
+                                          verbose=True)
+
+        # The pose at the above position
+        expected_T_loc = numpy.array([[1.0, 0.0, 0.0, 0.5],
+                                      [0.0, 1.0, 0.0, 0.0],
+                                      [0.0, 0.0, 1.0, 0.0],
+                                      [0.0, 0.0, 0.0, 1.0]])
+        error = 'The pose on the trajectory ' + str(T_loc) + \
+                ' doesnt match the expected pose ' + str(expected_T_loc)
+        numpy.testing.assert_array_almost_equal(T_loc, expected_T_loc, decimal=7, \
+                                                err_msg=error, verbose=True)
+
+
 class Test_GetPointFrom(unittest.TestCase):
     """
     Unit Tests for GetPointFrom()

@@ -6,8 +6,8 @@ logger.setLevel(logging.INFO)
 
 class ChiselModule(PerceptionModule):
     
-    def __init(self, env, mesh_client=None, service_namespace=None,
-               destination_frame=None, reference_link=None):
+    def __init__(self, env, mesh_client=None, service_namespace=None,
+               detection_frame=None, destination_frame=None, reference_link=None):
         """
         @param env The OpenRAVE environment
         @param mesh_client An instance of the Chisel sensor system (if None, one is created)
@@ -31,8 +31,9 @@ class ChiselModule(PerceptionModule):
         if mesh_client is None:
             import openravepy
             mesh_client = openravepy.RaveCreateSensorSystem(env, 'mesh_marker')
-                self.mesh_client = mesh_client
-                self.serv_ns = service_namespace
+
+        self.mesh_client = mesh_client
+        self.serv_ns = service_namespace
 
         # Create a ROS camera used to generate a synthetic point cloud
         #  to mask known kinbodies from the chisel mesh
@@ -42,8 +43,15 @@ class ChiselModule(PerceptionModule):
         self.camera_bodies = []
 
         self.reset_detection_srv = None
+        
+        if detection_frame is None:
+            # By default, the Chisel kinbody is put in map frame
+            #  not camera frame
+            detection_frame='/map' 
+        self.detection_frame = detection_frame
+
         if destination_frame is None:
-            destination_frame = "/map"
+            destination_frame = '/map'
         self.destination_frame = destination_frame
         self.reference_link = reference_link
 
@@ -59,17 +67,9 @@ class ChiselModule(PerceptionModule):
         if ignored_bodies is None:
             ignored_bodies = []
 
-        # Remove any previous bodies in the camera
-        for b in self.camera_bodies:
-            self.camera.remove_body(b)
-        self.camera_bodies = []
+        # Dictionary mapping ignored bodies to start transform
+        orig_bodies = {}
 
-        # Add any ignored bodies to the camera
-        for b in ignored_bodies:
-            if b not in self.camera_bodies:
-                self.camera.add_body(b)
-                self.camera_bodies.append(b)
-                
         #Check if chisel kinbody in env
         already_in_env = False
         for body in env.GetBodies():
@@ -81,26 +81,58 @@ class ChiselModule(PerceptionModule):
         if already_in_env:
             chisel_kb = env.GetKinBody('Chisel/full_mesh')
             env.Remove(chisel_kb)
-                        
-        #Reset Chisel
-        if self.reset_detection_srv is None:
-            import rospy, chisel_msgs.srv
-            srv_nm = self.serv_ns+'/Reset'
-            rospy.wait_for_service(srv_nm)
-            self.reset_detection_srv = rospy.ServiceProxy(srv_nm,
-                                                      chisel_msgs.srv.ResetService)
-        self.reset_detection_srv()
 
-        #Get Kinbody and load into env
-        self.mesh_client.SendCommand('GetMesh Chisel/full_mesh')
-        chisel_mesh = env.GetKinBody('Chisel/full_mesh')
-        
+        try:
+            from kinbody_helper import transform_from_or
+
+            # Add any ignored bodies to the camera
+            # We need to transform all these bodies from their pose
+            #   in OpenRAVE to the equivalent pose in TF so that
+            #   chisel can perform the appropriate masking
+            #   Then we will transform them all back after the server
+            #   performs the detection
+            for b in ignored_bodies:
+                if b not in self.camera_bodies:
+                    with env:
+                        orig_bodies[b] = b.GetTransform()
+                    transform_from_or(kinbody=b, 
+                                      detection_frame=self.detection_frame,
+                                      destination_frame=self.destination_frame,
+                                      reference_link=self.reference_link)
+                    self.camera.add_body(b)
+                    self.camera_bodies.append(b)
+
+            #Reset Chisel
+            if self.reset_detection_srv is None:
+                import rospy, chisel_msgs.srv
+                srv_nm = self.serv_ns+'/Reset'
+                rospy.wait_for_service(srv_nm)
+                self.reset_detection_srv = rospy.ServiceProxy(srv_nm,
+                                                              chisel_msgs.srv.ResetService)
+            self.reset_detection_srv()
+
+            #Get Kinbody and load into env
+            self.mesh_client.SendCommand('GetMesh Chisel/full_mesh')
+            chisel_mesh = env.GetKinBody('Chisel/full_mesh')
+
+        finally:
+
+            # Remove any previous bodies in the camera
+            for b in self.camera_bodies:
+                self.camera.remove_body(b)
+            self.camera_bodies = []
+
+            with env:
+                # Restore all bodies to their original pose
+                for b, orig_pose in orig_bodies.iteritems():
+                    b.SetTransform(orig_pose)
+
         if chisel_mesh is not None and self.reference_link is not None:
             # Apply a transform to the chisel kinbody to put it in the correct
             # location in the OpenRAVE environment
             from kinbody_helper import transform_to_or
             transform_to_or(kinbody=chisel_mesh,
-                            detection_frame="/map",
+                            detection_frame=self.detection_frame,
                             destination_frame=self.destination_frame,
                             reference_link=self.reference_link)
                         
