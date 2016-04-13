@@ -34,7 +34,7 @@ import numpy
 import openravepy
 import time
 from ..util import SetTrajectoryTags
-from base import BasePlanner, PlanningError, PlanningMethod, Tags
+from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class GreedyIKPlanner(BasePlanner):
     def __str__(self):
         return 'GreedyIKPlanner'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               **kw_args):
         """
@@ -82,7 +82,7 @@ class GreedyIKPlanner(BasePlanner):
 
         return self.PlanWorkspacePath(robot, traj, timelimit)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 **kw_args):
@@ -141,7 +141,7 @@ class GreedyIKPlanner(BasePlanner):
         return self.PlanWorkspacePath(robot, traj,
                                       timelimit, min_waypoint_index=1)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
                           min_waypoint_index=None, **kw_args):
         """

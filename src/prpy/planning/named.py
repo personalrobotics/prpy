@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 import logging, numpy, openravepy
-from base import BasePlanner, PlanningError, UnsupportedPlanningError, PlanningMethod
+from base import BasePlanner, PlanningError, ClonedPlanningMethod
 
 class NamedPlanner(BasePlanner):
     def __init__(self, delegate_planner=None):
@@ -41,7 +41,7 @@ class NamedPlanner(BasePlanner):
     def __str__(self):
         return 'NamedPlanner'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToNamedConfiguration(self, robot, name, **kw_args):
         """ Plan to a named configuration.
 

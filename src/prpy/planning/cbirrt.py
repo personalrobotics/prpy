@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -32,7 +32,7 @@ import numpy
 import openravepy
 from ..util import SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  PlanningMethod, Tags)
+                  ClonedPlanningMethod, Tags)
 import prpy.kin
 import prpy.tsr
 
@@ -48,7 +48,7 @@ class CBiRRTPlanner(BasePlanner):
     def __str__(self):
         return 'CBiRRT'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to multiple goal configurations with CBiRRT. This adds each goal
@@ -61,7 +61,7 @@ class CBiRRTPlanner(BasePlanner):
         kw_args.setdefault('smoothingitrs', 0)
         return self.Plan(robot, jointgoals=goals, **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a single goal configuration with CBiRRT.
@@ -72,7 +72,7 @@ class CBiRRTPlanner(BasePlanner):
         kw_args.setdefault('smoothingitrs', 0)
         return self.Plan(robot, jointgoals=[goal], **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Plan to a desired end-effector pose.
@@ -90,7 +90,7 @@ class CBiRRTPlanner(BasePlanner):
 
         return self.Plan(robot, tsr_chains=[tsr_chain], **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 smoothingitrs=100, **kw_args):
         """
@@ -153,7 +153,7 @@ class CBiRRTPlanner(BasePlanner):
             **kw_args
         )
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsr_chains, smoothingitrs=100, **kw_args):
         """
         Plan to a goal specified as a list of TSR chains. CBiRRT supports an

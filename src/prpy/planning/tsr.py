@@ -32,7 +32,7 @@ import time
 import itertools
 import numpy
 import openravepy
-from base import (BasePlanner, PlanningMethod, PlanningError,
+from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class TSRPlanner(BasePlanner):
 
     # TODO: Temporarily disabled based on Pras' feedback.
     """
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToIK(self, robot, goal_pose, **kw_args):
         from ..tsr import TSR, TSRChain
 
@@ -61,7 +61,7 @@ class TSRPlanner(BasePlanner):
         return self.PlanToTSR(robot, [tsr_chain], **kw_args)
     """
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=2.0,
                   num_attempts=3, chunk_size=1, ranker=None,
                   max_deviation=2*numpy.pi, **kw_args):
