@@ -33,7 +33,9 @@ from .. import util
 from ..controllers import PositionCommandController
 from endeffector import EndEffector
 
+
 class BarrettHand(EndEffector):
+
     def __init__(self, sim, manipulator, bhd_namespace, ft_sim=True):
         """End-effector wrapper for the BarrettHand.
         This class wraps a BarrettHand end-effector that is controlled by BHD
@@ -68,8 +70,8 @@ class BarrettHand(EndEffector):
 
         # Hand state, force/torque sensor, and tactile pads.
         if not sim:
-            self.handstate_sensor = util.create_sensor(env,
-                'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
+            # self.handstate_sensor = util.create_sensor(env,
+            #     'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
 
             self.controller = PositionCommandController(bhd_namespace, 'hand_controller')
 
@@ -82,10 +84,9 @@ class BarrettHand(EndEffector):
 
         self.ft_simulated = ft_sim
         if not ft_sim:
-            pass
-            # TODO TriggerController for taring f/t sensor
-            # self.ft_sensor = util.create_sensor(env,
-            #     'BarrettFTSensor {0:s} {1:s}'.format('prpy', owd_namespace))
+            raise NotImplementedError("Force/Torque not yet implemented in Python under ros_control")
+            # TODO self.ft_tare_controller = TriggerController(bhd_namespace, 'ft_sensor')
+            # TODO self.ft_sensor =
 
         # TODO: Attach the tactile sensor plugin.
 
@@ -200,7 +201,8 @@ class BarrettHand(EndEffector):
         else:
             # TODO: We're missing documentation here. What is the "current
             # state" of the hand? How do we interpret the return value?
-            return hand.handstate_sensor.SendCommand('GetState')
+            # return hand.handstate_sensor.SendCommand('GetState')
+            raise NotImplementedError("Strain guage not yet implemented in Python under ros_control")
 
     def GetStrain(hand):
         """ Gets the most recent strain sensor readings.
@@ -208,8 +210,9 @@ class BarrettHand(EndEffector):
         """
         if not hand.simulated:
             # This is because we are overriding the force/torque sensor datatype
-            sensor_data = hand.handstate_sensor.GetSensorData()
-            return sensor_data.force.copy()
+            # sensor_data = hand.handstate_sensor.GetSensorData()
+            # return sensor_data.force.copy()
+            raise NotImplementedError("Strain guage not yet implemented in Python under ros_control")
         else:
             return numpy.zeros(3)
 
@@ -219,9 +222,10 @@ class BarrettHand(EndEffector):
         """
         if not hand.simulated:
             # This is because we are overriding the force/torque sensor datatype.
-            sensor_data = hand.handstate_sensor.GetSensorData()
-            breakaway = sensor_data.torque
-            return breakaway
+            # sensor_data = hand.handstate_sensor.GetSensorData()
+            # breakaway = sensor_data.torque
+            # return breakaway
+            raise NotImplementedError("Strain guage not yet implemented in Python under ros_control")
         else:
             return [ False, False, False ]
 
@@ -233,8 +237,9 @@ class BarrettHand(EndEffector):
         @return force,torque force/torque in the hand frame
         """
         if not hand.ft_simulated:
-            sensor_data = hand.ft_sensor.GetSensorData()
-            return sensor_data.force, sensor_data.torque
+            # sensor_data = hand.ft_sensor.GetSensorData()
+            # return sensor_data.force, sensor_data.torque
+            raise NotImplementedError("Force/Torque not yet implemented in Python under ros_control")
         else:
             return numpy.zeros(3), numpy.zeros(3)
 
@@ -247,7 +252,7 @@ class BarrettHand(EndEffector):
         complete.
         """
         if not hand.ft_simulated:
-            hand.ft_sensor.SendCommand('Tare')
+            raise NotImplementedError("Force/Torque not yet implemented in Python under ros_control")
 
     def _GetJointFromName(self, name):
         robot = self.manipulator.GetRobot()
