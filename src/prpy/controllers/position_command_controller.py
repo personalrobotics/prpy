@@ -10,7 +10,8 @@ class PositionCommandController(OrController):
         self.namespace = namespace
         self.controller_name = controller_name
         self.simulated = simulated
-        self.controller_client = SetPositionClient(namespace, controller_name)
+        self.controller_client = SetPositionClient(namespace, controller_name, 10.0)
+        # TODO take timeout as parameter
         self._current_cmd = None
         self.logger.info("Position Command Controller initialized")
 

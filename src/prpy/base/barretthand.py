@@ -73,7 +73,9 @@ class BarrettHand(EndEffector):
             # self.handstate_sensor = util.create_sensor(env,
             #     'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
 
-            self.controller = PositionCommandController(bhd_namespace, 'hand_controller')
+            # TODO propper namespace
+            # self.controller = PositionCommandController(bhd_namespace, 'hand_controller')
+            self.controller = PositionCommandController('', 'right_hand_controller')
 
         else:
             self.controller = robot.AttachController(name=self.GetName(),
