@@ -154,7 +154,8 @@ class WAM(Manipulator):
                              num_dof, len(velocities)))
 
         if not self.simulated:
-            self.controller.SendCommand('Servo ' + ' '.join([ str(qdot) for qdot in velocities ]))
+            # self.controller.SendCommand('Servo ' + ' '.join([ str(qdot) for qdot in velocities ]))
+            raise NotImplementedError('Servoing and velocity control not yet supported.')
         else:
             self.controller.Reset(0)
             self.servo_simulator.SetVelocity(velocities)
