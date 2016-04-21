@@ -60,7 +60,7 @@ class Mico(Manipulator):
         # Load or_nlopt_ik as the IK solver. Unfortunately, IKFast doesn't work
         # on the Mico.
         if iktype is not None:
-            self.iksolver = openravepy.RaveCreateIkSolver(env, 'NloptIK')
+            self.iksolver = openravepy.RaveCreateIkSolver(env, 'TracIK')
             self.SetIKSolver(self.iksolver)
 
         # Load simulation controllers.
