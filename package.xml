@@ -26,12 +26,15 @@
   <run_depend>manipulation2</run_depend>
   <run_depend>openrave</run_depend>
   <run_depend>openrave_catkin</run_depend>
+  <run_depend>or_mesh_marker</run_depend>
+  <run_depend>offscreen_render</run_depend>
   <run_depend>python-scipy</run_depend>
   <run_depend>python-termcolor</run_depend>
   <run_depend>python-trollius</run_depend>
   <run_depend>python-rospkg</run_depend>
   <run_depend>python-yaml</run_depend>
   <run_depend>python-lxml</run_depend>
+  <run_depend>tf</run_depend>
   <test_depend>python-nose</test_depend>
   <!-- These optional dependencies cause unit tests can fail if missing. -->
   <test_depend>cbirrt2</test_depend>

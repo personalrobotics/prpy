@@ -78,7 +78,10 @@ def transform_from_or(kinbody, detection_frame, destination_frame,
     with kinbody.GetEnv():
         body_in_or = kinbody.GetTransform()
 
-    or_in_destination = numpy.linalg.inv(reference_link.GetTransform())
+    if reference_link is not None:
+        or_in_destination = numpy.linalg.inv(reference_link.GetTransform())
+    else:
+        or_in_destination = numpy.eye(4)
     body_in_destination = numpy.dot(or_in_destination, body_in_or)
 
     body_in_detection = numpy.dot(destination_in_detection, body_in_destination)
