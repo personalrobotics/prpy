@@ -33,10 +33,11 @@ import functools
 import logging
 import numpy
 import openravepy
-from ..clone import Clone
+from ..clone import Clone, CloneException
 from ..futures import defer
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
-from .exceptions import PlanningError, UnsupportedPlanningError
+from .exceptions import (ClonedPlanningError, MetaPlanningError,
+                         PlanningError, UnsupportedPlanningError)
 
 logger = logging.getLogger(__name__)
 
@@ -83,14 +84,6 @@ class Tags(object):
     """
 
 
-class MetaPlanningError(PlanningError):
-    def __init__(self, message, errors):
-        PlanningError.__init__(self, message)
-        self.errors = errors
-
-    # TODO: Print the inner exceptions.
-
-
 class LockedPlanningMethod(object):
     """
     Decorate a planning method that locks the calling environment.
@@ -133,34 +126,37 @@ class ClonedPlanningMethod(LockedPlanningMethod):
         joint_indices = [robot.GetActiveDOFIndices(), None]
         joint_values = [robot.GetActiveDOFValues(), None]
 
-        with Clone(env, clone_env=instance.env) as cloned_env:
-            cloned_robot = cloned_env.Cloned(robot)
+        try:
+            with Clone(env, clone_env=instance.env) as cloned_env:
+                cloned_robot = cloned_env.Cloned(robot)
 
-            # Store the cloned joint values and indices.
-            joint_indices[1] = cloned_robot.GetActiveDOFIndices()
-            joint_values[1] = cloned_robot.GetActiveDOFValues()
+                # Store the cloned joint values and indices.
+                joint_indices[1] = cloned_robot.GetActiveDOFIndices()
+                joint_values[1] = cloned_robot.GetActiveDOFValues()
 
-            # Check for mismatches in the cloning and hackily reset them.
-            # (This is due to a possible bug in OpenRAVE environment cloning
-            # where in certain situations, the Active DOF ordering and values
-            # do not match the parent environment.  It seems to be exacerbated
-            # by multirotation joints, but the exact cause and repeatability
-            # is unclear at this point.)
-            if not numpy.array_equal(joint_indices[0], joint_indices[1]):
-                logger.warning("Cloned Active DOF index mismatch: %s != %s",
-                               str(joint_indices[0]),
-                               str(joint_indices[1]))
-                cloned_robot.SetActiveDOFs(joint_indices[0])
+                # Check for mismatches in the cloning and hackily reset them.
+                # (This is due to a possible bug in OpenRAVE environment
+                # cloning where in certain situations, the Active DOF ordering
+                # and values do not match the parent environment.  It seems to
+                # be exacerbated by multirotation joints, but the exact cause
+                # and repeatability is unclear at this point.)
+                if not numpy.array_equal(joint_indices[0], joint_indices[1]):
+                    logger.warning(
+                        "Cloned Active DOF index mismatch: %s != %s",
+                        str(joint_indices[0]), str(joint_indices[1]))
+                    cloned_robot.SetActiveDOFs(joint_indices[0])
 
-            if not numpy.allclose(joint_values[0], joint_values[1]):
-                logger.warning("Cloned Active DOF value mismatch: %s != %s",
-                               str(joint_values[0]),
-                               str(joint_values[1]))
-                cloned_robot.SetActiveDOFValues(joint_values[0])
+                if not numpy.allclose(joint_values[0], joint_values[1]):
+                    logger.warning(
+                        "Cloned Active DOF value mismatch: %s != %s",
+                        str(joint_values[0]), str(joint_values[1]))
+                    cloned_robot.SetActiveDOFValues(joint_values[0])
 
-            traj = super(ClonedPlanningMethod, self).__call__(
-                instance, cloned_robot, *args, **kw_args)
-            return CopyTrajectory(traj, env=env)
+                traj = super(ClonedPlanningMethod, self).__call__(
+                    instance, cloned_robot, *args, **kw_args)
+                return CopyTrajectory(traj, env=env)
+        except CloneException as e:
+            raise ClonedPlanningError(e)
 
 
 class PlanningMethod(ClonedPlanningMethod):
@@ -184,10 +180,12 @@ class Planner(object):
     def get_planning_method_names(self):
         return filter(lambda method_name: self.has_planning_method(method_name), dir(self))
 
+
 class BasePlanner(Planner):
     def __init__(self):
         super(BasePlanner, self).__init__()
         self.env = openravepy.Environment()
+
 
 class MetaPlanner(Planner):
     __metaclass__ = abc.ABCMeta
