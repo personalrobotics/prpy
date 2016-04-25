@@ -64,7 +64,7 @@ class TSRPlanner(BasePlanner):
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=2.0,
                   num_attempts=3, chunk_size=1, ranker=None,
-                  max_deviation=2*numpy.pi, **kw_args):
+                  max_deviation=2 * numpy.pi, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
         samples a fixed number of goals from the specified TSRs up-front, then
@@ -145,7 +145,7 @@ class TSRPlanner(BasePlanner):
         # Group the IK solutions into sets of the specified size
         # (plan for each set of IK solutions together).
         ranked_ik_solution_sets = [
-            ranked_ik_solutions[i:i+chunk_size, :]
+            ranked_ik_solutions[i:i + chunk_size, :]
             for i in range(0, ranked_ik_solutions.shape[0], chunk_size)
         ]
 
