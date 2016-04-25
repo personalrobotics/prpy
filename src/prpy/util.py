@@ -1463,8 +1463,7 @@ def VanDerCorputSampleGenerator(start, end, step=2):
     Generates a sequence of values from start to end, with specified
     step size, using an approximate binary Van der Corput sequence.
 
-    The end value is also returned if it's more than half the
-    distance from the closest value.
+    The start and end values are always returned.
 
     For example, on the interval [0.0, 13.7], the sequence is:
     [0.0, 13.7, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
@@ -1493,23 +1492,19 @@ def VanDerCorputSampleGenerator(start, end, step=2):
     # Keep a list to make sure we return all the sample values
     times_sampled = [False for i in range(mod_end+1)]
 
-    vdc = VanDerCorputSequence(start, steps_to_take)
+    # Return the start and the end values.
+    yield float(start)
+    yield float(end)
+
+    vdc = VanDerCorputSequence(start, steps_to_take, include_endpoints=False)
     vdc_seq = itertools.islice(vdc, steps_to_take+1)
-    count = 0
+
     for s in vdc_seq:
         # Snap this sample value to the desired step-size
         idx = int( step * numpy.round(s) )
         if (idx % step) != 0:
             idx = idx + 1
 
-        # If required, return the actual end-point value (a float) as
-        # the 2nd sample point to be returned. Then the next sample
-        # point is the end-point rounded to step-size.
-        if count == 1:
-            if leftover_time > (step / 2.0):
-                yield float(end)
-
-        count = count+1
         while True:
             if times_sampled[idx] == False:
                 times_sampled[idx] = True
