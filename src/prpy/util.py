@@ -1484,6 +1484,10 @@ def VanDerCorputSampleGenerator(start, end, step=2):
     if not (step > 0):
         raise ValueError("The 'step' value must be positive.")
 
+    # Return the start and the end values.
+    yield float(start)
+    yield float(end)
+
     # The duration, rounded to nearest step-size
     mod_end = int(end - (end % step))
     steps_to_take = mod_end / float(step)
@@ -1491,10 +1495,7 @@ def VanDerCorputSampleGenerator(start, end, step=2):
 
     # Keep a list to make sure we return all the sample values
     times_sampled = [False for i in range(mod_end+1)]
-
-    # Return the start and the end values.
-    yield float(start)
-    yield float(end)
+    times_sampled[0] = True
 
     vdc = VanDerCorputSequence(start, steps_to_take, include_endpoints=False)
     vdc_seq = itertools.islice(vdc, steps_to_take+1)
