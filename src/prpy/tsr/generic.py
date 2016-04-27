@@ -138,7 +138,7 @@ def box_grasp(robot, box, length, width, height,
     #return [grasp_chain1, grasp_chain2, grasp_chain3]
     return [grasp_chain1]
 
-def place_object_tsr(robot, obj, pose_tsr_chain, manip=None, 
+def place_object(robot, obj, pose_tsr_chain, manip=None, 
                      **kwargs):
     '''
     Generates end-effector poses for placing an object.
@@ -169,11 +169,11 @@ def place_object_tsr(robot, obj, pose_tsr_chain, manip=None,
 
     return  [ place_chain ]
 
-def transport_upright_tsr(robot, obj, 
-                          roll_epsilon=0.2, 
-                          pitch_epsilon=0.2, 
-                          yaw_epsilon=0.2,
-                          manip=None, **kwargs):
+def transport_upright(robot, obj, 
+                      roll_epsilon=0.2, 
+                      pitch_epsilon=0.2, 
+                      yaw_epsilon=0.2,
+                      manip=None, **kwargs):
     '''
     Generates a trajectory-wide constraint for transporting the object with little roll, pitch or yaw
     Assumes the object has already been grasped and is in the proper
