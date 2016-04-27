@@ -6,7 +6,7 @@ logger.setLevel(logging.INFO)
 
 class ChiselModule(PerceptionModule):
     
-    def __init(self, env, mesh_client=None, service_namespace=None,
+    def __init__(self, env, mesh_client=None, service_namespace=None,
                destination_frame=None, reference_link=None):
         """
         @param env The OpenRAVE environment
@@ -31,8 +31,8 @@ class ChiselModule(PerceptionModule):
         if mesh_client is None:
             import openravepy
             mesh_client = openravepy.RaveCreateSensorSystem(env, 'mesh_marker')
-                self.mesh_client = mesh_client
-                self.serv_ns = service_namespace
+            self.mesh_client = mesh_client
+            self.serv_ns = service_namespace
 
         # Create a ROS camera used to generate a synthetic point cloud
         #  to mask known kinbodies from the chisel mesh
