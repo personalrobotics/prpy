@@ -30,8 +30,10 @@
 
 import numpy, openravepy, time
 from .. import util
-from ..controllers import PositionCommandController
+from ..controllers import (
+    PositionCommandController, TriggerController)
 from endeffector import EndEffector
+from geometry_msgs.msg import WrenchStamped
 
 
 class BarrettHand(EndEffector):
@@ -64,19 +66,15 @@ class BarrettHand(EndEffector):
 
         manipulator.SetChuckingDirection(closing_direction)
 
-        # Load the  hand controller.
         robot = self.manipulator.GetRobot()
         env = robot.GetEnv()
 
-        # Hand state, force/torque sensor, and tactile pads.
+        # Controller setup
+        self.bhd_namespace = bhd_namespace
+        self.hand_side = bhd_namespace[1:]  # TODO hand name hack
         if not sim:
-            # self.handstate_sensor = util.create_sensor(env,
-            #     'HandstateSensor {0:s} {1:s}'.format('prpy', bhd_namespace))
-
-            # TODO propper namespace
-            # self.controller = PositionCommandController(bhd_namespace, 'hand_controller')
-            self.controller = PositionCommandController('', 'right_hand_controller')
-
+            self.controller = PositionCommandController('', self.hand_side +
+                                                        '_hand_controller')
         else:
             self.controller = robot.AttachController(name=self.GetName(),
                                                      args='IdealController',
@@ -84,13 +82,11 @@ class BarrettHand(EndEffector):
                                                      affine_dofs=0,
                                                      simulated=sim)
 
-        self.ft_simulated = ft_sim
-        if not ft_sim:
-            raise NotImplementedError("Force/Torque not yet implemented in Python under ros_control")
-            # TODO self.ft_tare_controller = TriggerController(bhd_namespace, 'ft_sensor')
-            # TODO self.ft_sensor =
+        self.ft_tare_controller = TriggerController('', self.hand_side +
+                                                    '_tare_controller',
+                                                    ft_sim)
 
-        # TODO: Attach the tactile sensor plugin.
+        # TODO tactile sensors
 
     def GetSpreadIndex(self):
         """ Gets the DOF index of the spread joint.
@@ -135,7 +131,7 @@ class BarrettHand(EndEffector):
         if f3     is not None: preshape[2] = f3
         if spread is not None: preshape[3] = spread
 
-        self.controller.SetDesired(preshape)
+        self.controller.SetPosition(preshape)
         util.WaitForControllers([ self.controller ], timeout=timeout)
 
     def OpenHand(hand, spread=None, timeout=None):
@@ -158,7 +154,6 @@ class BarrettHand(EndEffector):
 
             util.WaitForControllers([ hand.controller ], timeout=timeout)
         else:
-            # TODO: Load this angle from somewhere.
             hand.MoveHand(f1=0.0, f2=0.0, f3=0.0, spread=spread, timeout=timeout)
 
     def CloseHand(hand, spread=None, timeout=None):
@@ -181,7 +176,6 @@ class BarrettHand(EndEffector):
 
             util.WaitForControllers([ hand.controller ], timeout=timeout)
         else:
-            # TODO: Load this angle from somewhere.
             hand.MoveHand(f1=3.2, f2=3.2, f3=3.2, spread=spread, timeout=timeout)
 
     def ResetHand(hand):
@@ -191,9 +185,7 @@ class BarrettHand(EndEffector):
         clear the fingers' breakaway state. This function blocks until the
         reset is complete.
         """
-        # TODO TriggerController for resetting hand
-        if not hand.simulated:
-            hand.controller.SendCommand('ResetHand')
+        raise NotImplementedError('ResetHand not yet implemented under ros_control.')
 
     def GetState(hand):
         """Gets the current state of the hand
@@ -204,7 +196,7 @@ class BarrettHand(EndEffector):
             # TODO: We're missing documentation here. What is the "current
             # state" of the hand? How do we interpret the return value?
             # return hand.handstate_sensor.SendCommand('GetState')
-            raise NotImplementedError("Strain guage not yet implemented in Python under ros_control")
+            raise NotImplementedError("Hand.GetState() not yet implemented under ros_control.")
 
     def GetStrain(hand):
         """ Gets the most recent strain sensor readings.
@@ -227,7 +219,7 @@ class BarrettHand(EndEffector):
             # sensor_data = hand.handstate_sensor.GetSensorData()
             # breakaway = sensor_data.torque
             # return breakaway
-            raise NotImplementedError("Strain guage not yet implemented in Python under ros_control")
+            raise NotImplementedError('GetBreakaway not yet implemented under ros_control.')
         else:
             return [ False, False, False ]
 
@@ -239,9 +231,11 @@ class BarrettHand(EndEffector):
         @return force,torque force/torque in the hand frame
         """
         if not hand.ft_simulated:
-            # sensor_data = hand.ft_sensor.GetSensorData()
-            # return sensor_data.force, sensor_data.torque
-            raise NotImplementedError("Force/Torque not yet implemented in Python under ros_control")
+            import rospy
+            sensor_data = rospy.wait_for_message(hand.bhd_namespace +
+                                                 '/ft_wrench',
+                                                 WrenchStamped)
+            return sensor_data.wrench.force, sensor_data.wrench.torque
         else:
             return numpy.zeros(3), numpy.zeros(3)
 
@@ -253,8 +247,7 @@ class BarrettHand(EndEffector):
         return as it blocks until the tare is complete.
         complete.
         """
-        if not hand.ft_simulated:
-            raise NotImplementedError("Force/Torque not yet implemented in Python under ros_control")
+        hand.ft_tare_controller.Trigger(timeout=10)
 
     def _GetJointFromName(self, name):
         robot = self.manipulator.GetRobot()

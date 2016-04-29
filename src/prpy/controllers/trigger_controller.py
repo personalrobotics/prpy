@@ -10,16 +10,27 @@ class TriggerController(OrController):
         self.namespace = namespace
         self.controller_name = controller_name
         self.simulated = simulated
-        self.controller_client = TriggerClient(namespace, controller_name)
+        if not simulated:
+            self.controller_client = TriggerClient(namespace, controller_name)
         self.logger.info("Trigger Controller initialized")
 
-    def Trigger(self):
+    def Trigger(self, timeout=None):
+        """Tigger the controlled action
+
+        :param timeout: if not None, block until timeout
+        :type timeout: double or None
+        """
         if not self.IsDone():
             raise TriggerFailed("Trigger action already \
                                      in progress and cannot be preempted",
                                 None)
 
-        self._current_cmd = self.controller_client.execute()
+        if not self.simulated:
+            self._current_cmd = self.controller_client.execute()
+            if timeout is not None and timeout > 0.0:
+                self._current_cmd.result(timeout)
 
     def IsDone(self):
-        return self._current_cmd is not None and self._current_cmd.done()
+        return (self.simulated or
+                self._current_cmd is None or
+                self._current_cmd.done())

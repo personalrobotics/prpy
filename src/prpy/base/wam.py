@@ -36,8 +36,6 @@ import openravepy
 import warnings
 from manipulator import Manipulator
 from prpy.clone import Clone
-from prpy.controllers import RewdOrGravityCompensationController, RewdOrTrajectoryController
-from ros_control_client_py import ControllerManagerClient, SwitchError
 from .. import util
 from .. import exceptions
 
@@ -50,6 +48,7 @@ class WAM(Manipulator):
 
         self.simulated = sim
         self._iktype = iktype
+        self.namespace = namespace
 
         if iktype is not None:
             self._SetupIK(iktype)
@@ -65,25 +64,17 @@ class WAM(Manipulator):
             self.servo_simulator = ServoSimulator(
                 self, rate=20, watchdog_timeout=0.1)
 
-            self.controller = self.GetRobot().AttachController(name=self.GetName(),
-                                                               args='IdealController',
-                                                               dof_indices=self.GetArmIndices(),
-                                                               affine_dofs=0,
-                                                               simulated=sim)
-        else:
-            # TODO load controller_manager namespace from param/arg?
-            self.controller_switcher = ControllerManagerClient('/controller_manager')
-            wam_joints = ['j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7']
-            self.controller = RewdOrGravityCompensationController(self.GetRobot(),
-                                                                  [namespace + '/' + j for j in wam_joints],
-                                                                  self.simulated)
+    def IsSimulated(self):
+        return self.simulated
 
+    def GetJointNames(self):
+        return [self.namespace + '/' + j for j in
+                ['j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7']]
 
     def CloneBindings(self, parent):
         Manipulator.CloneBindings(self, parent)
 
         self.simulated = True
-        self.controller = None
         self._iktype = parent._iktype
 
         if self._iktype is not None:
@@ -106,17 +97,7 @@ class WAM(Manipulator):
         control. Values between 0 and 1 are experimental.
         @param stiffness boolean or decimal value between 0.0 and 1.0
         """
-        if isinstance(stiffness, numbers.Number) and not (0 <= stiffness <= 1):
-            raise Exception('Stiffness must be boolean or decimal in the range [0, 1]; got %f.' % stiffness)
-        elif not self.simulated:
-            if stiffness:
-                stiff_controllers =     [self.controller.GetNamespace() + "/joint_state_controller",
-                                         self.controller.GetNamespace() + "/rewd_trajectory_controller"]
-                self.controller_manager.request(stiff_controllers).switch()
-            else:
-                grav_comp_controllers = [self.controller.GetNamespace() + "/joint_state_controller",
-                                         self.controller.GetNamespace() + "/rewd_gravity_compensation_controller"]
-                self.controller_manager.request(grav_comp_controllers).switch()
+        self.GetRobot().SetStiffness(stiffness, manip=self)
 
 
     def SetTrajectoryExecutionOptions(self, traj, stop_on_stall=False,
@@ -154,8 +135,9 @@ class WAM(Manipulator):
                              num_dof, len(velocities)))
 
         if not self.simulated:
-            # self.controller.SendCommand('Servo ' + ' '.join([ str(qdot) for qdot in velocities ]))
-            raise NotImplementedError('Servoing and velocity control not yet supported.')
+            raise NotImplementedError('Servoing and velocity control not yet'
+                                      'supported under ros_control.')
+
         else:
             self.controller.Reset(0)
             self.servo_simulator.SetVelocity(velocities)
@@ -174,9 +156,9 @@ class WAM(Manipulator):
         @return whether the servo was successful
         """
         steps = int(math.ceil(duration/timeStep))
-        original_dofs = self.GetRobot().GetDOFValues(manipulator.GetArmIndices())
-        velocity = numpy.array(target-manipulator.GetRobot().GetDOFValues(manipulator.GetArmIndices()))
-        velocities = v/steps#[v/steps for v in velocity]
+        original_dofs = self.GetRobot().GetDOFValues(self.GetArmIndices())
+        velocity = numpy.array(target - self.GetRobot().GetDOFValues(self.GetArmIndices()))
+        velocities = [v/steps for v in velocity]
         inCollision = False 
         if collisionChecking:
             inCollision = self.CollisionCheck(target)
@@ -187,7 +169,7 @@ class WAM(Manipulator):
                 self.Servo(velocities)
                 time.sleep(timeStep)
             self.Servo([0] * len(self.GetArmIndices()))
-            new_dofs = self.GetRobot().GetDOFValues(self.GetArmIndices())
+            # new_dofs = self.GetRobot().GetDOFValues(self.GetArmIndices())
             return True
         else:
             return False
@@ -210,7 +192,7 @@ class WAM(Manipulator):
         return Manipulator.GetVelocityLimits(self)
         
     def SetVelocityLimits(self, velocity_limits, min_accel_time,
-                          openrave=True, owd=True):
+                          openrave=True, owd=None):
         """Change the OpenRAVE and OWD joint velocity limits.
         Joint velocities that exceed these limits will trigger a velocity fault.
         @param velocity_limits vector of joint velocity limits in radians per second
@@ -218,22 +200,24 @@ class WAM(Manipulator):
         @param openrave flag to set the OpenRAVE velocity limits
         @param owd flag to set the OWD velocity limits
         """
+        # TODO implement in ros_control
+        if owd is not None:
+            warnings.warn(
+                'The "owd" flag is deprecated in'
+                ' SetVelocityLimits and will be removed in a future version.',
+                DeprecationWarning)
+
         # Update the OpenRAVE limits.
         if openrave:
             Manipulator.SetVelocityLimits(self, velocity_limits, min_accel_time)
-
-        # Update the OWD limits.
-        if owd and not self.simulated:
-            args  = [ 'SetSpeed' ]
-            args += [ str(min_accel_time) ]
-            args += [ str(velocity) for velocity in velocity_limits ]
-            args_str = ' '.join(args)
-            self.controller.SendCommand(args_str)
 
     def GetTrajectoryStatus(manipulator):
         """Gets the status of the current (or previous) trajectory executed by OWD.
         @return status of the current (or previous) trajectory executed
         """
+        raise NotImplementedError('GetTrajectoryStatus not supported on manipulator.'
+                                  ' Use returned TrajectoryFuture instead.') 
+
         if not manipulator.simulated:
             return manipulator.controller.SendCommand('GetStatus')
         else:
@@ -246,6 +230,8 @@ class WAM(Manipulator):
         """Clears the current trajectory execution status.
         This resets the output of \ref GetTrajectoryStatus.
         """
+        raise NotImplementedError('ClearTrajectoryStatus not supported on manipulator.')
+
         if not manipulator.simulated:
             manipulator.controller.SendCommand('ClearStatus')
 
@@ -270,6 +256,8 @@ class WAM(Manipulator):
         @param **kw_args planner parameters
         @return felt_force flag indicating whether we felt a force.
         """
+        raise NotImplementedError('MoveUntilTouch not yet implemented under ros_control.')
+
         from contextlib import nested
         from openravepy import CollisionReport, KinBody, Robot, RaveCreateTrajectory
         from ..planning.exceptions import CollisionPlanningError

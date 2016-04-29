@@ -51,41 +51,44 @@ class RewdOrController(OrController):
         self.logger.info("Rewd Controller initialized")
 
 
-class RewdOrGravityCompensationController(RewdOrController):
-    def __init__(self, robot, namespace, joint_names, simulated=False):
-        super(RewdOrGravityCompensationController, self).__init__(robot,
-                                                                  namespace,
-                                                                  joint_names,
-                                                                  simulated)
+# class RewdOrGravityCompensationController(RewdOrController):
+#     def __init__(self, robot, namespace, joint_names, simulated=False):
+#         super(RewdOrGravityCompensationController, self).__init__(robot,
+#                                                                   namespace,
+#                                                                   joint_names,
+#                                                                   simulated)
 
-        self.logger.info("Rewd Gravity Compensation Controller initialized")
+#         self.logger.info('Rewd Gravity Compensation Controller initialized')
 
-
-    def GetTorque(self):
-        pass
+#     def GetTorque(self):
+#         pass
 
 
 class RewdOrTrajectoryController(RewdOrController):
-    def __init__(self, robot, namespace, joint_names, simulated=False):
+    def __init__(self, robot, namespace, controller_name, joint_names,
+                 simulated=False):
         super(RewdOrTrajectoryController, self).__init__(robot,
                                                          namespace,
                                                          joint_names,
                                                          simulated)
+        if simulated:
+            raise NotImplementedError('Simulation not supported in RewdOrTrajectoryController')
 
-        self.controller_client = FollowJointTrajectoryClient(namespace + "/rewd_trajectory_controller")
+        self.controller_client = FollowJointTrajectoryClient(namespace,
+                                                             controller_name)
         self.current_trajectory = None
-        self.logger.info("Rewd Trajectory Controller initialized")
+        self.logger.info('Rewd Trajectory Controller initialized')
 
     def SetPath(self, traj):
         if not self.IsDone():
-            raise TrajectoryExecutionFailed("Currently executing another trajectory", traj, None)
+            raise TrajectoryExecutionFailed('Currently executing another trajectory', traj, None)
 
         ros_traj = or_to_ros_trajectory(self.GetRobot(), traj)
         self.current_trajectory = self.controller_client.execute(ros_traj)
 
     def IsDone(self):
-        return self.current_trajectory is not None and self.current_trajectory.done()
+        return self.current_trajectory is None or self.current_trajectory.done()
 
     def GetTime(self):
         # TODO implement with self.current_trajectory.partial_result()
-        pass
+        raise NotImplementedError('GetTime not yet implemented in RewdOrTrajectoryController')

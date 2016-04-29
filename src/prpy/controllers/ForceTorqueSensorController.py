@@ -1,5 +1,6 @@
 import logging
-
+import rospy
+from geometry_msgs.msg import WrenchStamped
 from . import OrController
 
 
@@ -9,15 +10,21 @@ class ForceTorqueSensorController(OrController):
         self.namespace = namespace
         self.controller_name = controller_name
         self.simulated = simulated
-        self.controller_client = ForceTorqueSensorController(namespace,
-                                                             controller_name)
+
         self.logger.info("Force/Torque Sensor Controller initialized")
 
     def GetForceTorque(self):
-        if not self.IsDone():
-            pass  # TODO raise
-
-        self._current_cmd = self.controller_client.execute()
-
+        if self.simulated:
+            msg = WrenchStamped()
+            msg.header.stamp = rospy.Time.now()
+            return msg
+        else:
+            if not self.IsDone():
+                pass  # TODO raise
+            else:
+                return rospy.wait_for_message(self.controller_name,
+                                              WrenchStamped,
+                                              timeout=1.0)
+                
     def IsDone(self):
-        return self._current_cmd is not None and self._current_cmd.done()
+        return 'done'

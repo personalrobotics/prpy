@@ -1,3 +1,3 @@
-from rewd_controllers import OrController, RewdOrController, RewdOrGravityCompensationController, RewdOrTrajectoryController
+from rewd_controllers import OrController, RewdOrController, RewdOrTrajectoryController
 from position_command_controller import PositionCommandController
 from trigger_controller import TriggerController

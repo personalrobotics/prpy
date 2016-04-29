@@ -2,18 +2,23 @@ import logging
 
 from . import OrController
 from ros_control_client_py import SetPositionClient, SetPositionFailed
+from ros_control_client_py.util import or_to_ros_trajectory
 
 
 class PositionCommandController(OrController):
-    def __init__(self, namespace, controller_name, simulated=False):
+    def __init__(self, namespace, controller_name, simulated=False,
+                 connection_timeout=10.0):
+        if simulated:
+            raise NotImplementedError('simulation not supported on \
+                                       PositionCommandController')
         self.logger = logging.getLogger(__name__)
         self.namespace = namespace
         self.controller_name = controller_name
-        self.simulated = simulated
-        self.controller_client = SetPositionClient(namespace, controller_name, 10.0)
-        # TODO take timeout as parameter
+        self.controller_client = SetPositionClient(namespace, controller_name,
+                                                   connection_timeout)
         self._current_cmd = None
-        self.logger.info("Position Command Controller initialized")
+        self.logger.info('Position Command Controller {}/{} initialized'
+                         .format(namespace, controller_name))
 
     def SetPosition(self, position):
         if not self.IsDone():
@@ -21,7 +26,8 @@ class PositionCommandController(OrController):
                                      in progress and cannot be preempted",
                                     position, None)
 
-        self._current_cmd = self.controller_client.execute(position)
+        self._current_cmd = self.controller_client.execute(
+            or_to_ros_trajectory(position))
 
     def IsDone(self):
-        return self._current_cmd is not None and self._current_cmd.done()
+        return self._current_cmd is None or self._current_cmd.done()
