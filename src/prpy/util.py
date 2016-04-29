@@ -1541,15 +1541,15 @@ def VanDerCorputSampleGenerator(start, end, step=2):
     # Return a collision-checking sequence that eventually covers the range.
     vdc = VanDerCorputSequence(lower=start, upper=end, include_endpoints=False)
     for s in vdc:
+        if numpy.all(is_checked):
+            return
+
         idx = numpy.digitize((s,), check_bins)
         if is_checked[idx]:
             continue
 
         is_checked[idx] = True
         yield float(check_bins[idx])
-
-        if numpy.all(is_checked):
-            return
 
 
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
