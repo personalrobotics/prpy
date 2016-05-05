@@ -82,6 +82,7 @@ class BarrettHand(EndEffector):
                                                      affine_dofs=0,
                                                      simulated=sim)
 
+        self.ft_simulated = ft_sim
         self.ft_tare_controller = TriggerController('', self.hand_side +
                                                     '_tare_controller',
                                                     ft_sim)

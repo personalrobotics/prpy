@@ -26,8 +26,8 @@ class PositionCommandController(OrController):
                                      in progress and cannot be preempted",
                                     position, None)
 
-        self._current_cmd = self.controller_client.execute(
-            or_to_ros_trajectory(position))
+        self.logger.info('Sending position: {}'.format(position))
+        self._current_cmd = self.controller_client.execute(position)
 
     def IsDone(self):
         return self._current_cmd is None or self._current_cmd.done()

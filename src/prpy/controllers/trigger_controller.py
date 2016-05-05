@@ -9,6 +9,7 @@ class TriggerController(OrController):
         self.logger = logging.getLogger(__name__)
         self.namespace = namespace
         self.controller_name = controller_name
+        self._current_cmd = None
         self.simulated = simulated
         if not simulated:
             self.controller_client = TriggerClient(namespace, controller_name)
@@ -27,7 +28,7 @@ class TriggerController(OrController):
 
         if not self.simulated:
             self._current_cmd = self.controller_client.execute()
-            if timeout is not None and timeout > 0.0:
+            if timeout is not None and timeout >= 0.0:
                 self._current_cmd.result(timeout)
 
     def IsDone(self):

@@ -115,14 +115,7 @@ class WAM(Manipulator):
                                hand frame.
         @param torque vector of the three torques
         """
-        util.SetTrajectoryTags(traj, {
-            'owd_options': {
-                'stop_on_stall': bool(stop_on_stall),
-                'stop_on_ft': bool(stop_on_ft),
-                'force_magnitude': float(force_magnitude),
-                'force_direction': list(force_direction),
-                'torque': list(torque),
-        }}, append=True)
+        raise NotImplementedError('OWD execution options not supported under ros_control')
 
     def Servo(self, velocities):
         """Servo with a vector of instantaneous joint velocities.
