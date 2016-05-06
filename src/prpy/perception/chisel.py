@@ -12,14 +12,14 @@ class ChiselModule(PerceptionModule):
     def __init__(self, env, service_namespace='Chisel', mesh_name = 'Chisel/full_mesh',
                 detection_frame='/map', destination_frame='/map', reference_link=None):
         """
-        The perception module implementation for CHISEL - which converts all unmodelled clutter from the point 
-        cloud to an OpenRAVE Kinbody - after masking out desired known objects
+        The perception module implementation for CHISEL. It converts all unmodelled clutter from the point 
+        cloud to an OpenRAVE Kinbody - after masking out specified known objects already in the Environment.
 
         @param env The OpenRAVE environment
-        @param mesh_client An instance of the Chisel sensor system (if None, one is created)
         @param service_namespace The namespace to use for Chisel service calls (default: Chisel)
-        @param destination_frame The tf frame the detected chisel kinbody should be transformed to
-        (default map)
+        @param mesh_name The name of the topic on which the Chisel marker is published.
+        @param detection_frame The frame in which the Chisel mesh is detected. (default: map)
+        @param destination_frame The tf frame the detected chisel kinbody should be transformed to (default: map)
         @param reference_link A link on an OpenRAVE kinbody that corresponds to the tf frame
         specified by the destination_frame parameter. If not provided it is assumed that the 
         transform from the destination_frame tf frame to the OpenRAVE environment is the identity
@@ -47,13 +47,14 @@ class ChiselModule(PerceptionModule):
         self.reference_link = reference_link
 
     @PerceptionMethod
-    def DetectObject(self, robot, ignored_bodies=None, **kw_args):
+    def DetectObject(self, robot, ignored_bodies=None, timeout=5, **kw_args):
         """
-        Obtains the KinBody corresponding to the Chisel Mesh after masking out
-        any existing kinbodies if desired
+        Obtain the KinBody corresponding to the Chisel Mesh after masking out
+        any existing kinbodies if desired (as specified in ignored_bodies).
 
         @param robot Required by the PerceptionMethod interface
         @param ignored_bodies A list of known kinbodies to be masked out
+        @param timeout The timeout for which to wait for the Chisel Mesh
         of the chisel mesh
         """
         env = robot.GetEnv()
@@ -91,13 +92,12 @@ class ChiselModule(PerceptionModule):
                         self.camera_bodies.append(b)
 
                 #Reset Chisel
-                if self.reset_detection_srv is None:
-                    import rospy, chisel_msgs.srv
-                    srv_nm = self.serv_ns+'/Reset'
-                    rospy.wait_for_service(srv_nm)
-                    self.reset_detection_srv = rospy.ServiceProxy(srv_nm,
-                                                                  chisel_msgs.srv.ResetService)
-                self.reset_detection_srv()
+                import rospy, chisel_msgs.srv
+                srv_nm = self.serv_ns+'/Reset'
+                rospy.wait_for_service(srv_nm,timeout)
+                reset_detection_srv = rospy.ServiceProxy(srv_nm,
+                                                              chisel_msgs.srv.ResetService)
+                reset_detection_srv()
 
                 #Get Kinbody and load into env
                 self.mesh_client.SendCommand('GetMesh '+self.mesh_name)
