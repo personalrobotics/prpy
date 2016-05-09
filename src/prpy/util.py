@@ -1544,7 +1544,7 @@ def VanDerCorputSampleGenerator(start, end, step=2):
         if numpy.all(is_checked):
             return
 
-        idx = numpy.digitize((s,), check_bins)
+        idx = numpy.digitize((s,), check_bins, right=True)
         if is_checked[idx]:
             continue
 

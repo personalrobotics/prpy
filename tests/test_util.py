@@ -468,42 +468,42 @@ class Tests(unittest.TestCase):
     #  for getting sample points to be collision-checked.)
 
     def test_VanDerCorputSampleGenerator_ExcessLessThanHalfStep(self):
-        # Check that the end-point is included when it's
+        # Check that the end-point is included when its
         # more than half the step-size from the closest value.
-        expected_sequence = [0.0, 13.7, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
+        expected_sequence = [0., 13.7, 8., 4., 12., 2., 10., 6.]
         traj_dur = 13.7
         vdc_seq = prpy.util.VanDerCorputSampleGenerator(0.0, traj_dur, step=2)
         seq_list = [s for s in vdc_seq]
         error = 'The sequence ' + str(seq_list) + \
                 ' doesnt match the expected sequence ' + str(expected_sequence)
-        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence, \
-                                                decimal=7, err_msg=error, \
+        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence,
+                                                decimal=7, err_msg=error,
                                                 verbose=True)
 
     def test_VanDerCorputSampleGenerator_ExcessEqualToHalfStep(self):
-        # Check that the end-point is NOT included when it's distance 
-        # is EQUAL too (or less than) the step-size.
-        expected_sequence = [0.0, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
+        # Check that the end-point is included when its distance
+        # is EQUAL to (or less than) the step-size.
+        expected_sequence = [0., 13., 8., 4., 10., 2., 6., 12.]
         traj_dur = 13.0
         vdc_seq = prpy.util.VanDerCorputSampleGenerator(0.0, traj_dur, step=2)
         seq_list = [s for s in vdc_seq]
         error = 'The sequence ' + str(seq_list) + \
                 ' doesnt match the expected sequence ' + str(expected_sequence)
-        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence, \
-                                                decimal=7, err_msg=error, \
+        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence,
+                                                decimal=7, err_msg=error,
                                                 verbose=True)
 
     def test_VanDerCorputSampleGenerator_NoExcess(self):
         # Check when the step-size fits exactly into the duration of the
         # trajectory, also check when function inputs are integers.
-        expected_sequence = [0.0, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
+        expected_sequence = [0., 12., 6., 4., 10., 2., 8.]
         traj_duratn = 12
         vdc_seq = prpy.util.VanDerCorputSampleGenerator(0, traj_duratn, step=2)
         seq_list = [s for s in vdc_seq]
         error = 'The sequence ' + str(seq_list) + \
                 ' doesnt match the expected sequence ' + str(expected_sequence)
-        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence, \
-                                                decimal=7, err_msg=error, \
+        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence,
+                                                decimal=7, err_msg=error,
                                                 verbose=True)
 
     def test_VanDerCorputSampleGenerator_StepSizeSnapping(self):
@@ -513,15 +513,15 @@ class Tests(unittest.TestCase):
         # That is, the 3rd value of the expected sequence is '6'
         # (instead of 5.5) because we need the Sample Generate to
         # snap all sequence values to the step-size.
-        expected_sequence = [0.0, 11.0, 6.0, 3.0, 8.0, 1.0, \
-                                                 7.0, 4.0, 10.0, 2.0, 5.0, 9.0]
+        expected_sequence = [0, 11, 6.0, 3.0, 9.0, 2.0, 7.0,
+                             5.0, 10.0, 1.0, 4.0, 8.0]
         traj_duratn = 11
         vdc_seq = prpy.util.VanDerCorputSampleGenerator(0, traj_duratn, step=1)
         seq_list = [s for s in vdc_seq]
         error = 'The sequence ' + str(seq_list) + \
                 ' doesnt match the expected sequence ' + str(expected_sequence)
-        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence, \
-                                                decimal=7, err_msg=error, \
+        numpy.testing.assert_array_almost_equal(seq_list, expected_sequence,
+                                                decimal=7, err_msg=error,
                                                 verbose=True)
 
 
