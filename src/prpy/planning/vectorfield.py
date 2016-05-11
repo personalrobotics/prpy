@@ -33,11 +33,9 @@
 import logging
 import numpy
 import openravepy
-import time
 from .. import util
-from base import BasePlanner, PlanningError, PlanningMethod, Tags
+from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 from enum import Enum
-import math
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +79,10 @@ class VectorFieldPlanner(BasePlanner):
     def __str__(self):
         return 'VectorFieldPlanner'
 
-
-
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               pose_error_tol=0.01,
-                              integration_interval = 10.0,
+                              integration_interval=10.0,
                               **kw_args):
         """
         Plan to an end effector pose by following a geodesic loss function
@@ -113,7 +109,9 @@ class VectorFieldPlanner(BasePlanner):
 
             # Go as fast as possible
             vlimits = robot.GetDOFVelocityLimits(robot.GetActiveDOFIndices())
-            return min(abs(vlimits[i] / dqout[i]) if dqout[i] != 0. else 1. for i in xrange(vlimits.shape[0])) * dqout
+            return min(abs(vlimits[i] / dqout[i])
+                       if dqout[i] != 0. else 1.
+                       for i in xrange(vlimits.shape[0])) * dqout
 
         def CloseEnough():
             """
@@ -123,8 +121,7 @@ class VectorFieldPlanner(BasePlanner):
             the integration will terminate.
             """
             pose_error = util.GetGeodesicDistanceBetweenTransforms(
-                                               manip.GetEndEffectorTransform(),
-                                               goal_pose)
+                manip.GetEndEffectorTransform(), goal_pose)
             if pose_error < pose_error_tol:
                 return Status.TERMINATE
             return Status.CONTINUE
@@ -139,12 +136,12 @@ class VectorFieldPlanner(BasePlanner):
         util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
         return traj
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 position_tolerance=0.01,
                                 angular_tolerance=0.15,
-                                integration_interval = 10.0,
+                                integration_interval=10.0,
                                 **kw_args):
         """
         Plan to a desired end-effector offset with move-hand-straight
@@ -183,7 +180,7 @@ class VectorFieldPlanner(BasePlanner):
             Function defining a joint-space vector field.
             """
             twist = util.GeodesicTwist(manip.GetEndEffectorTransform(),
-                                            Tstart)
+                                       Tstart)
             twist[0:3] = direction
 
             dqout, _ = util.ComputeJointVelocityFromTwist(
@@ -199,7 +196,7 @@ class VectorFieldPlanner(BasePlanner):
             Succeed if distance moved is larger than max_distance.
             Cache and continue if distance moved is larger than distance.
             """
-            from .exceptions import ConstraintViolationPlanningError 
+            from .exceptions import ConstraintViolationPlanningError
 
             Tnow = manip.GetEndEffectorTransform()
 
@@ -212,7 +209,7 @@ class VectorFieldPlanner(BasePlanner):
                     'Deviated from orientation constraint.')
             distance_moved = numpy.dot(position_error, direction)
             position_deviation = numpy.linalg.norm(position_error -
-                                                   distance_moved*direction)
+                                                   distance_moved * direction)
             if position_deviation > position_tolerance:
                 raise ConstraintViolationPlanningError(
                     'Deviated from straight line constraint.')
@@ -228,20 +225,18 @@ class VectorFieldPlanner(BasePlanner):
             return Status.CONTINUE
 
         return self.FollowVectorField(robot, vf_straightline, TerminateMove,
-                                      integration_interval,
-                                      timelimit, 
+                                      integration_interval, timelimit,
                                       **kw_args)
 
-
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanWorkspacePath(self, robot, traj,
                           timelimit=5.0,
                           position_tolerance=0.01,
                           angular_tolerance=0.15,
-                          t_step = 0.001,
+                          t_step=0.001,
                           Kp_ff=None,
                           Kp_e=None,
-                          integration_interval = 10.0,
+                          integration_interval=10.0,
                           **kw_args):
         """
         Plan a configuration space path given a workspace path.
@@ -290,13 +285,12 @@ class VectorFieldPlanner(BasePlanner):
         traj = util.ComputeGeodesicUnitTiming(traj, env=None, alpha=1.0)
 
         # Set the default gains
-        if Kp_ff == None:
-            Kp_ff = 0.4*numpy.array([1.0,1.0,1.0,1.0,1.0,1.0])
-        if Kp_e == None:
-            Kp_e = 1.0*numpy.array([1.0,1.0,1.0,1.0,1.0,1.0])
+        if Kp_ff is None:
+            Kp_ff = 0.4 * numpy.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+        if Kp_e is None:
+            Kp_e = 1.0 * numpy.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
 
         manip = robot.GetActiveManipulator()
-        Tstart = manip.GetEndEffectorTransform()
 
         # Get the final end-effector pose
         duration = traj.GetDuration()
@@ -310,25 +304,25 @@ class VectorFieldPlanner(BasePlanner):
 
             # Find where we are on the goal trajectory by finding
             # the the closest point
-            (_,t,_) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
-                                                                   T_ee_actual,
-                                                                   traj,
-                                                                   0.0005)
+            (_, t, _) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
+                T_ee_actual, traj, 0.0005)
+
             # Get the desired end-effector transform from
             # the goal trajectory
             desired_T_ee = openravepy.matrixFromPose(traj.Sample(t)[0:7])
 
             # Get the next end-effector transform, using finite-differences
-            pose_ee_next = traj.Sample(t+t_step)[0:7]
+            pose_ee_next = traj.Sample(t + t_step)[0:7]
             desired_T_ee_next = openravepy.matrixFromPose(pose_ee_next)
 
             # Get the translation tangent to current position
-            tangent_vec = desired_T_ee_next[0:3,3] - desired_T_ee[0:3,3]
+            tangent_vec = desired_T_ee_next[0:3, 3] - desired_T_ee[0:3, 3]
             # Get the translational error
-            position_error_vec = desired_T_ee[0:3,3] - T_ee_actual[0:3,3]
+            position_error_vec = desired_T_ee[0:3, 3] - T_ee_actual[0:3, 3]
             # Get the translational error perpendicular to the path
-            tangent_trans_error = position_error_vec - \
-               numpy.dot(position_error_vec, util.NormalizeVector(tangent_vec))
+            tangent_trans_error = \
+                position_error_vec - numpy.dot(
+                    position_error_vec, util.NormalizeVector(tangent_vec))
             tangent_trans_error = numpy.nan_to_num(tangent_trans_error)
 
             # The twist between the actual end-effector position and
@@ -350,11 +344,11 @@ class VectorFieldPlanner(BasePlanner):
             twist_parallel[3:6] = util.NormalizeVector(twist_parallel[3:6])
 
             # Apply gains
-            twist = Kp_e*twist_perpendicular + Kp_ff*twist_parallel
+            twist = Kp_e * twist_perpendicular + Kp_ff * twist_parallel
 
             # Calculate joint velocities using an optimized jacobian
-            dqout, _ = util.ComputeJointVelocityFromTwist(robot, twist,
-                                              joint_velocity_limits=numpy.PINF)
+            dqout, _ = util.ComputeJointVelocityFromTwist(
+                robot, twist, joint_velocity_limits=numpy.PINF)
             return dqout
 
         def TerminateMove():
@@ -371,19 +365,18 @@ class VectorFieldPlanner(BasePlanner):
 
             # Find where we are on the goal trajectory by finding
             # the the closest point
-            (_,t,_) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
-                                                                     T_ee_curr,
-                                                                     traj,
-                                                                     0.0005)
+            (_, t, _) = util.GetMinDistanceBetweenTransformAndWorkspaceTraj(
+                T_ee_curr, traj, 0.0005)
+
             # Get the desired end-effector transform from
             # the goal trajectory
             desired_T_ee = openravepy.matrixFromPose(traj.Sample(t)[0:7])
 
             # Get the position vector tangent to the trajectory,
             # using finite-differences
-            pose_ee_next = traj.Sample(t+t_step)[0:7]
+            pose_ee_next = traj.Sample(t + t_step)[0:7]
             desired_T_ee_next = openravepy.matrixFromPose(pose_ee_next)
-            tangent_vec = desired_T_ee_next[0:3,3] - desired_T_ee[0:3,3]
+            tangent_vec = desired_T_ee_next[0:3, 3] - desired_T_ee[0:3, 3]
 
             # Calculate error between current end-effector pose
             # and where we should be on the goal trajectory
@@ -393,8 +386,9 @@ class VectorFieldPlanner(BasePlanner):
 
             # Use only the translation error that is perpendicular
             # to our current position
-            tangent_trans_error = position_error_vec - \
-               numpy.dot(position_error_vec, util.NormalizeVector(tangent_vec))
+            tangent_trans_error = \
+                position_error_vec - numpy.dot(
+                    position_error_vec, util.NormalizeVector(tangent_vec))
             tangent_trans_error = numpy.nan_to_num(tangent_trans_error)
 
             position_error = tangent_trans_error
@@ -410,10 +404,10 @@ class VectorFieldPlanner(BasePlanner):
 
             # Check if we have reached the end of the goal trajectory
             error_to_goal = util.GeodesicError(T_ee_curr, T_ee_goal)
-            goal_orientation_error = error_to_goal[3] # radians
-            goal_position_error = error_to_goal[0:3] # x,y,z
-            if ((numpy.fabs(goal_orientation_error) < angular_tolerance) and
-                (numpy.linalg.norm(goal_position_error) < position_tolerance)):
+            orientation_error = error_to_goal[3]  # radians
+            position_error = error_to_goal[0:3]  # x,y,z
+            if ((numpy.fabs(orientation_error) < angular_tolerance) and
+                    (numpy.linalg.norm(position_error) < position_tolerance)):
                 return Status.CACHE_AND_TERMINATE
 
             return Status.CONTINUE
@@ -422,8 +416,7 @@ class VectorFieldPlanner(BasePlanner):
                                       integration_interval,
                                       timelimit, **kw_args)
 
-
-    @PlanningMethod
+    @ClonedPlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
                           integration_time_interval=10.0,
                           timelimit=5.0,
@@ -443,10 +436,9 @@ class VectorFieldPlanner(BasePlanner):
         from .exceptions import (
             CollisionPlanningError,
             SelfCollisionPlanningError,
-            TimeoutPlanningError
         )
         from openravepy import CollisionReport, RaveCreateTrajectory
-        from ..util import ComputeJointVelocityFromTwist, GetCollisionCheckPts, ComputeUnitTiming
+        from ..util import GetCollisionCheckPts
         import time
         import scipy.integrate
 
@@ -461,9 +453,6 @@ class VectorFieldPlanner(BasePlanner):
 
         env = robot.GetEnv()
         active_indices = robot.GetActiveDOFIndices()
-
-        # Get the robot's joint velocity limits
-        qdot_limit = robot.GetDOFVelocityLimits(active_indices)
 
         # Create a new trajectory matching the current
         # robot's joint configuration specification
@@ -540,7 +529,8 @@ class VectorFieldPlanner(BasePlanner):
                     # in GetCollisionCheckPts causes this to enter an infinite
                     # loop.
                     checks = GetCollisionCheckPts(robot, path,
-                        include_start=False) #start_time=nonlocals['t_check'])
+                                                  include_start=False)
+                    # start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
                     fn_status_callback(t_check, q_check)
@@ -549,10 +539,10 @@ class VectorFieldPlanner(BasePlanner):
                     # DOF resolution the next time the integrator takes a step.
                     nonlocals['t_check'] = t_check
 
-                return 0 # Keep going.
+                return 0  # Keep going.
             except PlanningError as e:
                 nonlocals['exception'] = e
-                return -1 # Stop.
+                return -1  # Stop.
 
         # Integrate the vector field to get a configuration space path.
         #
@@ -573,7 +563,7 @@ class VectorFieldPlanner(BasePlanner):
         integrator.integrate(t=integration_time_interval)
 
         t_cache = nonlocals['t_cache']
-        exception = nonlocals['exception'] 
+        exception = nonlocals['exception']
 
         if t_cache is None:
             raise exception or PlanningError('An unknown error has occurred.')
@@ -604,4 +594,3 @@ class VectorFieldPlanner(BasePlanner):
             }, append=True
         )
         return output_path
-

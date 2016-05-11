@@ -33,7 +33,7 @@ import openravepy
 from .. import ik_ranking
 from base import (BasePlanner,
                   PlanningError,
-                  PlanningMethod)
+                  ClonedPlanningMethod)
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class IKPlanner(BasePlanner):
     def __str__(self):
         return 'IKPlanner'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToIK(self, robot, goal_pose, ranker=ik_ranking.JointLimitAvoidance,
                  num_attempts=1, **kw_args):
         from openravepy import (IkFilterOptions,

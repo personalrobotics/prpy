@@ -134,6 +134,7 @@ class ApriltagsModule(PerceptionModule):
         return_obj = None
         for obj in added_bodies:
             if obj.GetName() != object_name:
+                env = robot.GetEnv()
                 env.Remove(obj)
             else:
                 return_obj = obj
