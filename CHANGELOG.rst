@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.0.0 (2016-05-11)
+------------------
 * Migrate HERB to `ros_control`. `#233 <https://github.com/personalrobotics/prpy/issues/233>`_
 * Move `BarrettHand`, `WAM`, and `WAMRobot` classes to HerbPy.
 * Contributors: Clint Liddick, Michael Koval
