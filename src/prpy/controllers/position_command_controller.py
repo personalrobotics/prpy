@@ -9,13 +9,13 @@ class PositionCommandController(OrController):
     """A controller for stateful position control
 
     An interface to using the position_command_controller package
-    that is \"compatible\" with how we use OpenRAVE controllers
+    that is "compatible" with how we use OpenRAVE controllers
     """
     def __init__(self, namespace, controller_name, simulated=False,
                  connection_timeout=10.0):
         if simulated:
-            raise NotImplementedError('simulation not supported on \
-                                       PositionCommandController')
+            raise NotImplementedError('Simulation not supported on '
+                                      'PositionCommandController')
         self.logger = logging.getLogger(__name__)
         self.namespace = namespace
         self.controller_name = controller_name
@@ -27,8 +27,8 @@ class PositionCommandController(OrController):
 
     def SetPosition(self, position):
         if not self.IsDone():
-            raise SetPositionFailed("PositionCommand action already \
-                                     in progress and cannot be preempted",
+            raise SetPositionFailed('PositionCommand action already '
+                                    'in progress and cannot be preempted',
                                     position, None)
 
         self.logger.info('Sending position: {}'.format(position))

@@ -5,6 +5,11 @@ from ros_control_client_py import TriggerClient, TriggerFailed
 
 
 class TriggerController(OrController):
+    """A controller for triggering actions
+
+    An interface for using trigger controller
+    is "compatible" with how we use OpenRAVE controllers
+    """
     def __init__(self, namespace, controller_name, simulated=False):
         self.logger = logging.getLogger(__name__)
         self.namespace = namespace

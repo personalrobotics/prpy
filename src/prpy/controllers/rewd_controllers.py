@@ -42,6 +42,7 @@ class OrController(object):
 
 
 class RewdOrController(OrController):
+    """A super class for initializing all RewdOrControllers"""
     def __init__(self, robot, namespace, joint_names, simulated=False):
         self.logger = logging.getLogger(__name__)
         self.robot = robot
@@ -55,7 +56,7 @@ class RewdOrTrajectoryController(RewdOrController):
     """A controller for trajectory execution
 
     An interface for using trajectory controllers that
-    is \"compatible\" with how we use OpenRAVE controllers
+    is "compatible" with how we use OpenRAVE controllers
     """
     def __init__(self, robot, namespace, controller_name, joint_names,
                  simulated=False):
