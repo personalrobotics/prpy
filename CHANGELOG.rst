@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.0.0 (2016-05-11)
+------------------
 * Changes VanDerCorputSampleGenerator to include goal. `#304 <https://github.com/personalrobotics/prpy/issues/304>`_
 * PEP8 and lint fixes. `#302 <https://github.com/personalrobotics/prpy/issues/302>`_ `#276 <https://github.com/personalrobotics/prpy/issues/276>`_
 * Fixed bug in Apriltags `DetectObjects`. `#292 <https://github.com/personalrobotics/prpy/issues/292>`_ `#294 <https://github.com/personalrobotics/prpy/issues/294>`_ 
