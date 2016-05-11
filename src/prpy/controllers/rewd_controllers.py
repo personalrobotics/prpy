@@ -8,7 +8,7 @@ class OrController(object):
     """Dummy/empty OpenRAVE controller class"""
 
     def GetControlDOFIndices(self):
-        pass
+        raise NotImplementedError("GetControlDOFIndices not implemented")
 
     def GetNamespace(self):
         return self.namespace
@@ -17,28 +17,28 @@ class OrController(object):
         return self.robot
 
     def Reset(self):
-        pass
+        raise NotImplementedError("Reset not implemented")
 
     def SetDesired(self, positions):
-        pass
+        raise NotImplementedError("SetDesired not implemented")
 
     def SetPath(self, traj):
-        pass
+        raise NotImplementedError("SetPath not implemented")
 
     def SimulationStep(self, dt):
-        pass
+        raise NotImplementedError("SimulatedStep not implemented")
 
     def IsDone(self):
-        pass
+        raise NotImplementedError("IsDone not implemented")
 
     def GetTime(self):
-        pass
+        raise NotImplementedError("GetTime not implemented")
     
     def GetVelocity(self):
-        pass
+        raise NotImplementedError("GetVelocity not implemented")
 
     def GetTorque(self):
-        pass
+        raise NotImplementedError("GetTorque not implemented")
 
 
 class RewdOrController(OrController):
@@ -51,20 +51,12 @@ class RewdOrController(OrController):
         self.logger.info("Rewd Controller initialized")
 
 
-# class RewdOrGravityCompensationController(RewdOrController):
-#     def __init__(self, robot, namespace, joint_names, simulated=False):
-#         super(RewdOrGravityCompensationController, self).__init__(robot,
-#                                                                   namespace,
-#                                                                   joint_names,
-#                                                                   simulated)
-
-#         self.logger.info('Rewd Gravity Compensation Controller initialized')
-
-#     def GetTorque(self):
-#         pass
-
-
 class RewdOrTrajectoryController(RewdOrController):
+    """A controller for trajectory execution
+
+    An interface for using trajectory controllers that
+    is \"compatible\" with how we use OpenRAVE controllers
+    """
     def __init__(self, robot, namespace, controller_name, joint_names,
                  simulated=False):
         super(RewdOrTrajectoryController, self).__init__(robot,

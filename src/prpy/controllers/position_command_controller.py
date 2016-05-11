@@ -6,6 +6,11 @@ from ros_control_client_py.util import or_to_ros_trajectory
 
 
 class PositionCommandController(OrController):
+    """A controller for stateful position control
+
+    An interface to using the position_command_controller package
+    that is \"compatible\" with how we use OpenRAVE controllers
+    """
     def __init__(self, namespace, controller_name, simulated=False,
                  connection_timeout=10.0):
         if simulated:

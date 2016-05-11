@@ -53,12 +53,6 @@ class WAM(Manipulator):
         if iktype is not None:
             self._SetupIK(iktype)
 
-        # Enable servo motions in simulation mode.
-        # self.controller = self.GetRobot().AttachController(name=self.GetName(),
-        #     args='OWDController {0:s} {1:s}'.format('prpy', owd_namespace),
-        #     dof_indices=self.GetArmIndices(), affine_dofs=0, simulated=sim
-        # )
-
         if sim:
             from prpy.simulation import ServoSimulator
             self.servo_simulator = ServoSimulator(
