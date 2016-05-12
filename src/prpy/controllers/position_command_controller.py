@@ -25,7 +25,7 @@ class PositionCommandController(OrController):
         self.logger.info('Position Command Controller {}/{} initialized'
                          .format(namespace, controller_name))
 
-    def SetPosition(self, position):
+    def SetDesired(self, position):
         if not self.IsDone():
             raise SetPositionFailed('PositionCommand action already '
                                     'in progress and cannot be preempted',
