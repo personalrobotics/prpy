@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.0.1 (2016-05-12)
+------------------
 * Changed `SetPosition` to match OpenRAVE `Controller` `SetDesired` API.
 * Contributors: Clint Liddick
 
