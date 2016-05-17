@@ -1,8 +1,5 @@
 import logging
 
-from ros_control_client_py import FollowJointTrajectoryClient, TrajectoryExecutionFailed
-from ros_control_client_py.util import or_to_ros_trajectory
-
 
 class OrController(object):
     """Dummy/empty OpenRAVE controller class"""
@@ -65,7 +62,10 @@ class RewdOrTrajectoryController(RewdOrController):
                                                          joint_names,
                                                          simulated)
         if simulated:
-            raise NotImplementedError('Simulation not supported in RewdOrTrajectoryController')
+            raise NotImplementedError('Simulation not supported in '
+                                      'RewdOrTrajectoryController')
+
+        from ros_control_client_py import FollowJointTrajectoryClient
 
         self.controller_client = FollowJointTrajectoryClient(namespace,
                                                              controller_name)
@@ -73,15 +73,20 @@ class RewdOrTrajectoryController(RewdOrController):
         self.logger.info('Rewd Trajectory Controller initialized')
 
     def SetPath(self, traj):
+        from ros_control_client_py import TrajectoryExecutionFailed
+        from ros_control_client_py.util import or_to_ros_trajectory
         if not self.IsDone():
-            raise TrajectoryExecutionFailed('Currently executing another trajectory', traj, None)
+            raise TrajectoryExecutionFailed('Currently executing another '
+                                            'trajectory', traj, None)
 
         ros_traj = or_to_ros_trajectory(self.GetRobot(), traj)
         self.current_trajectory = self.controller_client.execute(ros_traj)
 
     def IsDone(self):
-        return self.current_trajectory is None or self.current_trajectory.done()
+        return (self.current_trajectory is None or
+                self.current_trajectory.done())
 
     def GetTime(self):
         # TODO implement with self.current_trajectory.partial_result()
-        raise NotImplementedError('GetTime not yet implemented in RewdOrTrajectoryController')
+        raise NotImplementedError('GetTime not yet implemented in '
+                                  'RewdOrTrajectoryController')
