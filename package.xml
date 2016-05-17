@@ -34,7 +34,6 @@
   <run_depend>python-rospkg</run_depend>
   <run_depend>python-yaml</run_depend>
   <run_depend>python-lxml</run_depend>
-  <run_depend>ros_control_client_py</run_depend>
   <test_depend>python-nose</test_depend>
   <!-- These optional dependencies cause unit tests can fail if missing. -->
   <test_depend>cbirrt2</test_depend>

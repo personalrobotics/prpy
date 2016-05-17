@@ -1,8 +1,5 @@
 import logging
-
 from . import OrController
-from ros_control_client_py import SetPositionClient, SetPositionFailed
-from ros_control_client_py.util import or_to_ros_trajectory
 
 
 class PositionCommandController(OrController):
@@ -16,6 +13,7 @@ class PositionCommandController(OrController):
         if simulated:
             raise NotImplementedError('Simulation not supported on '
                                       'PositionCommandController')
+        from ros_control_client_py import SetPositionClient
         self.logger = logging.getLogger(__name__)
         self.namespace = namespace
         self.controller_name = controller_name
@@ -26,6 +24,7 @@ class PositionCommandController(OrController):
                          .format(namespace, controller_name))
 
     def SetDesired(self, position):
+        from ros_control_client_py import SetPositionFailed
         if not self.IsDone():
             raise SetPositionFailed('PositionCommand action already '
                                     'in progress and cannot be preempted',
