@@ -1,7 +1,6 @@
 import logging
 
 from . import OrController
-from ros_control_client_py import TriggerClient, TriggerFailed
 
 
 class TriggerController(OrController):
@@ -17,6 +16,7 @@ class TriggerController(OrController):
         self._current_cmd = None
         self.simulated = simulated
         if not simulated:
+            from ros_control_client_py import TriggerClient
             self.controller_client = TriggerClient(namespace, controller_name)
         self.logger.info("Trigger Controller initialized")
 
@@ -26,7 +26,11 @@ class TriggerController(OrController):
         :param timeout: if not None, block until timeout
         :type timeout: double or None
         """
+        if self.simulated:
+            pass
+
         if not self.IsDone():
+            from ros_control_client_py import TriggerFailed
             raise TriggerFailed("Trigger action already \
                                      in progress and cannot be preempted",
                                 None)
