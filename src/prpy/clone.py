@@ -115,6 +115,18 @@ class Clone(object):
             # PrPy-annotated classes.
             setattr(self.clone_env, 'clone_parent', self.clone_parent)
 
+            # Set cloned parent on all bodies, manipulators and links
+            for body in parent_env.GetBodies():
+                cloned_body = Cloned(body, into=self.clone_env)
+
+                if body.IsRobot():
+                    for m in body.GetManipulators():
+                        Cloned(m, into=self.clone_env)
+
+                for link in body.GetLinks():
+                    Cloned(link, into=self.clone_env)
+
+
             # Convenience method to get references from Clone environment.
             def ClonedWrapper(*instances):
                 return Cloned(*instances, into=self.clone_env)
