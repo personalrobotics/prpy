@@ -345,11 +345,16 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
         ]
         sensor_infos = []
 
-        from openravepy import RaveCreateModule
-        urdf_module = RaveCreateModule(env, 'urdf')
-        args = 'Load {:s}'.format(data['uri'])
-        kinbody_name = urdf_module.SendCommand(args)
-        kinbody = env.GetRobot(kinbody_name)
+        if data['uri'].endswith('.xml'):
+            print 'Reading ', data['uri']
+            kinbody = env.ReadRobotXMLFile(data['uri'])
+            env.Add(kinbody)
+        else:
+            from openravepy import RaveCreateModule
+            urdf_module = RaveCreateModule(env, 'urdf')
+            args = 'Load {:s}'.format(data['uri'])
+            kinbody_name = urdf_module.SendCommand(args)
+            kinbody = env.GetRobot(kinbody_name)
 #        kinbody = RaveCreateRobot(env, '')
 #        kinbody.Init(
 #            link_infos, joint_infos,
