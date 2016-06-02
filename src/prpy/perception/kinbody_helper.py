@@ -1,6 +1,7 @@
 
-def transform_to_or(kinbody, detection_frame, destination_frame, 
-                    reference_link=None):
+def transform_to_or(kinbody, detection_frame=None, destination_frame=None, 
+                    detection_in_destination=None,
+                    reference_link=None, pose=None):
     """
     Transform the pose of a kinbody from a pose determined using TF to 
     the correct relative pose in OpenRAVE. This transformation is performed
@@ -14,27 +15,35 @@ def transform_to_or(kinbody, detection_frame, destination_frame,
       given by the destination_frame parameter (if None it is assumed
       that the transform between the OpenRAVE world and the destination_frame 
       tf frame is the identity)
+    @param pose The pose to transform (if None, kinbody.GetTransform() is used)
     """
-
     import numpy
-    import tf
-    import rospy
-    listener = tf.TransformListener()
+    if pose is None:
+        with kinbody.GetEnv():
+            pose = kinbody.GetTransform()
 
-    listener.waitForTransform(
-        detection_frame, destination_frame,
-        rospy.Time(),
-        rospy.Duration(10))
+    if detection_in_destination is None:
+        import tf, rospy
+        listener = tf.TransformListener()
 
-    frame_trans, frame_rot = listener.lookupTransform(
-        destination_frame, detection_frame,
-        rospy.Time(0))
+        if pose is None:
+            with kinbody.GetEnv():
+                pose = kinbody.GetTransform()
+
+        listener.waitForTransform(
+            detection_frame, destination_frame,
+            rospy.Time(),
+            rospy.Duration(10))
         
-    from tf.transformations import quaternion_matrix
-    detection_in_destination = numpy.array(numpy.matrix(quaternion_matrix(frame_rot)))
-    detection_in_destination[:3,3] = frame_trans
+        frame_trans, frame_rot = listener.lookupTransform(
+            destination_frame, detection_frame,
+            rospy.Time(0))
+        
+        from tf.transformations import quaternion_matrix
+        detection_in_destination = numpy.array(numpy.matrix(quaternion_matrix(frame_rot)))
+        detection_in_destination[:3,3] = frame_trans
     
-    with env:
+    with kinbody.GetEnv():
         body_in_destination = numpy.dot(detection_in_destination, kinbody.GetTransform())
 
         if reference_link is not None:
@@ -90,3 +99,15 @@ def transform_from_or(kinbody, detection_frame, destination_frame,
 
         body_in_detection = numpy.dot(destination_in_detection, body_in_destination)
         kinbody.SetTransform(body_in_detection)
+
+    body_in_destination = numpy.dot(detection_in_destination, pose)
+
+    if reference_link is not None:
+        with kinbody.GetEnv():
+            destination_in_or = reference_link.GetTransform()
+    else:        
+        destination_in_or = numpy.eye(4)
+
+    body_in_or= numpy.dot(destination_in_or, body_in_destination)
+    with kinbody.GetEnv():
+        kinbody.SetTransform(body_in_or)

@@ -8,7 +8,6 @@ logger.setLevel(logging.INFO)
 
 class ChiselModule(PerceptionModule):
     
-
     def __init__(self, env, service_namespace='Chisel', mesh_name = 'Chisel/full_mesh',
                 detection_frame='/map', destination_frame='/map', reference_link=None):
         """
