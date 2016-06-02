@@ -95,15 +95,3 @@ def transform_from_or(kinbody, detection_frame, destination_frame,
 
         body_in_detection = numpy.dot(destination_in_detection, body_in_destination)
         kinbody.SetTransform(body_in_detection)
-
-    body_in_destination = numpy.dot(detection_in_destination, pose)
-
-    if reference_link is not None:
-        with kinbody.GetEnv():
-            destination_in_or = reference_link.GetTransform()
-    else:        
-        destination_in_or = numpy.eye(4)
-
-    body_in_or= numpy.dot(destination_in_or, body_in_destination)
-    with kinbody.GetEnv():
-        kinbody.SetTransform(body_in_or)

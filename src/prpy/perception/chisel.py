@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 class ChiselModule(PerceptionModule):
     
     def __init__(self, env, service_namespace='Chisel', mesh_name = 'Chisel/full_mesh',
-                detection_frame='/map', destination_frame='/map', reference_link=None):
+                detection_frame='/herb_base', destination_frame='/map', reference_link=None):
         """
         The perception module implementation for CHISEL. It converts all unmodelled clutter from the point 
         cloud to an OpenRAVE Kinbody - after masking out specified known objects already in the Environment.
