@@ -84,7 +84,7 @@ class ChiselModule(PerceptionModule):
                         with env:
                             orig_bodies[b] = b.GetTransform()
                         transform_from_or(kinbody=b, 
-                                          detection_frame=self.detection_frame,
+                                          detection_frame='/map',
                                           destination_frame=self.destination_frame,
                                           reference_link=self.reference_link)
                         self.camera.add_body(b)
