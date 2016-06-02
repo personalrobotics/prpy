@@ -117,13 +117,16 @@ class SimtrackModule(PerceptionModule):
 
         print query_name
         for (name, pose) in obj_poses:
-            print name
+            print  name
             if name == query_name:
                 obj_pose = pose
                 break;
 
         if (obj_pose is None):
             raise PerceptionException('Failed to detect object %s', obj_name)  
+            
+        if numpy.array_equal(obj_pose, numpy.eye(4)):
+            raise PerceptionException('Object %s detected but failed to compute pose', obj_name)
 
         env = robot.GetEnv()
         if env.GetKinBody(obj_name) is None:
@@ -134,6 +137,7 @@ class SimtrackModule(PerceptionModule):
                 obj_name,
                 os.path.join(self.kinbody_path, kinbody_file))
             
+        print 'Object pose: ', obj_pose
         body = env.GetKinBody(obj_name)
 
         # Apply a transform to the kinbody to put it in the 

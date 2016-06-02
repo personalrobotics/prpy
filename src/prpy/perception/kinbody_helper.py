@@ -26,10 +26,6 @@ def transform_to_or(kinbody, detection_frame=None, destination_frame=None,
         import tf, rospy
         listener = tf.TransformListener()
 
-        if pose is None:
-            with kinbody.GetEnv():
-                pose = kinbody.GetTransform()
-
         listener.waitForTransform(
             detection_frame, destination_frame,
             rospy.Time(),
@@ -44,7 +40,7 @@ def transform_to_or(kinbody, detection_frame=None, destination_frame=None,
         detection_in_destination[:3,3] = frame_trans
     
     with kinbody.GetEnv():
-        body_in_destination = numpy.dot(detection_in_destination, kinbody.GetTransform())
+        body_in_destination = numpy.dot(detection_in_destination, pose)
 
         if reference_link is not None:
             destination_in_or = reference_link.GetTransform()
