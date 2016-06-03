@@ -2,6 +2,11 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.0.1 (2016-05-12)
+------------------
+* Changed `SetPosition` to match OpenRAVE `Controller` `SetDesired` API.
+* Contributors: Clint Liddick
+
 3.0.0 (2016-05-11)
 ------------------
 * Migrate HERB to `ros_control`. `#233 <https://github.com/personalrobotics/prpy/issues/233>`_
