@@ -22,7 +22,10 @@ def cylinder_grasp(robot, obj, obj_radius, obj_height,
                    vertical_tolerance = 0.02,
                    yaw_range = None,
                    manip = None, **kwargs):
-    """
+    '''
+    Generate a list of TSRChain objects. Sampling from any of these
+    TSRChains will give an end-effector pose that achieves a grasp on a cylinder.
+    
     NOTE: This function makes the following assumptions:
       1. The end-effector is oriented such that the z-axis is out of the palm
           and the x-axis should be perpendicular to the object
@@ -39,7 +42,16 @@ def cylinder_grasp(robot, obj, obj_radius, obj_height,
     @param yaw_range Allowable range of yaw around object (default: [-pi, pi])
     @param manip The manipulator to perform the grasp, if None
        the active manipulator on the robot is used
-    """
+    '''
+    if obj_radius <= 0.0:
+        raise Exception('obj_radius must be > 0')
+
+    if obj_height <= 0.0:
+        raise Exception('obj_height must be > 0')
+        
+    if vertical_tolerance < 0.0:
+        raise Exception('vertical_tolerance must be >= 0')
+
     manip_idx = get_manip_idx(robot, manip=manip)
 
     T0_w = obj.GetTransform()
@@ -80,7 +92,10 @@ def box_grasp(robot, box, length, width, height,
               lateral_offset = 0.0,
               lateral_tolerance = 0.02,
               manip = None, **kwargs):
-    """
+    '''
+    Generate a list of TSRChain objects. Sampling from any of these
+    TSRChains will give an end-effector pose that achieves a grasp on a box.
+
     NOTE: This function makes the following assumptions:
       1. The end-effector is oriented such that the z-axis is out of the palm
           and the x-axis should be perpendicular to the object
@@ -99,7 +114,19 @@ def box_grasp(robot, box, length, width, height,
       a good grasp
     @param manip The manipulator to perform the grasp, if None the active 
       manipulator on the robot is used
-    """
+    '''
+    if length <= 0.0:
+        raise Exception('length must be > 0')
+
+    if width <= 0.0:
+        raise Exception('width must be > 0')
+        
+    if height <= 0.0:
+        raise Exception('height must be > 0')
+
+    if lateral_tolerance < 0.0:
+        raise Exception('lateral_tolerance must be >= 0.0')
+
     manip_idx = get_manip_idx(robot, manip=manip)
 
     T0_w = box.GetTransform()
@@ -215,9 +242,13 @@ def place_object(robot, obj, pose_tsr_chain, manip=None,
     @param manip The manipulator grasping the object, if None the active
        manipulator of the robot is used
     '''
+
     manip_idx = get_manip_idx(robot, manip=manip)
     if manip is None:
         manip = robot.GetManipulators()[manip_idx]
+
+    if not manip.IsGrabbing(obj):
+        raise Exception('manip %s is not grabbing %s' % (manip.GetName(), obj.GetName())
 
     ee_in_obj = numpy.dot(numpy.linalg.inv(obj.GetTransform()), 
                           manip.GetEndEffectorTransform())
@@ -252,6 +283,15 @@ def transport_upright(robot, obj,
     @param manip the manipulator grasping the object, if None the active manipulator 
        of the robot is used
     '''
+    if roll_epsilon < 0.0:
+        raise Exception('roll_espilon must be >= 0')
+        
+    if pitch_epsilon < 0.0:
+        raise Exception('pitch_epsilon must be >= 0')
+
+    if yaw_epsilon < 0.0:
+        raise Exception('yaw_epsilon must be >= 0')
+
     manip_idx = get_manip_idx(robot, manip=manip)
     if manip is None:
         manip = robot.GetManipulators()[manip_idx]
