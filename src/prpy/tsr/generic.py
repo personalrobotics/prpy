@@ -52,6 +52,14 @@ def cylinder_grasp(robot, obj, obj_radius, obj_height,
     if vertical_tolerance < 0.0:
         raise Exception('vertical_tolerance must be >= 0')
 
+    if yaw_range is not None and len(yaw_range) != 2:
+        raise Exception('yaw_range parameter must be 2 element list specifying min and max values')
+
+    if yaw_range is not None and yaw_range[0] > yaw_range[1]:
+        raise Exception('The first element of the yaw_range parameter must be greater '
+                        'than or equal to the second (current values [%f, %f])' 
+                        % (yaw_range[0], yaw_range[1]))
+
     manip_idx = get_manip_idx(robot, manip=manip)
 
     T0_w = obj.GetTransform()
