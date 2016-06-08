@@ -3,10 +3,10 @@ from prpy.tsr.tsrlibrary import TSRFactory
 from prpy.tsr.tsr import TSR, TSRChain
 
 def get_manip_idx(robot, manip=None):
-    ''' 
+    """
     Helper function for getting the manipulator index
     to be used by the TSR
-    '''
+    """
     if manip is None:
         manip_idx = robot.GetActiveManipulatorIndex()
     else:
@@ -22,7 +22,7 @@ def cylinder_grasp(robot, obj, obj_radius, obj_height,
                    vertical_tolerance = 0.02,
                    yaw_range = None,
                    manip = None, **kwargs):
-    '''
+    """
     Generate a list of TSRChain objects. Sampling from any of these
     TSRChains will give an end-effector pose that achieves a grasp on a cylinder.
     
@@ -42,7 +42,7 @@ def cylinder_grasp(robot, obj, obj_radius, obj_height,
     @param yaw_range Allowable range of yaw around object (default: [-pi, pi])
     @param manip The manipulator to perform the grasp, if None
        the active manipulator on the robot is used
-    '''
+    """
     if obj_radius <= 0.0:
         raise Exception('obj_radius must be > 0')
 
@@ -92,7 +92,7 @@ def box_grasp(robot, box, length, width, height,
               lateral_offset = 0.0,
               lateral_tolerance = 0.02,
               manip = None, **kwargs):
-    '''
+    """
     Generate a list of TSRChain objects. Sampling from any of these
     TSRChains will give an end-effector pose that achieves a grasp on a box.
 
@@ -114,7 +114,7 @@ def box_grasp(robot, box, length, width, height,
       a good grasp
     @param manip The manipulator to perform the grasp, if None the active 
       manipulator on the robot is used
-    '''
+    """
     if length <= 0.0:
         raise Exception('length must be > 0')
 
@@ -232,7 +232,7 @@ def box_grasp(robot, box, length, width, height,
 
 def place_object(robot, obj, pose_tsr_chain, manip=None, 
                      **kwargs):
-    '''
+    """
     Generates end-effector poses for placing an object.
     This function assumes the object is grasped when called
     
@@ -241,14 +241,14 @@ def place_object(robot, obj, pose_tsr_chain, manip=None,
     @param pose_tsr_chain The tsr chain for sampling placement poses for the object
     @param manip The manipulator grasping the object, if None the active
        manipulator of the robot is used
-    '''
+    """
 
     manip_idx = get_manip_idx(robot, manip=manip)
     if manip is None:
         manip = robot.GetManipulators()[manip_idx]
 
     if not manip.IsGrabbing(obj):
-        raise Exception('manip %s is not grabbing %s' % (manip.GetName(), obj.GetName())
+        raise Exception('manip %s is not grabbing %s' % (manip.GetName(), obj.GetName()))
 
     ee_in_obj = numpy.dot(numpy.linalg.inv(obj.GetTransform()), 
                           manip.GetEndEffectorTransform())
@@ -270,7 +270,7 @@ def transport_upright(robot, obj,
                       pitch_epsilon=0.2, 
                       yaw_epsilon=0.2,
                       manip=None, **kwargs):
-    '''
+    """
     Generates a trajectory-wide constraint for transporting the object with little roll, pitch or yaw
     Assumes the object has already been grasped and is in the proper
     configuration for transport.
@@ -282,7 +282,7 @@ def transport_upright(robot, obj,
     @param yaw_epsilon The amount to let the object yaw during transport (object frame)
     @param manip the manipulator grasping the object, if None the active manipulator 
        of the robot is used
-    '''
+    """
     if roll_epsilon < 0.0:
         raise Exception('roll_espilon must be >= 0')
         
