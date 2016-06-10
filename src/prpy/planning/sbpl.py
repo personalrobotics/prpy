@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -28,13 +28,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from base import BasePlanner, PlanningError, PlanningMethod, UnsupportedPlanningError
+from base import BasePlanner, PlanningError, ClonedPlanningMethod, UnsupportedPlanningError
 import openravepy
 
 class SBPLPlanner(BasePlanner):
     def __init__(self):
         super(SBPLPlanner, self).__init__()
-        
+
         try:
             self.planner = openravepy.RaveCreatePlanner(self.env, 'SBPL')
         except openravepy.openrave_exception:
@@ -53,7 +53,7 @@ class SBPLPlanner(BasePlanner):
     def SetPlannerParameters(self, params_yaml):
         self.planner_params = params_yaml
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToBasePose(self, robot, goal_pose, timelimit=60.0, return_first=False, **kw_args):
         """
         Plan to a base pose using SBPL

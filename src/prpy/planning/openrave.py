@@ -35,7 +35,7 @@ import openravepy
 from base import (BasePlanner,
                   PlanningError,
                   UnsupportedPlanningError,
-                  PlanningMethod)
+                  ClonedPlanningMethod)
 
 
 class OpenRAVEPlanner(BasePlanner):
@@ -54,7 +54,7 @@ class OpenRAVEPlanner(BasePlanner):
     def __str__(self):
         return 'OpenRAVE {0:s}'.format(self.algorithm)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OpenRAVE. This will invoke the
@@ -70,9 +70,12 @@ class OpenRAVEPlanner(BasePlanner):
               or_args=None, **kw_args):
 
         # Get rid of default postprocessing
-        extraParams =  '<_postprocessing planner=""><_nmaxiterations>0</_nmaxiterations></_postprocessing>'
+        extraParams = ('<_postprocessing planner="">'
+                       '<_nmaxiterations>0</_nmaxiterations>'
+                       '</_postprocessing>')
         # Maximum planner iterations
-        extraParams += '<_nmaxiterations>{:d}</_nmaxiterations>'.format(maxiter)
+        extraParams += ('<_nmaxiterations>{:d}</_nmaxiterations>'
+                        .format(maxiter))
 
         if or_args is not None:
             for key, value in or_args.iteritems():
@@ -113,7 +116,7 @@ class BiRRTPlanner(OpenRAVEPlanner):
     def __init__(self):
         OpenRAVEPlanner.__init__(self, algorithm='birrt')
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OpenRAVE. This will invoke the
@@ -122,10 +125,9 @@ class BiRRTPlanner(OpenRAVEPlanner):
         @param goal the desired robot joint configuration
         @return traj a trajectory from current configuration to specified goal
         """
-
         return self._Plan(robot, goal, **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to one of many configuration with OpenRAVE's BiRRT planner.
