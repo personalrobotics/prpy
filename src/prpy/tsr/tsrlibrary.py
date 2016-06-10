@@ -105,9 +105,7 @@ class TSRLibrary(object):
                 f = self.all_factories[self.robot_name][self.generic_kinbody_key][action_name]
                 logger.info('Using robot specific generic object')
             except KeyError:
-                raise KeyError('There is no TSR factory registered for action "{:s}"'
-                               ' with robot "{:s}" and object "{:s}".'.format(
-                        action_name, self.robot_name, kinbody_name))
+                pass
 
         if f is None:
             try:
