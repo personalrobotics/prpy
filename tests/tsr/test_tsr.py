@@ -6,7 +6,6 @@ from unittest import TestCase
 # Disabled this test because it currently fails.
 """
 class TsrTest(TestCase):
-    """ Test cases for prpy.tsr.Tsr. """
     def test_sample_xyzrpy(self):
         # Test zero-intervals.
         Bw = [[0.,   0.],    # X

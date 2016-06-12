@@ -1,31 +1,28 @@
-import rospy
-import vncc_msgs.srv
-import vncc_msgs.msg
 import math
-import tf
-import tf.transformations as transformations
 import numpy
 import os.path
 
 from base import PerceptionModule, PerceptionMethod
 
 
-class VnccModule(PerceptionModule):
+class SimtrackModule(PerceptionModule):
 
     def __init__(self, kinbody_path, detection_frame, world_frame,
                  service_namespace=None):
         """
-        This initializes a VNCC detector.
+        This initializes a simtrack detector.
         
         @param kinbody_path The path to the folder where kinbodies are stored
         @param detection_frame The TF frame of the camera
         @param world_frame The desired world TF frame
-        @param service_namespace The namespace for the VNCC service (default: /vncc)
+        @param service_namespace The namespace for the simtrack service (default: /simtrack)
         """
-
+        import rospy
+        import tf
+        import tf.transformations as transformations
         # Initialize a new ros node if one has not already been created
         try:
-            rospy.init_node('vncc_detector', anonymous=True)
+            rospy.init_node('simtrack_detector', anonymous=True)
         except rospy.exceptions.ROSException:
             pass
             
@@ -36,7 +33,7 @@ class VnccModule(PerceptionModule):
             self.listener = None
                 
         if service_namespace is None:
-            service_namespace='/vncc'
+            service_namespace='/simtrack'
 
         self.detection_frame = detection_frame
         self.world_frame = world_frame
@@ -45,8 +42,10 @@ class VnccModule(PerceptionModule):
         self.kinbody_path = kinbody_path
 
         # A map of known objects that can be queries
-        self.kinbody_to_query_map = {'plastic_plate': 'plate',
-                                     'plastic_bowl': 'bowl'}
+        self.kinbody_to_query_map = {'fuze_bottle': 'fuze_bottle_visual',
+                                     'pop_tarts': 'pop_tarts_visual'}
+        self.query_to_kinbody_map = {'fuze_bottle_visual': 'fuze_bottle',
+                                     'pop_tarts_visual': 'pop_tarts'}
 
     @staticmethod
     def _MsgToPose(msg):
@@ -56,12 +55,13 @@ class VnccModule(PerceptionModule):
         @return A 4x4 transformation matrix containing the pose
         as read from the message
         """
+        import tf.transformations as transformations
         #Get translation and rotation (from Euler angles)
-        pose = transformations.euler_matrix(msg.roll*0.0,msg.pitch*0.0,msg.yaw*0.0) 
+        pose = transformations.quaternion_matrix(numpy.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w]))
     
-        pose[0,3] = msg.pt.x
-        pose[1,3] = msg.pt.y
-        pose[2,3] = msg.pt.z
+        pose[0,3] = msg.pose.position.x
+        pose[1,3] = msg.pose.position.y
+        pose[2,3] = msg.pose.position.z
         
 	return pose
 
@@ -71,6 +71,7 @@ class VnccModule(PerceptionModule):
         @param pose The 4x4 transformation matrix containing the pose to transform
         @return The 4x4 transformation matrix describing the pose in world frame
         """
+        import rospy
         #Get pose w.r.t world frame
         self.listener.waitForTransform(self.world_frame,self.detection_frame,
                                        rospy.Time(),rospy.Duration(10))
@@ -89,7 +90,8 @@ class VnccModule(PerceptionModule):
         return result
         
 
-    def _GetDetection(self, obj_name):
+    def _GetDetections(self, obj_names):
+        import simtrack_msgs.srv
         """
         Calls the service to get a detection of a particular object.
         @param obj_name The name of the object to detect
@@ -97,20 +99,23 @@ class VnccModule(PerceptionModule):
         in world frame, None if the object is not detected
         """
         #Call detection service for a particular object
-        detect_vncc = rospy.ServiceProxy(self.service_namespace+'/get_vncc_detections',
-                                         vncc_msgs.srv.GetDetections)
+        detect_simtrack = rospy.ServiceProxy(self.service_namespace+'/detect_objects',
+                                         simtrack_msgs.srv.DetectObjects)
         
-        detect_resp = detect_vncc(object_name=obj_name)
+        detect_resp = detect_simtrack(obj_names, 5.0)
+
         
-        if detect_resp.ok == False:
-            return None
-            
-        #Assumes one instance of object
-        result = self._MsgToPose(detect_resp.detections[0])
-        if (self.detection_frame is not None and self.world_frame is not None):
-            result = self._LocalToWorld(result)
-        result[:3,:3] = numpy.eye(3)
-        return result
+        detections = []
+
+        for i in xrange(0, len(detect_resp.detected_models)) :
+            obj_name = detect_resp.detected_models[i];
+            obj_pose = detect_resp.detected_poses[i];
+            obj_pose_tf = self._MsgToPose(obj_pose);
+            if (self.detection_frame is not None and self.world_frame is not None):
+                obj_pose_tf = self._LocalToWorld(obj_pose_tf)
+            detections.append((obj_name, obj_pose_tf));
+
+        return detections
 
     @PerceptionMethod
     def DetectObject(self, robot, obj_name, **kw_args):
@@ -125,19 +130,27 @@ class VnccModule(PerceptionModule):
         from prpy.perception.base import PerceptionException
 
         if obj_name not in self.kinbody_to_query_map:
-            raise PerceptionException(
-                'The VNCC module cannot detect object {:s}'.format(obj_name))
+            raise PerceptionException('The simtrack module cannot detect object %s', obj_name)
 
         query_name = self.kinbody_to_query_map[obj_name]
-        obj_pose = self._GetDetection(query_name)
-        if obj_pose is None:
-            raise PerceptionException(
-                'Failed to detect object {:s}'.format(obj_name))
-            
+        obj_poses = self._GetDetections(query_name)
+        if len(obj_poses is 0):
+            raise PerceptionException('Failed to detect object %s', obj_name)
+        
+        obj_pose = None
+
+        for (name, pose) in obj_poses:
+            if (name is query_name):
+                obj_pose = pose
+                break;
+
+        if (obj_pose is None):
+            raise PerceptionException('Failed to detect object %s', obj_name)  
+
         env = robot.GetEnv()
         if env.GetKinBody(obj_name) is None:
             from prpy.rave import add_object
-            kinbody_file = '{:s}.kinbody.xml'.format(obj_name)
+            kinbody_file = '%s.kinbody.xml' % obj_name
             new_body = add_object(
                 env,
                 obj_name,
@@ -146,3 +159,32 @@ class VnccModule(PerceptionModule):
         body = env.GetKinBody(obj_name)
         body.SetTransform(obj_pose)
         return body
+
+    @PerceptionMethod 
+    def DetectObjects(self, robot, **kw_args):
+        """
+        Overriden method for detection_frame
+        """
+        from prpy.perception.base import PerceptionException
+        env = robot.GetEnv()
+        # Detecting empty list will detect all possible objects
+        detections = self._GetDetections([])
+
+        for (obj_name, obj_pose) in detections:
+            if (obj_name not in self.query_to_kinbody_map):
+                continue
+
+            kinbody_name = self.query_to_kinbody_map[obj_name]
+
+            if env.GetKinBody(kinbody_name) is None:
+                from prpy.rave import add_object
+                kinbody_file = '%s.kinbody.xml' % kinbody_name
+                new_body = add_object(
+                    env,
+                    kinbody_name,
+                    os.path.join(self.kinbody_path, kinbody_file))
+            print kinbody_name
+            body = env.GetKinBody(kinbody_name)
+            body.SetTransform(obj_pose)
+
+

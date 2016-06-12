@@ -34,7 +34,7 @@ import numpy
 import openravepy
 import time
 from ..util import SetTrajectoryTags
-from base import BasePlanner, PlanningError, PlanningMethod, Tags
+from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class GreedyIKPlanner(BasePlanner):
     def __str__(self):
         return 'GreedyIKPlanner'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               **kw_args):
         """
@@ -67,8 +67,7 @@ class GreedyIKPlanner(BasePlanner):
             traj = openravepy.RaveCreateTrajectory(self.env, '')
             spec = openravepy.IkParameterization.\
                 GetConfigurationSpecificationFromType(
-                        openravepy.IkParameterizationType.Transform6D,
-                        'linear')
+                    openravepy.IkParameterizationType.Transform6D, 'linear')
             traj.Init(spec)
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(start_pose))
@@ -76,13 +75,13 @@ class GreedyIKPlanner(BasePlanner):
                         openravepy.poseFromMatrix(goal_pose))
             openravepy.planningutils.RetimeAffineTrajectory(
                 traj,
-                maxvelocities=0.1*numpy.ones(7),
-                maxaccelerations=0.1*numpy.ones(7)
+                maxvelocities=0.1 * numpy.ones(7),
+                maxaccelerations=0.1 * numpy.ones(7)
             )
 
         return self.PlanWorkspacePath(robot, traj, timelimit)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 **kw_args):
@@ -118,30 +117,29 @@ class GreedyIKPlanner(BasePlanner):
             traj = openravepy.RaveCreateTrajectory(self.env, '')
             spec = openravepy.IkParameterization.\
                 GetConfigurationSpecificationFromType(
-                        openravepy.IkParameterizationType.Transform6D,
-                        'linear')
+                    openravepy.IkParameterizationType.Transform6D, 'linear')
             traj.Init(spec)
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(start_pose))
             min_pose = numpy.copy(start_pose)
-            min_pose[0:3, 3] += distance*direction
+            min_pose[0:3, 3] += distance * direction
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(min_pose))
             if max_distance is not None:
                 max_pose = numpy.copy(start_pose)
-                max_pose[0:3, 3] += max_distance*direction
+                max_pose[0:3, 3] += max_distance * direction
                 traj.Insert(traj.GetNumWaypoints(),
                             openravepy.poseFromMatrix(max_pose))
             openravepy.planningutils.RetimeAffineTrajectory(
                 traj,
-                maxvelocities=0.1*numpy.ones(7),
-                maxaccelerations=0.1*numpy.ones(7)
+                maxvelocities=0.1 * numpy.ones(7),
+                maxaccelerations=0.1 * numpy.ones(7)
             )
 
         return self.PlanWorkspacePath(robot, traj,
                                       timelimit, min_waypoint_index=1)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
                           min_waypoint_index=None, **kw_args):
         """
@@ -154,14 +152,11 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return qtraj configuration space path
         """
-        from .exceptions import (
-            TimeoutPlanningError, 
-            CollisionPlanningError, 
-            SelfCollisionPlanningError,
-            JointLimitError)
+        from .exceptions import (TimeoutPlanningError,
+                                 CollisionPlanningError,
+                                 SelfCollisionPlanningError)
         from openravepy import CollisionReport
-        from numpy import linalg as LA
-
+        p = openravepy.KinBody.SaveParameters
 
         with robot:
             manip = robot.GetActiveManipulator()
@@ -177,83 +172,87 @@ class GreedyIKPlanner(BasePlanner):
             dt = traj.GetDuration()
 
             # Smallest CSpace step at which to give up
-            min_step = min(robot.GetActiveDOFResolutions())/100.
-            ik_options = openravepy.IkFilterOptions.CheckEnvCollisions 
+            min_step = min(robot.GetActiveDOFResolutions()) / 100.
+            ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
             start_time = time.time()
             epsilon = 1e-6
 
-
             try:
-                collision_error = None 
                 while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        if collision_error is not None: 
-                            raise collision_error 
                         raise TimeoutPlanningError(timelimit)
 
                     # Hypothesize new configuration as closest IK to current
                     qcurr = robot.GetActiveDOFValues()  # Configuration at t.
                     qnew = manip.FindIKSolution(
-                        openravepy.matrixFromPose(traj.Sample(t+dt)[0:7]),
+                        openravepy.matrixFromPose(traj.Sample(t + dt)[0:7]),
                         ik_options,
                         ikreturn=False,
                         releasegil=True
                     )
 
-                    # FindIKSolutions is slower than FindIKSolution, 
-                    # so call this only to identify error when there is no solution
-                    if qnew is None: 
-                        ik_solutions = manip.FindIKSolutions(
-                            openravepy.matrixFromPose(traj.Sample(t+dt)[0:7]),
-                            openravepy.IkFilterOptions.IgnoreSelfCollisions,
-                            ikreturn=False,
-                            releasegil=True
-                        )
-
-                        # update collision_error to contain collision info.
-                        for q in ik_solutions:
-                            robot.SetActiveDOFValues(q)
-                            report = CollisionReport()
-                            if self.env.CheckCollision(robot, report=report):
-                                collision_error = CollisionPlanningError.FromReport(report) 
-                            elif robot.CheckSelfCollision(report=report):
-                                collision_error = SelfCollisionPlanningError.FromReport(report)
-                            
                     # Check if the step was within joint DOF resolution.
                     infeasible_step = True
                     if qnew is not None:
                         # Found an IK
                         step = abs(qnew - qcurr)
                         if (max(step) < min_step) and qtraj:
-                            if collision_error is not None: 
-                                raise collision_error
                             raise PlanningError('Not making progress.')
-                        infeasible_step = any(step > robot.GetActiveDOFResolutions())
+                        infeasible_step = \
+                            any(step > robot.GetActiveDOFResolutions())
                     if infeasible_step:
                         # Backtrack and try half the step
-                        dt = dt/2.0
+                        dt = dt / 2.0
                     else:
                         # Move forward to new trajectory time.
                         robot.SetActiveDOFValues(qnew)
                         qtraj.Insert(qtraj.GetNumWaypoints(), qnew)
                         t = min(t + dt, traj.GetDuration())
-                        dt = dt*2.0
+                        dt = dt * 2.0
 
             except PlanningError as e:
                 # Compute the min acceptable time from the min waypoint index.
                 if min_waypoint_index is None:
-                    min_waypoint_index = traj.GetNumWaypoints()-1
+                    min_waypoint_index = traj.GetNumWaypoints() - 1
                 cspec = traj.GetConfigurationSpecification()
-                wpts = [traj.GetWaypoint(i) for i in range(min_waypoint_index+1)]
+                wpts = [traj.GetWaypoint(i)
+                        for i in range(min_waypoint_index + 1)]
                 dts = [cspec.ExtractDeltaTime(wpt) for wpt in wpts]
                 min_time = numpy.sum(dts)
 
                 # Throw an error if we haven't reached the minimum waypoint.
                 if t < min_time:
-                    raise
+                    # FindIKSolutions is slower than FindIKSolution, so call
+                    # this only to identify error when there is no solution.
+                    ik_solutions = manip.FindIKSolutions(
+                        openravepy.matrixFromPose(
+                            traj.Sample(t + dt * 2.0)[0:7]),
+                        openravepy.IkFilterOptions.IgnoreSelfCollisions,
+                        ikreturn=False, releasegil=True
+                    )
+
+                    collision_error = None
+                    # update collision_error to contain collision info.
+                    with robot.CreateRobotStateSaver(p.LinkTransformation):
+                        for q in ik_solutions:
+                            robot.SetActiveDOFValues(q)
+                            cr = CollisionReport()
+                            if self.env.CheckCollision(robot, report=cr):
+                                collision_error = \
+                                    CollisionPlanningError.FromReport(cr)
+                            elif robot.CheckSelfCollision(report=cr):
+                                collision_error = \
+                                    SelfCollisionPlanningError.FromReport(cr)
+                            else:
+                                collision_error = None
+                    if collision_error is not None:
+                        raise collision_error
+                    else:
+                        raise
+
                 # Otherwise we'll gracefully terminate.
                 else:
                     logger.warning('Terminated early at time %f < %f: %s',

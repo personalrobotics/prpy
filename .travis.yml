@@ -3,10 +3,6 @@ sudo: required
 language: generic
 cache:
 - apt
-env:
-  global:
-  - REPOSITORY=prpy
-  - DISTRIBUTION=https://raw.githubusercontent.com/personalrobotics/pr-rosinstalls/feature/rosdistro/repositories.yml
 # Install test fixture dependencies.
 before_install:
 - mkdir -p "${HOME}/workspace/src"
@@ -20,6 +16,6 @@ install:
 - ./scripts/internal-distro.py --workspace=src distribution.yml --repository "${REPOSITORY}"
 script:
 - ./scripts/internal-build.sh ${PACKAGE_NAMES}
-- ./scripts/internal-test.sh ${PACKAGE_NAMES}
+- travis_wait ./scripts/internal-test.sh ${PACKAGE_NAMES}
 after_script:
 - ./scripts/view-all-results.sh test_results

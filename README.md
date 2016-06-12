@@ -1,5 +1,7 @@
 # PrPy
 
+[![Build Status](https://travis-ci.org/personalrobotics/prpy.svg?branch=master)](https://travis-ci.org/personalrobotics/prpy)
+
 PrPy is a Python library used by the Personal Robotics Laboratory at Carnegie
 Mellon University. This library includes robot-agnostic utilities that make
 it easier to use OpenRAVE in Python scripts. This includes a high-level
@@ -23,12 +25,27 @@ two subclasses:
 2. `prpy.planning.base.MetaPlanner`: combines the output of multiple motion
    planners, each of which is a `BasePlanner` or another `MetaPlanner`
 
-Each planner has one or more *planning methods*, annotated with the
-`@PlanningMethod` decorator, that look like ordinary functions. However, unlike
-an ordinary function, calling a planning method clones the robot's environment
-into a *planning environment* associated with the planner. Planning occurs in
-the cloned environment to allow PrPy to run multiple planners in parallel and
-to paralellize planning and execution.
+Each planner has one or more *planning methods*, annotated with either the
+`@LockedPlanningMethod` or `@ClonedPlanningMethod decorator, that look like
+ordinary functions. Using these decorators makes other PrPy components
+aware that these methods exist and follow a particular specification that
+allows them to be composed with other PrPy objects automatically.  For
+example, `MetaPlanner`s will report that they can perform planning methods
+that their child motion planners have enumerated via `@PlanningMethod`
+decorators.
+
+`@PlanningMethod` decorators also make sure that calls to planning code are
+executed in a thread-safe manner.  In the case of `@LockedPlanningMethod`,
+this is enforced by locking the calling environment until the planning method
+has completed. In the case of `@ClonedPlanningMethod`, this is enforced by
+cloning the calling environment, and calling the wrapped method with references
+to the cloned environment.  The result of the method is then copied back to the
+calling environment.  `@ClonedPlanningMethod`s can be used to run multiple
+planners in parallel and to parallelize planning and execution.
+
+In general, **locked** planning methods are used for calls that will terminate
+extremely quickly, while **cloned** planning methods are used for calls that
+might take a significant amount of time.
 
 For example, the following code will use OMPL to plan `robot`'s active DOFs
 from their current values to to the `goal_config` configuration:
@@ -38,10 +55,10 @@ planner = OMPLPlanner('RRTConnect')
 output_path = planner.PlanToConfiguration(robot, goal_config)
 ```
 
-First, `robot.GetEnv()` is cloned into the the `planner.env` planning
-environment. Next, planning occurs in the cloned environment. Finally, the
-output path is cloned back into `robot.GetEnv()` and is returned by the
-planner.
+As this is a `@ClonedPlanningMethod`, `robot.GetEnv()` is cloned into the
+the `planner.env` planning environment. Planning occurs within this cloned
+environment. Finally, the output path is cloned back into `robot.GetEnv()`
+and is returned by the planner.
 
 See the following sub-sections for more information about the built-in planners
 provided with PrPy, information about writing your own planner, and several
@@ -84,7 +101,7 @@ See the Python docstrings the above classes for more information.
 
 ### Common Planning Methods
   
-There is no formal list of `@PlanningMethod`s or their arguments. However, we
+There is no formal list of `@*PlanningMethod`s or their arguments. However, we
 have found these methods to be useful:
 
 - `PlanToConfiguration(robot, goal_config)`: plan the robot's active DOFs from
@@ -110,25 +127,36 @@ of these methods accept planner-specific keyword arguments.
 ### Writing a Custom Planner
 
 Implementing a custom planner requires extending the `BasePlanner` class and
-decorating one or more methods with the `@PlanningMethod` decorator. Extending
-the `BasePlanner` class constructs the planning environment `self.env` and
-allows PrPy to identify your planner as a base planner class, as opposed to a
-meta-planner. The `@PlanningMethod` decorator handles environment cloning and
-allows meta-planners to query the list of planning methods that the planner
-supports (e.g. to generate docstrings).
+decorating one or more methods with the `@LockedPlanningMethod` or
+`@ClonedPlanningMethod` decorator.
+
+Extending the `BasePlanner` class allows PrPy to identify your planner as a
+base planner class, as opposed to a meta-planner. The `@PlanningMethod`
+decorators handle environment cloning or locking and allows meta-planners to
+query the list of planning methods that the planner supports (e.g. to generate
+docstrings).
+
+Each instance of a `BasePlanner`-derived class constructs a planning
+environment `self.env`.  This environment is uniquely associated with each
+instance of the planner and is what will be used in `@ClonedPlanningMethod`
+calls. Since this environment is persistent and unique, it can also be used
+as a place to cache data or pre-load plugins for planners that have heavyweight
+initialization steps.  However, because of this, each planning instance can
+only execute one `@ClonedPlanningMethod` at a time.  It can still execute
+arbitrary `@LockedPlanningMethod` calls, as long as they are referring to
+robots in different environments.
 
 Please obey the following guidelines:
 
-- Assume that the cloned environment is locked during the entire call.
-- Subclass constructor **must** call `BasePlanner.__init__`.
-- A `@PlanningMethod` **must not** call another `@PlanningMethod`.
+- Assume that the planning environment is locked during the entire call.
+- Subclass constructors **must** call `BasePlanner.__init__`.
 - Each `@PlanningMethod` **must** accept the first argument `robot`, which is a
-  robot in the cloned environment.
+  robot in the environment it should be using to perform planning.
 - Each `@PlanningMethod` **must** accept `**kwargs` to ignore arguments that
   are not supported by the planner.
 - Each `@PlanningMethod` **must** return a `Trajectory` which was created in
-  the cloned environment.
-- When possible, use one of the defacto-standard `@PlanningMethod` names listed
+  the same environment as the robot it was passed (e.g. `robot.GetEnv()`).
+- When possible, use one of the defacto-standard `@*PlanningMethod` names listed
   below.
 - Raise a `PlanningError` to indicate an expected, but fatal, error (e.g.
   timeout with no collision-free path).
@@ -175,6 +203,81 @@ path1 = planner.PlanToConfiguration(robot, goal)
 path2 = planner.PlanToBasePose(robot, goal_pose)
 ```
 
+## Perception Pipeline
+
+Recently, support has been added for a few perception routines. The general structure is intended
+to mirror that of the planning pipeline, but it is somewhat less encapsulated than 
+planning, from the user's perspective.
+
+There is a `prpy.perception.base.PerceptionModule` class which is extended by every perception
+routine. Every routine has some common methods for perception, which are annotated with 
+`@PerceptionMethod`. Here is an example call (should happen in a typical herbpy console):
+
+```python
+from prpy.perception.apriltags import ApriltagsModule
+
+adetector = ApriltagsModule(marker_topic='/apriltags_kinect2/marker_array',
+                           marker_data_path=FindCatkinResource('pr_ordata','data/objects/tag_data.json'), 
+                           kinbody_path=FindCatkinResource('pr_ordata','data/objects'), 
+                           destination_frame='/map', 
+                           detection_frame='/head/kinect2_rgb_optical_frame')
+detected_objects = adetector.DetectObjects(robot)
+```
+IMPORTANT - Most of these methods require some underlying CPP server to be running, before calls can be
+made to the PrPy detector. 
+
+### Perception Modules
+
+Currently, the following perception routines are supported:
+
+- `AprilTags`
+- `VNCC`: Vectorized Normalized Cross Correlation
+- `SimTrack`
+- `BlockDetector`
+- `ROCK`: Robust Object Constellation and Kinematic Pose
+
+### Underlying Servers
+
+- `AprilTags`: Started via `apriltags.launch` in [herb_launch](https://github.com/personalrobotics/herb_launch). Publishes to `/apriltags_kinect2/detections` and `/apriltags_kinect2/marker_array`.
+- `VNCC`: Have [vncc_msgs](https://github.com/personalrobotics/vncc_msgs) and [vncc](https://github.com/personalrobotics/vncc) in your workspace. Run `roslaunch vncc vncc_estimator.launch`. This provides the `/vncc/get_vncc_detections` service.
+- `SimTrack` - See Caveats section below
+- `BlockDetector` - Have [tabletop_perception_tools](https://github.com/personalrobotics/tabletop_perception_tools) in your workspace. Run `rosrun tabletop_perception_tools tools_server`. This provides the `/tools_server/find_blocks` service.
+- `ROCK` - To be updated later.
+
+
+### Common Perception Methods
+
+At this point, two methods are common to all perception routines. However, some 
+routine-specific knowledge may be required to make them work. This is particularly reflected
+in the constructor for the perception module.
+
+- `DetectObjects(self, robot, **kw_args)`: This runs the perception method for all
+objects that the particular routine knows about. Typically, this information is specified
+either as a config file (in the case of AprilTags) or in the constructor of the respective
+module.
+- `DetectObject(self,robot,obj_name)`: This runs the perception routine to detect a particular object,
+based on the known names in the database.
+
+The return type for both is typically one or more OpenRAVE kinbodies, with the correct
+transformation relative to the current environment, if the input `tf`s have been 
+correctly provided.
+
+
+### Caveats
+
+As mentioned above, running the perception routines require a bit of routine-specific knowledge,
+because of differences in the way some of them operate. Some of those caveats, for each routine
+are mentioned here.
+
+- `AprilTags`: This method involves detection of visual fiducial markers. There is a database that maps
+april tag IDs to the objects to which they are attached, along with the relative transform
+of the tag with respect to the object kinbody, in `pr_ordata/data/objects/tag_data.json`.
+- `VNCC`: This is a single-query method and so currently does not support `DetectObjects`, but just
+`DetectObject`, where the object names are obtained from the map in the module's constructor.
+- `SimTrack`: See https://github.com/personalrobotics/simtrack for more details. You will need the `personalrobotics` fork. This can track/detect any kind of textured object stored as an `.obj` file. The perception module only calls the detector, but the tracker can also be integrated pretty easily. It supports `DetectObjects`, and requires the simtrack `multi_rigid_node` to be running on the robot to work. Inside the module, there is a map of `simtrack` objects to kinbodies.
+- `BlockDetector`: This is specifically for detecting blocks on a table in front of the camera. Therefore,
+it only has a `DetectBlocks` method.
+- `ROCK`: This is still under development and so does not exactly conform to the underlying API.
 
 ## Environment Cloning
 

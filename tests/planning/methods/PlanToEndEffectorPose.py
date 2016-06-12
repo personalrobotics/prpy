@@ -10,7 +10,7 @@ class PlanToEndEffectorPoseTest(object):
             self.robot.SetActiveDOFValues(self.config_feasible_goal)
             goal_ik = self.manipulator.GetEndEffectorTransform()
 
-            self.robot.SetActiveDOFValues(self.config_feasible_start)
+            self.robot.SetActiveDOFValues(self.config_feasible_start2)
 
         # Test
         path = self.planner.PlanToEndEffectorPose(self.robot, goal_ik)
@@ -19,7 +19,7 @@ class PlanToEndEffectorPoseTest(object):
         self.ValidatePath(path)
 
         first_waypoint = path.GetWaypoint(0)
-        assert_allclose(first_waypoint, self.config_feasible_start)
+        assert_allclose(first_waypoint, self.config_feasible_start2)
 
         with self.env:
             last_waypoint = path.GetWaypoint(path.GetNumWaypoints() - 1)
