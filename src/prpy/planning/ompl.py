@@ -105,7 +105,6 @@ class OMPLPlanner(BasePlanner):
         with self.env:
             if (not continue_planner) or (not self.setup):
                 self.planner.InitPlan(robot, params)
-                raw_input("press enter to begin")
                 self.setup = True
 
             status = self.planner.PlanPath(traj, releasegil=True)
@@ -230,25 +229,32 @@ class ConstrainedOMPLPlanner(OMPLPlanner):
         OMPLPlanner.__init__(self, algorithm='CRRTConnect')
 
 
-    @PlanningMethod
-    def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
+    @ClonedPlanningMethod
+    def PlanToTSR(self, robot, tsrchains, planner_range=0.1, ompl_args=None, **kw_args):
         """
         Plan using the given TSR chains with OMPL. 
         @param robot
         @param tsrchains A list of TSRChain objects to respect during planning
+        @param planner_range the max stepsize for the planner before a projection
+         is applied
         @param ompl_args ompl RRTConnect specific parameters
         @return traj
         """
+        if ompl_args is None:
+            ompl_args = {}
+        ompl_args['range'] = planner_range
         return self._TSRPlan(robot, tsrchains, ompl_args=ompl_args, **kw_args)
 
-    @PlanningMethod
-    def PlanToEndEffectorOffset(self, robot, direction, distance,
+    @ClonedPlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance, planner_range=0.1,
                                 smoothingitrs=100, **kw_args):
         """
         Plan to a desired end-effector offset.
         @param robot
         @param direction unit vector in the direction of motion
         @param distance minimum distance in meters
+        @param planner_range the max stepsize for the planner before a projection
+         is applied
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
@@ -269,16 +275,12 @@ class ConstrainedOMPLPlanner(OMPLPlanner):
             H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
             H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
 
-            # Serialize TSR string (goal)
-            Hw_end = numpy.eye(4)
-            Hw_end[2,3] = distance
-
             # Serialize TSR string (whole-trajectory constraint)
             Bw = numpy.zeros((6,2))
-            epsilon = 0.001
+            epsilon = 0.00
             Bw = numpy.array([[-epsilon,            epsilon],
                               [-epsilon,            epsilon],
-                              [min(0.0, distance),  max(0.0, distance)],
+                              [min(-epsilon, distance-epsilon),  max(epsilon, distance+epsilon)],
                               [-epsilon,            epsilon],
                               [-epsilon,            epsilon],
                               [-epsilon,            epsilon]])
@@ -288,6 +290,7 @@ class ConstrainedOMPLPlanner(OMPLPlanner):
                           Tw_e = H_w_ee, 
                           Bw = Bw, 
                           manip = robot.GetActiveManipulatorIndex())
+
             traj_tsr_chain = TSRChain(constrain=True, TSRs=[trajtsr])
 
             # Compute a goal pose
@@ -303,7 +306,10 @@ class ConstrainedOMPLPlanner(OMPLPlanner):
         for g in goal_configs:
             goal += g.tolist()
 
-        self._TSRPlan(robot, [traj_tsr_chain], goal=goal, **kw_args)
+        ompl_args = {'range': planner_range}
+
+        from prpy.viz import RenderTSRList
+        return self._TSRPlan(robot, [traj_tsr_chain], goal=goal, ompl_args=ompl_args, **kw_args)
 
     def _TSRPlan(self, robot, tsrchains, **kw_args):
         extra_params = ''
