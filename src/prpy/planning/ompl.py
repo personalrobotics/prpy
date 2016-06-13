@@ -228,7 +228,6 @@ class ConstrainedOMPLPlanner(OMPLPlanner):
     def __init__(self):
         OMPLPlanner.__init__(self, algorithm='CRRTConnect')
 
-
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, planner_range=0.1, ompl_args=None, **kw_args):
         """
@@ -280,7 +279,8 @@ class ConstrainedOMPLPlanner(OMPLPlanner):
             epsilon = 0.00
             Bw = numpy.array([[-epsilon,            epsilon],
                               [-epsilon,            epsilon],
-                              [min(-epsilon, distance-epsilon),  max(epsilon, distance+epsilon)],
+                              [min(-epsilon, distance-epsilon),  
+                                max(epsilon, distance+epsilon)],
                               [-epsilon,            epsilon],
                               [-epsilon,            epsilon],
                               [-epsilon,            epsilon]])
