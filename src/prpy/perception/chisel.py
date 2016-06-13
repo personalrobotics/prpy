@@ -61,9 +61,6 @@ class ChiselModule(PerceptionModule):
         if ignored_bodies is None:
             ignored_bodies = []
 
-        # Dictionary mapping ignored bodies to start transform
-        orig_bodies = {}
-
         #Check if chisel kinbody in env
         chisel_kb = env.GetKinBody(self.mesh_name)
         if chisel_kb is not None:
@@ -72,7 +69,7 @@ class ChiselModule(PerceptionModule):
         with env:
             try:
                 from kinbody_helper import transform_from_or
-
+                import openravepy
                 # Add any ignored bodies to the camera
                 # We need to transform all these bodies from their pose
                 #   in OpenRAVE to the equivalent pose in TF so that
@@ -81,14 +78,22 @@ class ChiselModule(PerceptionModule):
                 #   performs the detection
                 for b in ignored_bodies:
                     if b not in self.camera_bodies:
-                        with env:
-                            orig_bodies[b] = b.GetTransform()
-                        transform_from_or(kinbody=b, 
-                                          detection_frame='/map',
-                                          destination_frame=self.destination_frame,
-                                          reference_link=self.reference_link)
-                        self.camera.add_body(b)
-                        self.camera_bodies.append(b)
+                        poses = self.SamplePoses(b.GetTransform())
+                        orig_name = b.GetName()
+
+                        for idx, pose in enumerate(poses):
+                            bcloned = openravepy.RaveCreateKinBody(env, b.GetXMLId())
+                            bcloned.Clone(b, 0)
+                            
+                            bcloned.SetName('%s_%d' % (orig_name, idx))
+                            env.Add(bcloned)
+                            transform_from_or(kinbody=bcloned,
+                                              pose=pose,
+                                              detection_frame='/map',
+                                              destination_frame=self.destination_frame,
+                                              reference_link=self.reference_link)
+                            self.camera.add_body(bcloned)
+                            self.camera_bodies.append(bcloned)
 
                 #Reset Chisel
                 import rospy, chisel_msgs.srv
@@ -103,16 +108,12 @@ class ChiselModule(PerceptionModule):
                 chisel_mesh = env.GetKinBody(self.mesh_name)
 
             finally:
-
+                
                 # Remove any previous bodies in the camera
                 for b in self.camera_bodies:
-                    self.camera.remove_body(b)
-                self.camera_bodies = []
+                    self.camera.remove_body_now(b)
+                    env.Remove(b)
                 
-                # Restore all bodies to their original pose
-                for b, orig_pose in orig_bodies.iteritems():
-                    b.SetTransform(orig_pose)
-
         if chisel_mesh is not None and self.reference_link is not None:
             # Apply a transform to the chisel kinbody to put it in the correct
             # location in the OpenRAVE environment
@@ -123,3 +124,23 @@ class ChiselModule(PerceptionModule):
                             reference_link=self.reference_link)
                         
         return chisel_mesh
+
+    def SamplePoses(self, orig_transform, radius=0.03):
+        """
+        Sample poses around the sphere of the given radius
+        Sampled poses maintain orientation but have different translations
+        @param orig_transform The original pose
+        @param radius The radius of the sphere to sample from
+        """
+        import copy, numpy
+        retvals = []
+        for i in [-1., 0., 1.]:
+            for j in [-1., 0., 1.]:
+                for k in [-1., 0., 1.]:
+                    v = numpy.array([i, j, k])
+                    if numpy.linalg.norm(v) > 0:
+                        v = radius * v / numpy.linalg.norm(v)
+                    new_transform = copy.deepcopy(orig_transform)
+                    new_transform[:3,3] = orig_transform[:3,3] + v
+                    retvals.append(new_transform)
+        return retvals

@@ -51,7 +51,7 @@ def transform_to_or(kinbody, detection_frame=None, destination_frame=None,
         kinbody.SetTransform(body_in_or)
 
 def transform_from_or(kinbody, detection_frame, destination_frame, 
-                      reference_link=None):
+                      reference_link=None, pose=None):
     """
     Transform the pose of a kinbody from a OpenRAVE pose to the correct
     relative pose in TF.This transformation is performed
@@ -72,6 +72,10 @@ def transform_from_or(kinbody, detection_frame, destination_frame,
     import rospy
     listener = tf.TransformListener()
 
+    if pose is None:
+        with kinbody.GetEnv():
+            pose = kinbody.GetTransform()
+
     listener.waitForTransform(
         detection_frame, destination_frame,
         rospy.Time(),
@@ -86,7 +90,7 @@ def transform_from_or(kinbody, detection_frame, destination_frame,
     destination_in_detection[:3,3] = frame_trans
 
     with kinbody.GetEnv():
-        body_in_or = kinbody.GetTransform()
+        body_in_or = pose
         if reference_link is not None:
             or_in_destination = numpy.linalg.inv(reference_link.GetTransform())
         else:
