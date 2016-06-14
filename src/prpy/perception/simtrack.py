@@ -3,9 +3,9 @@ import numpy
 import os.path
 
 from base import PerceptionModule, PerceptionMethod
+from tracking import TrackingModule, TrackingMethod
 
-
-class SimtrackModule(PerceptionModule):
+class SimtrackModule(PerceptionModule, TrackingModule):
 
     def __init__(self, kinbody_path, detection_frame, 
                  destination_frame=None, reference_link=None,
@@ -221,7 +221,7 @@ class SimtrackModule(PerceptionModule):
                             reference_link=self.reference_link,
                             pose=pose_tf)
 
-    @PerceptionMethod
+    @TrackingMethod
     def StartTrackObject(self, robot, obj_name, cache_transform=True, **kw_args):
         """
         Subscribe to the pose array for an object in order to track
@@ -273,7 +273,7 @@ class SimtrackModule(PerceptionModule):
                                                     queue_size=1
         )
 
-    @PerceptionMethod
+    @TrackingMethod
     def StopTrackObject(self, robot, obj_name, **kw_args):
         """
         Unsubscribe from the pose array to end tracking

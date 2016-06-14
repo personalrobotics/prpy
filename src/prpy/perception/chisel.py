@@ -125,7 +125,7 @@ class ChiselModule(PerceptionModule):
                         
         return chisel_mesh
 
-    def SamplePoses(self, orig_transform, radius=0.05):
+    def SamplePoses(self, orig_transform, radius=0.02):
         """
         Sample poses around the sphere of the given radius
         Sampled poses maintain orientation but have different translations

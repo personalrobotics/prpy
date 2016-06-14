@@ -1,4 +1,4 @@
-from base import TrackingModule, TrackingMethod
+from tracking import TrackingModule, TrackingMethod
 import openravepy
 
 class PointCloudTracker(TrackingModule):

@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from base import PerceptionModule, PerceptionMethod
+from tracking import TrackingModule, TrackingMethod
 from apriltags import ApriltagsModule
 from simulated import SimulatedPerceptionModule
 from rock_module import RockModule
