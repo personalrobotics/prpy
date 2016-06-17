@@ -94,3 +94,31 @@ class TimeoutPlanningError(PlanningError):
             message = 'Exceeded time limit.'
 
         super(TimeoutPlanningError, self).__init__(message)
+
+
+class MetaPlanningError(PlanningError):
+    """
+    A metaplanning error indicates that a planning operation that calls one or
+    more other planners internally failed due to the internal planning calls
+    failing.
+    """
+    def __init__(self, message, errors):
+        PlanningError.__init__(self, message)
+        self.errors = errors
+
+    # TODO: Print the inner exceptions.
+
+
+class ClonedPlanningError(PlanningError):
+    """
+    A cloned planning error indicates that planning failed because a
+    ClonedPlanningMethod was unable to clone the environment successfully.
+
+    This most commonly occurs when a planner attempts to clone while in
+    collision, which can corrupt the environment before the planner would
+    have a chance to detect the collision.
+    """
+    def __init__(self, cloning_error):
+        super(ClonedPlanningError, self).__init__(
+            "Failed to clone: {:s}".format(cloning_error))
+        self.error = cloning_error

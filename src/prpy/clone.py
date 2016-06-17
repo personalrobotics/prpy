@@ -92,31 +92,45 @@ class Clone(object):
                 with self.clone_parent:
                     self.clone_env.Clone(self.clone_parent, self.options)
 
+                    # Due to a bug in the OpenRAVE clone API, we need to regrab
+                    # objects in cloned environments because they might have
+                    # incorrectly computed 'ignore' flags.
+                    # TODO: Remove this block if OpenRAVE cloning is fixed.
+                    for robot in self.clone_parent.GetRobots():
+                        if len(robot.GetGrabbed()):
+                            # Since ignore lists are computed from current
+                            # pose,  calling RegrabAll() from a pose that is
+                            # in self-collision may ignore collisions.
+                            if robot.CheckSelfCollision():
+                                raise CloneException(
+                                    'Unable to compute self-collisions'
+                                    ' correctly. Robot {:s} was cloned'
+                                    ' while in collision.'
+                                    .format(robot.GetName())
+                                )
+                            cloned_robot = Cloned(robot, into=self.clone_env)
+                            cloned_robot.RegrabAll()
+
             # Required for InstanceDeduplicator to call CloneBindings for
             # PrPy-annotated classes.
             setattr(self.clone_env, 'clone_parent', self.clone_parent)
+
+            # Set cloned parent on all bodies, manipulators and links
+            for body in parent_env.GetBodies():
+                cloned_body = Cloned(body, into=self.clone_env)
+
+                if body.IsRobot():
+                    for m in body.GetManipulators():
+                        Cloned(m, into=self.clone_env)
+
+                for link in body.GetLinks():
+                    Cloned(link, into=self.clone_env)
+
 
             # Convenience method to get references from Clone environment.
             def ClonedWrapper(*instances):
                 return Cloned(*instances, into=self.clone_env)
             setattr(self.clone_env, 'Cloned', ClonedWrapper)
-
-            # Due to a bug in the OpenRAVE clone API, we need to regrab
-            # objects in cloned environments because they might have
-            # incorrectly computed 'ignore' flags.
-            # TODO(pkv): Remove this block once OpenRAVE cloning is fixed.
-            for robot in self.clone_parent.GetRobots():
-                # Since the new ignore lists are computed from the current
-                # pose,  calling RegrabAll() from a pose that is in
-                # SelfCollision may incorrectly ignore collisions.
-                if robot.CheckSelfCollision():
-                    raise CloneException(
-                        'Unable to compute self-collisions correctly. '
-                        'Robot {:s} was cloned while in collision.'
-                        .format(robot.GetName())
-                    )
-                cloned_robot = self.clone_env.Cloned(robot)
-                cloned_robot.RegrabAll()
 
     def __enter__(self):
         if self.lock:
@@ -191,7 +205,7 @@ def Cloned(*instances, **kwargs):
         if instance is None:
             clone_instances.append(None)
             continue
-        
+
         # Clone each instance based on its type.
         if isinstance(instance, openravepy.Robot):
             clone_instance = clone_env.GetRobot(instance.GetName())

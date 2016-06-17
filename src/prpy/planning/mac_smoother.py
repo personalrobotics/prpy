@@ -30,7 +30,7 @@
 
 from ..util import (CopyTrajectory, SimplifyTrajectory, SetTrajectoryTags,
                     IsTimedTrajectory)
-from base import (BasePlanner, PlanningError, PlanningMethod,
+from base import (BasePlanner, PlanningError, ClonedPlanningMethod,
                   UnsupportedPlanningError, Tags)
 from openravepy import (Planner, PlannerStatus, RaveCreatePlanner,
                         openrave_exception)
@@ -54,7 +54,7 @@ class MacSmoother(BasePlanner):
                 ' installed and in your OPENRAVE_PLUGIN path?'
             )
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def RetimeTrajectory(self, robot, path):
         # Copy the input trajectory into the planning environment. This is
         # necessary for two reasons: (1) the input trajectory may be in another
@@ -72,8 +72,8 @@ class MacSmoother(BasePlanner):
             params = Planner.PlannerParameters()
             self.blender.InitPlan(robot, params)
             status = self.blender.PlanPath(output_traj)
-            if status not in [ PlannerStatus.HasSolution,
-                               PlannerStatus.InterruptedWithSolution ]:
+            if status not in [PlannerStatus.HasSolution,
+                              PlannerStatus.InterruptedWithSolution]:
                 raise PlanningError('Blending trajectory failed.')
         except openrave_exception as e:
             raise PlanningError('Blending trajectory failed: ' + str(e))
@@ -84,12 +84,11 @@ class MacSmoother(BasePlanner):
             params = Planner.PlannerParameters()
             self.retimer.InitPlan(robot, params)
             status = self.retimer.PlanPath(output_traj)
-            if status not in [ PlannerStatus.HasSolution,
-                               PlannerStatus.InterruptedWithSolution ]:
+            if status not in [PlannerStatus.HasSolution,
+                              PlannerStatus.InterruptedWithSolution]:
                 raise PlanningError('Timing trajectory failed.')
         except openrave_exception as e:
             raise PlanningError('Timing trajectory failed: ' + str(e))
 
         SetTrajectoryTags(output_traj, {Tags.SMOOTH: True}, append=True)
         return output_traj
-
