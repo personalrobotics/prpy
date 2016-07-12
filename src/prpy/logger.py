@@ -53,7 +53,7 @@ def initialize_logging():
 
     # Remove all of the existing handlers.
     base_logger = logging.getLogger()
-    for handler in base_logger.handlers:
+    for handler in list(base_logger.handlers):
         base_logger.removeHandler(handler)
 
     # Add the custom handler.
