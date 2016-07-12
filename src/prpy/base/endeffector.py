@@ -73,5 +73,5 @@ class EndEffector(openravepy.Robot.Link):
         This both: (1) sets the current manipulator as active and (2) sets the
         active DOF values to thosse associated with this end-effector.
         """
-        self.GetRobot().SetActiveManipulator(self.manipulator)
-        self.GetRobot().SetActiveDOFs(self.GetArmIndices())
+        self.manipulator.GetRobot().SetActiveManipulator(self.manipulator)
+        self.manipulator.GetRobot().SetActiveDOFs(self.manipulator.GetArmIndices())
