@@ -56,6 +56,7 @@ class TSRFactory(object):
 class TSRLibrary(object):
     all_factories = collections.defaultdict(lambda: collections.defaultdict(dict))
     generic_kinbody_key = "_*"  # Something that is unlikely to be an actual kinbody name
+    generic_robot_key = "_*"
     
     def __init__(self, robot, robot_name=None):
         """
@@ -88,12 +89,28 @@ class TSRLibrary(object):
         f = None
         try:
             f = self.all_factories[self.robot_name][kinbody_name][action_name]
+            logger.info('Using robot specific TSR for object')
         except KeyError:
             pass
 
         if f is None:
             try:
+                f = self.all_factories[self.generic_robot_key][kinbody_name][action_name]
+                logger.info('Using generic TSR for object')
+            except KeyError:
+                pass
+
+        if f is None:
+            try:
                 f = self.all_factories[self.robot_name][self.generic_kinbody_key][action_name]
+                logger.info('Using robot specific generic object')
+            except KeyError:
+                pass
+
+        if f is None:
+            try:
+                f = self.all_factories[self.generic_robot_key][self.generic_kinbody_key][action_name]
+                logger.info('Using generic object')
             except KeyError:
                 raise KeyError('There is no TSR factory registered for action "{:s}"'
                                ' with robot "{:s}" and object "{:s}".'.format(
@@ -180,6 +197,9 @@ class TSRLibrary(object):
 
         if object_name is None:
             object_name = cls.generic_kinbody_key
+
+        if robot_name is None:
+            robot_name = cls.generic_robot_key
 
         if action_name in cls.all_factories[robot_name][object_name]:
             logger.warning('Overwriting duplicate TSR factory for action "%s"'
