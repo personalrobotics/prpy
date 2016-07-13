@@ -34,6 +34,7 @@ from prpy.planning.base import (
     BasePlanner,
     PlanningError,
     ClonedPlanningMethod,
+    LockedPlanningMethod,
     Tags
 )
 
@@ -57,7 +58,9 @@ class SnapPlanner(BasePlanner):
     def __str__(self):
         return 'SnapPlanner'
 
-    @ClonedPlanningMethod
+    #FIXME how can we have both in a non-API breaking way?
+    #@ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's
@@ -126,11 +129,14 @@ class SnapPlanner(BasePlanner):
         from prpy.util import GetLinearCollisionCheckPts
         from prpy.planning.exceptions import CollisionPlanningError
         from prpy.planning.exceptions import SelfCollisionPlanningError
+ 
+        # Rachel change (instead of using self.env)
+        env = robot.GetEnv()
 
         # Create a two-point trajectory between the
         # current configuration and the goal.
         # (a straight line in joint space)
-        traj = openravepy.RaveCreateTrajectory(self.env, '')
+        traj = openravepy.RaveCreateTrajectory(env, '')
         cspec = robot.GetActiveConfigurationSpecification('linear')
         active_indices = robot.GetActiveDOFIndices()
 
@@ -181,7 +187,7 @@ class SnapPlanner(BasePlanner):
 
             # Check for collisions
             report = openravepy.CollisionReport()
-            if self.env.CheckCollision(robot, report=report):
+            if env.CheckCollision(robot, report=report):
                 raise CollisionPlanningError.FromReport(report)
             elif robot.CheckSelfCollision(report=report):
                 raise SelfCollisionPlanningError.FromReport(report)
