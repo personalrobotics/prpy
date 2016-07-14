@@ -84,6 +84,12 @@ class OMPLPlanner(BasePlanner):
               formatted_extra_params=None, **kw_args):
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
+        if kw_args and 'seed' in kw_args.keys():
+            if not ompl_args:
+                ompl_args = {}
+
+            ompl_args['seed'] = kw_args['seed']
+
         if ompl_args is not None:
             for key, value in ompl_args.iteritems():
                 extraParams += '<{k:s}>{v:s}</{k:s}>'.format(

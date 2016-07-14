@@ -105,6 +105,10 @@ class TSRPlanner(BasePlanner):
                     'Cannot handle start or trajectory-wide TSR constraints.')
         tsrchains = [t for t in tsrchains if t.sample_goal]
 
+        # if seed is provided, set seed for each tsrchain
+        if kw_args and 'seed' in kw_args:
+            map(lambda t: t.set_seed(kw_args['seed']), tsrchains)
+
         # Create an iterator that cycles through each TSR chain.
         tsr_cycler = itertools.cycle(tsrchains)
 

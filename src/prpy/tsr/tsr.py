@@ -382,6 +382,7 @@ class TSR(object):
         # Unwrap rpy to [-pi, pi]
         from prpy.util import wrap_to_interval
         Bw_sample[3:6] = wrap_to_interval(Bw_sample[3:6])
+
         return Bw_sample
 
     def sample(self, xyzrpy=NANBW):
@@ -447,6 +448,9 @@ class TSR(object):
         import yaml
         x_dict = yaml.safe_load(x, *args, **kw_args)
         return TSR.from_dict(x_dict)
+
+    def set_seed(self, seed):
+        numpy.random.seed(seed)
 
 
 class TSRChain(object):
@@ -656,3 +660,11 @@ class TSRChain(object):
         """
         _, xyzrpy_list = self.distance(trans)
         return xyzrpy_list
+
+    def set_seed(self, seed): 
+        """
+        Sets seed for each TSR
+        @param seed integer seed
+        """
+        for tsr in self.TSRs:
+            tsr.set_seed(seed)

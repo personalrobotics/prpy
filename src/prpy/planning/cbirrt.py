@@ -167,6 +167,11 @@ class CBiRRTPlanner(BasePlanner):
         """
         is_constrained = False
 
+        # if seed is provided, set seed for each tsrchain
+        # TODO: This doesn't have any effect, it will get lost in serialization.
+        if kw_args and 'seed' in kw_args:
+            map(lambda t: t.set_seed(kw_args['seed']), tsr_chains)
+
         for chain in tsr_chains:
             if chain.sample_start or chain.sample_goal:
                 kw_args.setdefault('psample', 0.1)

@@ -55,6 +55,8 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         reqdict = {}
         reqdict['method'] = method # string
         reqdict['args'] = []
+        reqdict['planner'] = str(self.planner)
+
         for arg in args:
             try:
                 reqdict['args'].append(prpy.serialization.serialize(arg))
@@ -74,9 +76,15 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         try:
             plan_fn = getattr(self.planner, method)
             traj = plan_fn(*args, **kw_args)
+
+            from prpy.util import GetTrajectoryTags
+            from prpy.planning.base import Tags
+            tags = GetTrajectoryTags(traj)
             resdict['ok'] = True
+            resdict['planner_used'] = tags[Tags.PLANNER]
             resdict['traj_first'] = list(map(float,traj.GetWaypoint(0)))
             resdict['traj_last'] = list(map(float,traj.GetWaypoint(traj.GetNumWaypoints()-1)))
+
             return traj
             
         except prpy.planning.PlanningError as ex:
@@ -99,4 +107,9 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
             yaml.safe_dump(yamldict, fp)
             fp.close()
         
+            # save filename as tag
+            if resdict['ok']:
+                from prpy.util import SetTrajectoryTags
+                from prpy.planning.base import Tags
+                SetTrajectoryTags(traj, {Tags.LOGFILE: fn}, append=True)
         

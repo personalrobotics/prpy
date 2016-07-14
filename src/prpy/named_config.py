@@ -118,3 +118,24 @@ the following format:
     """
     def get_configuration_list(self):
         return self._configs.keys()
+
+    def get_indices(self):
+        return self._indices
+
+    def get_configs(self):
+        return self._configs
+    
+    def get_groups(self):
+        return self._groups
+
+    def set_indices(self, indices):
+        self._indices = indices
+
+    def set_configs(self, configs):
+        self._configs = configs
+    
+    def set_groups(self, groups):
+        self._groups = groups
+
+
+    

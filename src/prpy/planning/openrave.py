@@ -87,6 +87,10 @@ class OpenRAVEPlanner(BasePlanner):
         params.SetGoalConfig(goals)
         params.SetExtraParameters(extraParams)
 
+        # Set seed if provided
+        if kw_args and 'seed' in kw_args.keys():
+            params.SetRandomGeneratorSeed(kw_args['seed'])
+
         traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
 
         try:
@@ -96,7 +100,6 @@ class OpenRAVEPlanner(BasePlanner):
             if (not continue_planner) or not self.setup:
                 self.planner.InitPlan(robot, params)
                 self.setup = True
-
             status = self.planner.PlanPath(traj, releasegil=True)
             from openravepy import PlannerStatus
             if status not in [PlannerStatus.HasSolution,

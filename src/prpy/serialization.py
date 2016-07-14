@@ -133,8 +133,9 @@ def serialize_kinbody(body, uri_only=False):
 
 def serialize_robot(robot, uri_only=False):
     data = {
-        'robot_state': serialize_robot_state(robot),
+        'robot_state': serialize_robot_state(robot)
     }
+
     if not uri_only:
         data.update({
             'manipulators': map(serialize_manipulator, robot.GetManipulators()),
@@ -164,6 +165,10 @@ def serialize_robot_state(body):
         for name, (get_fn, _) in ROBOT_STATE_MAP.iteritems()
     }
     data['grabbed_bodies'] = map(serialize_grabbed_info, body.GetGrabbedInfo())
+
+    if body.configurations:    
+        data['config_library'] = serialize_config_library(body.configurations)
+
     return data
 
 def serialize_link(link):
@@ -212,6 +217,32 @@ def serialize_transform(t):
         'position': list(map(float,t[0:3, 3])),
         'orientation': list(map(float,quatFromRotationMatrix(t[0:3, 0:3]))),
     }
+
+def serialize_config_library(config_library):
+    _indices = config_library.get_indices()
+    _groups = config_library.get_groups()
+    _configurations = config_library.get_configs()
+
+    import numpy 
+    # converts type numpy.int32 to int
+    indices = numpy.array(list(_indices)).tolist() 
+    groups = {}
+    configurations = dict(_configurations)
+
+    for key, item in _groups.iteritems():
+        groups[key] = item.tolist()
+
+    for key, item in _configurations.iteritems():
+        # converts type numpy.int32 to int
+        configurations[key] = numpy.array(item).tolist() 
+
+    return{
+        'indices': indices,
+        'groups': groups,
+        'configurations': configurations
+    }
+
+
 
 # Deserialization.
 def _deserialize_internal(env, data, data_type):
@@ -333,9 +364,30 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
         deserialize_kinbody_state(body, body_data['kinbody_state'])
 
         if body.IsRobot():
-            deserialize_robot_state(body, body_data['robot_state'])
-
+            deserialize_robot_state(body, body_data['robot_state'])            
+    
     return env
+
+def deserialize_robots(data, env):
+    """ For each robot in data, add configuration library"""
+    robots = env.GetRobots()
+    robot_names = [robot.GetName() for robot in robots]
+    extended_robots = []
+
+    # Deserialize the kinematic structure.
+    deserialized_bodies = []
+    for body_data in data['bodies']:
+        if body_data['name'] in robot_names:
+            deserialized_bodies.append((env.GetRobot(body_data['name']), body_data))
+
+    # Restore state. We do this in a second pass to insure that any bodies that
+    # are grabbed already exist.
+    for body, body_data in deserialized_bodies:
+        deserialize_kinbody_state(body, body_data['kinbody_state'])
+        deserialize_robot_state(body, body_data['robot_state'])    
+        extended_robots.append(body)        
+        
+    return extended_robots
 
 def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
     from openravepy import RaveCreateKinBody, RaveCreateRobot
@@ -362,7 +414,12 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
                 if robot_name != name_desired:
                     raise RuntimeError('error, or_urdf name mismatch!')
                 kinbody = env.GetRobot(robot_name)
-            
+
+                # Wraps openrave Robot with prpy.base.Robot for additional attributes              
+                from prpy.base import Robot
+                from . import bind_subclass
+                bind_subclass(kinbody, Robot)
+
         else:
             
             kinbody = env.ReadKinBodyXMLFile(data['uri'])
@@ -457,6 +514,15 @@ def deserialize_robot_state(body, data):
 
         body.Grab(grabbed_body, robot_link, robot_links_to_ignore)
 
+    if 'config_library' in data: 
+        config_library = data['config_library']
+
+        from prpy.named_config import ConfigurationLibrary
+        body.configurations = ConfigurationLibrary()
+
+        for key, (_, set_fn) in ROBOT_CONFIGLIBRARY_MAP.iteritems():
+            set_fn(body.configurations, config_library[key])
+
 def deserialize_with_map(obj, data, attribute_map):
     for key, (_, deserialize_fn) in attribute_map.iteritems():
         setattr(obj, key, deserialize_fn(data[key]))
@@ -503,6 +569,7 @@ def deserialize_transform(data):
     t = matrixFromQuat(data['orientation'])
     t[0:3, 3] = data['position']
     return t
+
 
 # Schema.
 mesh_environment = openravepy.Environment()
@@ -578,6 +645,20 @@ ROBOT_STATE_MAP = {
         lambda x: x.GetActiveManipulator().GetName(),
         lambda x, value: x.SetActiveManipulator(value),
     ),
+}
+ROBOT_CONFIGLIBRARY_MAP = {
+    'indices': (
+        lambda x: list(x.get_indices()),
+        lambda x, value: x.set_indices(set(value))
+    ),
+    'groups': (
+        lambda x: x.get_groups(),
+        lambda x, value: x.set_groups(value)
+    ),
+    'configurations': (
+        lambda x: x.get_configs(),
+        lambda x, value: x.set_configs(value)
+    )
 }
 LINK_INFO_MAP = {
     '_bIsEnabled': both_identity,
