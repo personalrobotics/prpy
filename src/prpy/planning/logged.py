@@ -12,6 +12,7 @@ import yaml
 
 import prpy.planning.base
 import prpy.serialization
+from IPython import embed
 
 
 class LoggedPlanner(prpy.planning.base.MetaPlanner):
@@ -36,7 +37,7 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         # get log file name
         stamp = time.time()
         struct = time.localtime(stamp)
-        fn = 'log-{}.{:06d}.yaml'.format(
+        fn = 'collisionlog-{}.{:06d}.yaml'.format(
             time.strftime('%Y%m%d-%H%M%S', struct),
             int(1.0e6*(stamp-math.floor(stamp))))
         
@@ -50,8 +51,11 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         
         # serialize environment
         envdict = prpy.serialization.serialize_environment(env, uri_only=True)
-        
+        stubchecker = env.GetCollisionChecker()
+        #stubchecker.SendCommand('Reset')
+
         # serialize planning request
+        '''
         reqdict = {}
         reqdict['method'] = method # string
         reqdict['args'] = []
@@ -70,33 +74,34 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         
         # get ready to serialize result
         resdict = {}
-        
+        '''
         try:
             plan_fn = getattr(self.planner, method)
             traj = plan_fn(*args, **kw_args)
+            '''
             resdict['ok'] = True
             resdict['traj_first'] = list(map(float,traj.GetWaypoint(0)))
             resdict['traj_last'] = list(map(float,traj.GetWaypoint(traj.GetNumWaypoints()-1)))
+            '''
             return traj
-            
+
         except prpy.planning.PlanningError as ex:
-            resdict['ok'] = False
-            resdict['exception'] = str(ex)
             raise
-        
+
         except:
-            resdict['ok'] = False
-            resdict['exception'] = 'unknown exception type'
             raise
-        
+
         finally:
             # create yaml dictionary to be serialized
             yamldict = {}
             yamldict['environment'] = envdict
-            yamldict['request'] = reqdict
-            yamldict['result'] = resdict
+
+            check_info = stubchecker.SendCommand('GetLogInfo')
+            check_info = check_info.strip('\n')
+            check_info_lines = check_info.split('\n')
+            yamldict['collision_log'] = check_info_lines
+
             fp = open(fn,'w')
             yaml.safe_dump(yamldict, fp)
             fp.close()
-        
-        
+            stubchecker.SendCommand('Reset')
