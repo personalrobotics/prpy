@@ -15,9 +15,10 @@ import prpy.serialization
 
 
 class LoggedPlanner(prpy.planning.base.MetaPlanner):
-    def __init__(self, planner):
+    def __init__(self, planner, outputdir=''):
         super(LoggedPlanner, self).__init__()
         self.planner = planner
+        self.outputdir = outputdir
     
     def __str__(self):
         return 'Logged({0:s})'.format(self.planner)
@@ -36,10 +37,12 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         # get log file name
         stamp = time.time()
         struct = time.localtime(stamp)
+        from os.path import isfile, join
         fn = 'log-{}.{:06d}.yaml'.format(
             time.strftime('%Y%m%d-%H%M%S', struct),
             int(1.0e6*(stamp-math.floor(stamp))))
-        
+        fn = join(self.outputdir, fn)
+
         # retrieve enviroment
         if 'robot' in kw_args:
             env = kw_args['robot'].GetEnv()
@@ -77,14 +80,16 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
             plan_fn = getattr(self.planner, method)
             traj = plan_fn(*args, **kw_args)
 
-            from prpy.util import GetTrajectoryTags
+            from prpy.util import GetTrajectoryTags, SetTrajectoryTags
             from prpy.planning.base import Tags
             tags = GetTrajectoryTags(traj)
+            SetTrajectoryTags(traj, {Tags.LOGFILE: fn}, append=True)
+
             resdict['ok'] = True
             resdict['planner_used'] = tags[Tags.PLANNER]
             resdict['traj_first'] = list(map(float,traj.GetWaypoint(0)))
             resdict['traj_last'] = list(map(float,traj.GetWaypoint(traj.GetNumWaypoints()-1)))
-
+            resdict['traj'] = traj.serialize()
             return traj
             
         except prpy.planning.PlanningError as ex:
@@ -106,10 +111,4 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
             fp = open(fn,'w')
             yaml.safe_dump(yamldict, fp)
             fp.close()
-        
-            # save filename as tag
-            if resdict['ok']:
-                from prpy.util import SetTrajectoryTags
-                from prpy.planning.base import Tags
-                SetTrajectoryTags(traj, {Tags.LOGFILE: fn}, append=True)
         
