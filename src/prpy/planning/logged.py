@@ -5,6 +5,7 @@ from __future__ import division
 import collections
 import math
 import time
+import json
 
 import openravepy
 import numpy
@@ -97,9 +98,8 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
             yamldict['environment'] = envdict
 
             check_info = stubchecker.SendCommand('GetLogInfo')
-            check_info = check_info.strip('\n')
-            check_info_lines = check_info.split('\n')
-            yamldict['collision_log'] = check_info_lines
+            
+            yamldict['collision_log'] = json.loads(check_info)
 
             fp = open(fn,'w')
             yaml.safe_dump(yamldict, fp)
