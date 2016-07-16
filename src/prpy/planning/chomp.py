@@ -91,7 +91,7 @@ class DistanceFieldManager(object):
                         if other_body == body:
                             continue
                         other_bodies.append(other_body)
-                    other_savers = [openravepy.KinBodyStateSaver(body,openravepy.KinBody.SaveParameters.LinkEnable) for body in other_bodies]
+                    other_savers = [openravepy.KinBodyStateSaver(other_body,openravepy.KinBody.SaveParameters.LinkEnable) for other_body in other_bodies]
                     with contextlib.nested(*other_savers):
                         for other_body in other_bodies:
                             other_body.Enable(False)
