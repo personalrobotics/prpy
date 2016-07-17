@@ -29,6 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import collections
+import contextlib
 import logging
 import numpy
 import openravepy
@@ -84,7 +85,18 @@ class DistanceFieldManager(object):
                         body_name, os.path.basename(cache_path)
                     )
 
-                    self.module.computedistancefield(body, cache_filename=cache_path)
+                    # Temporarily disable other bodies for distance field computation
+                    other_bodies = []
+                    for other_body in self.env.GetBodies():
+                        if other_body == body:
+                            continue
+                        other_bodies.append(other_body)
+                    other_savers = [openravepy.KinBodyStateSaver(other_body,openravepy.KinBody.SaveParameters.LinkEnable) for other_body in other_bodies]
+                    with contextlib.nested(*other_savers):
+                        for other_body in other_bodies:
+                            other_body.Enable(False)
+                        self.module.computedistancefield(body, cache_filename=cache_path)
+
                     self.cache[body_name] = current_state
                     num_recomputed += 1
                 else:
