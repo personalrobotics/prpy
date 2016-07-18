@@ -38,9 +38,9 @@ import re
 def get_filename(logfile_name, planner, method, trial, seed=None):
 
    # dump to file    
-   save_path = os.path.abspath('replay')
-   method_name = yamldict['request']['method']
-   logfile_name = filter(lambda x: 'log-' in x, re.split(r'[/]|\.yaml',args.logfile))[0]
+   save_path = os.path.abspath('replay/'+method)
+   if not os.path.isdir(save_path):
+      os.mkdir(save_path)
    filename = "replay_" + logfile_name + "_" + method + "_" + planner
    if seed:
       filename = filename + "_seed_" + str(seed) 
@@ -55,7 +55,7 @@ def get_filename(logfile_name, planner, method, trial, seed=None):
 
 parser = argparse.ArgumentParser(description='replay planning request log file')
 parser.add_argument('--logfile', required=True)
-parser.add_argument('--planner', default='cbirrt', help=('cbirrt OMPL_RRTConnect birrt snap chomp vectorfield' 
+parser.add_argument('--planner', default='cbirrt', help=('cbirrt OMPL_RRTConnect snap chomp vectorfield' 
                                                         'greedy-ik trajopt try-all'))
 parser.add_argument('--viewer', '-v', type=str, default='interactivemarker', help='The viewer to attach (none for no viewer)')
 parser.add_argument('--log', default='true', help='Log this replay.')
@@ -77,8 +77,6 @@ for pl in planner_list:
       planners.append(CBiRRTPlanner())
    elif pl == 'OMPL_RRTConnect':
       planners.append(prpy.planning.ompl.OMPLPlanner('RRTConnect'))
-   elif pl == 'birrt':
-      planners.append(prpy.planning.openrave.OpenRAVEPlanner('birrt'))
    elif pl == "snap":
       planners.append(SnapPlanner())
    elif pl == 'chomp':
@@ -177,10 +175,10 @@ for actual_planner in planners:
       # filename to save the data
       filename = get_filename(logfile_name, str(actual_planner), method_name, j, args.seed)
 
-      import os.path 
-      if os.path.isfile(filename):
-         print ("\n\nSkipping ", filename,'\n\n')
-         continue
+      # import os.path 
+      # if os.path.isfile(filename):
+      #    print ("\n\nSkipping ", filename,'\n\n')
+      #    continue
 
       try:
          with Timer() as timer:

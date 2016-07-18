@@ -69,6 +69,7 @@ class DistanceFieldManager(object):
 
                 body_name = body.GetName()
                 current_state = self.get_geometric_state(body)
+                print 'state for', body_name, 'is', current_state
                 logger.debug('Computed state for "%s": %s', body_name, current_state)
 
                 # Check if the distance field is already loaded. Clear the
@@ -128,11 +129,17 @@ class DistanceFieldManager(object):
                                          joint.GetDOFIndex() + joint.GetDOF())
                     break
 
+        def roundval(val):
+            val = float('{:.5f}'.format(v))
+            if val == 0.0:
+                val = 0.0
+            return val
+
         return DistanceFieldKey(
             kinematics_hash = body.GetKinematicsGeometryHash(),
             enabled_mask = tuple(enabled_mask),
             dof_indices = tuple(dof_indices),
-            dof_values = tuple(body.GetDOFValues(dof_indices)),
+            dof_values = tuple([roundval(v) for v in body.GetDOFValues(dof_indices)]),
         )
 
     @staticmethod
