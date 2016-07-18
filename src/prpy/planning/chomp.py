@@ -45,10 +45,11 @@ DistanceFieldKey = collections.namedtuple('DistanceFieldKey',
 
 
 class DistanceFieldManager(object):
-    def __init__(self, module):
+    def __init__(self, module, require_cache=False):
         self.module = module
         self.env = self.module.GetEnv()
         self.cache = dict()
+        self.require_cache = require_cache
 
     def sync(self, robot):
         import os.path
@@ -95,7 +96,7 @@ class DistanceFieldManager(object):
                     with contextlib.nested(*other_savers):
                         for other_body in other_bodies:
                             other_body.Enable(False)
-                        self.module.computedistancefield(body, cache_filename=cache_path)
+                        self.module.computedistancefield(body, cache_filename=cache_path, require_cache=self.require_cache)
 
                     self.cache[body_name] = current_state
                     num_recomputed += 1
@@ -152,8 +153,9 @@ class DistanceFieldManager(object):
 
 
 class CHOMPPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, require_cache=False):
         super(CHOMPPlanner, self).__init__()
+        self.require_cache = require_cache
         self.setupEnv(self.env)
 
     def setupEnv(self, env):
@@ -194,7 +196,7 @@ class CHOMPPlanner(BasePlanner):
 
         # Create a DistanceFieldManager to track which distance fields are
         # currently loaded.
-        self.distance_fields = DistanceFieldManager(self.module)
+        self.distance_fields = DistanceFieldManager(self.module, require_cache=self.require_cache)
 
     def __str__(self):
         return 'CHOMP'
