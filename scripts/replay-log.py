@@ -11,14 +11,16 @@ import math
 import numpy
 import openravepy
 import yaml
+import json
 
 import prpy.planning
 import prpy.serialization
 
+
+
 parser = argparse.ArgumentParser(description='replay planning request log file')
 parser.add_argument('--logfile', required=True)
 parser.add_argument('--planner', default='cbirrt', help='cbirrt OMPL_RRTConnect birrt')
-parser.add_argument('--viewer', '-v', type=str, default='interactivemarker', help='The viewer to attach (none for no viewer)')
 args = parser.parse_args()
 
 # start openrave
@@ -34,12 +36,20 @@ if args.planner == 'OMPL_RRTConnect':
    planner = prpy.planning.ompl.OMPLPlanner('RRTConnect')
 if args.planner == 'birrt':
    planner = prpy.planning.openrave.OpenRAVEPlanner('birrt')
+if args.planner == 'snap':
+   planner = prpy.planning.SnapPlanner()
+if args.planner == 'vectorfield':
+   planner = prpy.planning.VectorFieldPlanner()
 
 # read log file
 yamldict = yaml.safe_load(open(args.logfile))
 
 # deserialize environment
 prpy.serialization.deserialize_environment(yamldict['environment'], env=env)
+
+#Set collision checker
+stubchecker = openravepy.RaveCreateCollisionChecker(env,'stub_checker')
+env.SetCollisionChecker(stubchecker)
 
 # load planning request
 try:
@@ -71,14 +81,17 @@ if not ikmodel.load():
 print('calling planning method ...')
 traj = method(*method_args, **method_kwargs)
 
-# retime/view resulting trajectory
-if args.viewer != 'none':
-   env.SetViewer(args.viewer)
-openravepy.planningutils.RetimeActiveDOFTrajectory(traj, robot)
-try:
-   while traj is not None:
-      raw_input('Press [Enter] to run the trajectory, [Ctrl]+[C] to quit ...')
-      with env:
-         robot.GetController().SetPath(traj)
-except KeyboardInterrupt:
-   print()
+# Log the collision checks
+
+check_info = stubchecker.SendCommand('GetLogInfo')
+check_info_dict = json.loads(check_info)
+
+if 'collision_log' in yamldict.keys():
+   yamldict['collision_log'][args.planner] = check_info_dict
+else:
+   yamldict['collision_log'] = {args.planner : check_info_dict}
+
+with open(args.logfile,'w') as f_out:
+   yaml.safe_dump(yamldict,f_out)
+
+stubchecker.SendCommand('Reset')
