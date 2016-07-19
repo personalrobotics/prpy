@@ -158,7 +158,7 @@ class Robot(openravepy.Robot):
         self.smoother = parent.smoother
 
         self.robot_name = parent.robot_name
-        self.tsrlibrary = parent.tsrlibrary
+        self.tsrlibrary = parent.tsrlibrary.clone(self)
         self.configurations = parent.configurations
 
         self.controllers = []
