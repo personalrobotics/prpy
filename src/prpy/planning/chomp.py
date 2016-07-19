@@ -132,7 +132,8 @@ class DistanceFieldManager(object):
             kinematics_hash = body.GetKinematicsGeometryHash(),
             enabled_mask = tuple(enabled_mask),
             dof_indices = tuple(dof_indices),
-            dof_values = tuple(body.GetDOFValues(dof_indices)),
+            # adding zero does -0.0 -> 0.0
+            dof_values = tuple([round(v,5)+0 for v in body.GetDOFValues(dof_indices)]),
         )
 
     @staticmethod
