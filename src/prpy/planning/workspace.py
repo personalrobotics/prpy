@@ -152,13 +152,21 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return qtraj configuration space path
         """
-        from .exceptions import (TimeoutPlanningError,
-                                 CollisionPlanningError,
-                                 SelfCollisionPlanningError)
-        from openravepy import CollisionReport
+        from .exceptions import (
+            TimeoutPlanningError,
+            CollisionPlanningError,
+            SelfCollisionPlanningError
+        )
+        from openravepy import (
+            CollisionOptions,
+            CollisionOptionsStateSaver,
+            CollisionReport
+        )
+
         p = openravepy.KinBody.SaveParameters
 
-        with robot:
+        with robot, CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                               CollisionOptions.ActiveDOFs):
             manip = robot.GetActiveManipulator()
             robot.SetActiveDOFs(manip.GetArmIndices())
 
