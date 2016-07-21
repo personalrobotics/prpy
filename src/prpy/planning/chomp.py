@@ -235,6 +235,10 @@ class CHOMPPlanner(BasePlanner):
         except Exception as e:
             raise PlanningError(str(e))
 
+        # Strip the extra groups added by CHOMP.
+        cspec = robot.GetActiveConfigurationSpecification('linear')
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
+
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
 
@@ -258,6 +262,10 @@ class CHOMPPlanner(BasePlanner):
                                             releasegil=True, **kw_args)
         except Exception as e:
             raise PlanningError(str(e))
+
+        # Strip the extra groups added by CHOMP.
+        cspec = robot.GetActiveConfigurationSpecification('linear')
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
 
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
         return traj
