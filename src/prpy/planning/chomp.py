@@ -179,13 +179,15 @@ class CHOMPPlanner(BasePlanner):
             from orcdchomp import orcdchomp
             module = openravepy.RaveCreateModule(self.env, 'orcdchomp')
         except ImportError:
-            raise UnsupportedPlanningError('Unable to import orcdchomp.')
+            raise UnsupportedPlanningError(
+                'Unable to import "orcdchomp". Is or_cdchomp installed?')
         except openravepy.openrave_exception as e:
             raise UnsupportedPlanningError(
-                'Unable to create orcdchomp module: ' + str(e))
+                'Failed loading "orcdchomp" module: ' + str(e))
 
         if module is None:
-            raise UnsupportedPlanningError('Failed loading CHOMP module.')
+            raise UnsupportedPlanningError(
+                'Failed loading "orcdchomp" module. Is or_cdchomp installed?')
 
         # This is a hack to prevent leaking memory.
         class CHOMPBindings(object):
@@ -209,7 +211,8 @@ class CHOMPPlanner(BasePlanner):
 
         # Create a DistanceFieldManager to track which distance fields are
         # currently loaded.
-        self.distance_fields = DistanceFieldManager(self.module, require_cache=self.require_cache)
+        self.distance_fields = DistanceFieldManager(
+            self.module, require_cache=self.require_cache)
 
     def __str__(self):
         return 'CHOMP'
