@@ -14,225 +14,225 @@ import yaml
 from or_trajopt import TrajoptPlanner
 import prpy.planning
 import prpy.serialization
+import prpy_lemur.lemur
+import prpy_lemur.roadmaps
+
 from prpy.planning import (
-   FirstSupported,
-   Sequence,
-   PlanningError,
-   UnsupportedPlanningError,
-   TSRPlanner,
-   NamedPlanner,
-   CBiRRTPlanner,
-   CHOMPPlanner,
-   GreedyIKPlanner,
-   IKPlanner,
-   SBPLPlanner,
-   SnapPlanner,
-   VectorFieldPlanner
+    FirstSupported,
+    Sequence,
+    PlanningError,
+    UnsupportedPlanningError,
+    TSRPlanner,
+    NamedPlanner,
+    CBiRRTPlanner,
+    CHOMPPlanner,
+    GreedyIKPlanner,
+    IKPlanner,
+    SnapPlanner,
+    VectorFieldPlanner
 )
+
+import time 
 
 
 import os.path
+from os.path import join, isfile
+from os import listdir
 import re
 
+def get_filename(logfile, planner, method, outputdir, trial, seed=None):
 
-def get_filename(logfile_name, planner, method, trial, seed=None):
+    logfile = filter(lambda x: 'log-' in x, re.split(r'[/]|\.yaml',logfile))[0]
+    savedir = os.path.join(outputdir, method, logfile, planner)
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
 
-   # dump to file    
-   save_path = os.path.abspath('replay/'+method)
-   if not os.path.isdir(save_path):
-      os.mkdir(save_path)
-   filename = "replay_" + logfile_name + "_" + method + "_" + planner
-   if seed:
-      filename = filename + "_seed_" + str(seed) 
-   if trial > 1:
-      filename = filename + "_trial_" + str(j+1) 
-   
-   filename = filename + ".yaml"
-   completePath = os.path.join(save_path, filename)
-   return completePath
+    filename = '_'.join(str(x) for x in ['replay', logfile, method, planner, 'trial', trial])
+    if seed is not None:
+        filename += '_seed_'+str(seed)
+    filename += '.yaml'
 
+    completePath = os.path.join(savedir, filename)
+    return completePath
 
 
 parser = argparse.ArgumentParser(description='replay planning request log file')
-parser.add_argument('--logfile', required=True)
-parser.add_argument('--planner', default='cbirrt', help=('cbirrt OMPL_RRTConnect snap chomp vectorfield' 
-                                                        'greedy-ik trajopt try-all'))
-parser.add_argument('--viewer', '-v', type=str, default='interactivemarker', help='The viewer to attach (none for no viewer)')
-parser.add_argument('--log', default='true', help='Log this replay.')
-parser.add_argument('--seed', type=int, default=None, help='Seed for randomized planners.')
-parser.add_argument('--num-trials', type=int, default=1, help='Number of trials per planner. Use only for cbirrt')
+parser.add_argument('--logdir', required=True)
+parser.add_argument('--planner', required=True, help=('cbirrt OMPL_RRTConnect snap chomp vectorfield' 
+                                                        ' greedy-ik trajopt lemur cachedlemur'))
+parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
 args = parser.parse_args()
 
-# start openrave
-openravepy.RaveInitialize(True, level=openravepy.DebugLevel.Info)
-atexit.register(openravepy.RaveDestroy)
-env = openravepy.Environment()
-atexit.register(env.Destroy)
-
 planner_list = args.planner.split(' ')
+randomized = [x.lower() for x in ['cbirrt', 'OMPL RRTConnect', 'CachedLemur', 'Lemur']]
 
 planners = []
 for pl in planner_list: 
-   if pl == 'cbirrt':
-      planners.append(CBiRRTPlanner())
-   elif pl == 'OMPL_RRTConnect':
-      planners.append(prpy.planning.ompl.OMPLPlanner('RRTConnect'))
-   elif pl == "snap":
-      planners.append(SnapPlanner())
-   elif pl == 'chomp':
-      planners.append(CHOMPPlanner())
-   elif pl == 'vectorfield':
-      planners.append(VectorFieldPlanner())
-   elif pl == 'greedy-ik':
-      planners.append(GreedyIKPlanner())
-   elif pl == 'trajopt':
-      planners.append(TrajoptPlanner())
-   elif pl == 'try-all':
-      planners = [
-              CBiRRTPlanner(),
-              prpy.planning.ompl.OMPLPlanner('RRTConnect'),
-              SnapPlanner(),
-              CHOMPPlanner(),
-              VectorFieldPlanner(),
-              GreedyIKPlanner(),
-              TrajoptPlanner()
-              ]
-      break
-   else:
+    if pl == 'cbirrt':
+        planners.append(CBiRRTPlanner())
+    elif pl == 'OMPL_RRTConnect':
+        planners.append(prpy.planning.ompl.OMPLPlanner('RRTConnect'))
+    elif pl == "snap":
+        planners.append(SnapPlanner())
+    elif pl == 'chomp':
+        planners.append(CHOMPPlanner())
+    elif pl == 'vectorfield':
+        planners.append(VectorFieldPlanner())
+    elif pl == 'greedy-ik':
+        planners.append(GreedyIKPlanner())
+    elif pl == 'trajopt':
+        planners.append(TrajoptPlanner())
+    elif pl == 'CachedLemur':
+        for i in range(10):
+            planner = prpy_lemur.lemur.LEMURPlanner(
+                roadmap=prpy_lemur.roadmaps.CachedHaltonOffDens(
+                    is_cache_required=True, num_per_batch=10000,
+                    gamma_factor=1.0, scaling='loglog_n', seed=i))
+            setattr(planner, 'seed', i)
+            setattr(planner, 'name', 'CachedLemur')
+            planners.append(planner)
+
+    elif pl == 'Lemur':
+        for i in range(10):
+            planner = prpy_lemur.lemur.LEMURPlanner(
+                roadmap=prpy_lemur.roadmaps.HaltonOffDens(
+                    num_per_batch=10000, gamma_factor=1.0, scaling='loglog_n', seed=i))
+            setattr(planner, 'seed', i)
+            setattr(planner, 'name', 'Lemur')
+            planners.append(planner)
+    else:
       raise ValueError("Unrecognized planner")
 
-logger = True if args.log == 'true' else False 
+logdir = args.logdir
+logfiles = []
+for dirpath, dirnames, filenames in os.walk(logdir):
+    subdirs = [os.path.join(dirpath, dirname) for dirname in dirnames]
+    for subdir in subdirs:
+        print (subdir)
+        logfiles.extend([join(subdir, f) for f in listdir(subdir) if isfile(join(subdir, f)) and f.endswith('.yaml')])
+
+logfiles.extend([join(logdir, f) for f in listdir(logdir) if isfile(join(logdir, f)) and f.endswith('.yaml')])
 
 # read log file
-yamldict = yaml.safe_load(open(args.logfile))
+for logfile in logfiles:
 
-# deserialize environment
-prpy.serialization.deserialize_environment(yamldict['environment'], env=env)
-robots = prpy.serialization.deserialize_robots(yamldict['environment'], env)
+    print ("Reading ", logfile)
+    start_logfile_at = time.time()
 
-for actual_planner in planners:
+    yamldict = yaml.safe_load(open(logfile))
+    method_name = yamldict['request']['method']
+    if method_name.lower() == 'plantotsr':
+        print ("Skipping PlanToTSR...")
+        continue
 
-   planner = FirstSupported(
-      Sequence(actual_planner,
-               TSRPlanner(delegate_planner=actual_planner)),
-      # Special purpose meta-planner.
-      NamedPlanner(delegate_planner=actual_planner)
-      )
+    for actual_planner in planners:
 
-   # load planning request
-   try:
-      method = getattr(planner, yamldict['request']['method'])
-   except (AttributeError, UnsupportedPlanningError) as e:
-      print ('{} does not support planning method {}!'.format(planner, yamldict['request']['method']))
-      continue
+        planner = FirstSupported(
+          Sequence(actual_planner,
+                    TSRPlanner(delegate_planner=actual_planner)),
+                    NamedPlanner(delegate_planner=actual_planner))
 
+        # load planning request
+        try:
+            method = getattr(planner, yamldict['request']['method'])
+        except (AttributeError, UnsupportedPlanningError) as e:
+            print ('{} does not support planning method {}!'.format(planner, yamldict['request']['method']))
+            continue
 
-   method_args = []
-   for method_arg in yamldict['request']['args']:
-      method_args.append(prpy.serialization.deserialize(env, method_arg))
-   method_kwargs = {}
-   for key,value in yamldict['request']['kw_args'].items():
-      method_kwargs[key] = prpy.serialization.deserialize(env, value)
+        # deserialize environment
+        import herbpy
+        env, robot = herbpy.initialize(sim=True)
+        prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
 
-   if args.seed:
-      method_kwargs['seed'] = args.seed
+        method_args = []
+        for method_arg in yamldict['request']['args']:
+            method_args.append(prpy.serialization.deserialize(env, method_arg))
+        method_kwargs = {}
+        for key,value in yamldict['request']['kw_args'].items():
+            method_kwargs[key] = prpy.serialization.deserialize(env, value)
 
-   # attempt to retrieve robot
-   if 'robot' in method_kwargs:
-      robot = method_kwargs['robot']
-   elif len(method_args) > 0:
-      robot = method_args[0]
-   else:
-      raise RuntimeError('could not retrieve robot!')
+        # remove robot and use properly deserialized robot 
+        if robot in method_args:
+            method_args.remove(robot)
+        if 'robot' in method_kwargs:
+            method_kwargs.pop('robot')
+        if 'ranker' in method_kwargs:
+            method_kwargs.pop('ranker')
 
-   robot = robots[0]
-   # remove robot and use properly deserialized robot 
-   if robot in method_args:
-      method_args.remove(robot)
-   if 'robot' in method_kwargs:
-      method_kwargs.pop('robot')
-   if 'ranker' in method_kwargs:
-      method_kwargs.pop('ranker')
+        # load ik solver for robot in case it's needed
+        ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
+            iktype=openravepy.IkParameterizationType.Transform6D)
+        if not ikmodel.load():
+            ikmodel.autogenerate()
 
-   # load ik solver for robot in case it's needed
-   ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
-      iktype=openravepy.IkParameterizationType.Transform6D)
-   if not ikmodel.load():
-      ikmodel.autogenerate()
+        # call planning method itself ...
+        print('calling planning method {} ...'.format(actual_planner))
+        from prpy.util import Timer, SetTrajectoryTags
+        from prpy.planning.base import Tags
+        
+        error_msg = None
+        traj = None
 
-   # call planning method itself ...
-   print('calling planning method {} ...'.format(actual_planner))
-   from prpy.util import Timer, SetTrajectoryTags
-   from prpy.planning.base import Tags
-   
-   error_msg = None
-   traj = None
-   no_attribute = False
-   logfile_name = filter(lambda x: 'log-' in x, re.split(r'[/]|\.yaml',args.logfile))[0]
-   method_name = yamldict['request']['method']
+        num_trials = 5 if str(actual_planner).lower() in randomized else 1
+        for j in range(num_trials):
+            print (actual_planner, 'trial ', j, ' seed ',  getattr(actual_planner, 'seed', None))
 
-   for j in range(args.num_trials):
-      # filename to save the data
-      filename = get_filename(logfile_name, str(actual_planner), method_name, j, args.seed)
+            filename = get_filename(logfile, getattr(actual_planner, 'name', str(actual_planner)), method_name, 
+                                    args.outdir, j, getattr(actual_planner, 'seed', None))
 
-      # import os.path 
-      # if os.path.isfile(filename):
-      #    print ("\n\nSkipping ", filename,'\n\n')
-      #    continue
+            start_time = time.time()
+            try:
+                traj = method(robot, *method_args, **method_kwargs)    
+            except PlanningError as e: 
+                error_msg = str(e)
+                print (error_msg)
+            except AttributeError as e:
+                break;
+            # except:
+            #     import sys
+            #     error_msg = sys.exc_info()[0]
+            #     print (error_msg)
+            finally:
+                planning_time = time.time() - start_time
+                # SetTrajectoryTags(traj, {Tags.PLAN_TIME: planning_time}, append=True)
 
-      try:
-         with Timer() as timer:
-            traj = method(robot, *method_args, **method_kwargs)
-         planning_time = timer.get_duration()
-         SetTrajectoryTags(traj, {Tags.PLAN_TIME: timer.get_duration()}, append=True)
-         print ("Timer: ", timer.get_duration())
-      except PlanningError as e: 
-         error_msg = str(e)
-         print (error_msg)
-      except AttributeError:
-         no_attribute = True
-         print ('{} does not support planning method {}!'.format(actual_planner, yamldict['request']['method']))
-         break;
-      except:
-         import sys
-         error_msg = sys.exc_info()[0]
-         print (error_msg)
-
-      if logger and not no_attribute: 
-         reqdict = {}
-         resdict = {}
-         reqdict['method'] = yamldict['request']['method']
-         if args.seed:
-            reqdict['seed'] = method_kwargs['seed']
-         reqdict['planner_name'] = str(planner)
-         resdict['ok'] = True if traj else False
-         if traj: 
+            
+            reqdict = {}
+            resdict = {}
+            reqdict['method'] = yamldict['request']['method'] 
+            reqdict['seed'] = getattr(actual_planner, 'seed', None)
+            reqdict['planner_name'] = str(planner)
+            resdict['ok'] = True if traj else False
             resdict['planning_time'] = planning_time
-            resdict['traj'] = traj.serialize()
-         if error_msg:
-            resdict['error'] = str(error_msg)
-         yamldict_res = {}
-         yamldict_res['environment'] = yamldict['environment']
-         yamldict_res['request'] = reqdict
-         yamldict_res['result'] = resdict
+            if traj: 
+                resdict['traj'] = traj.serialize()
+            if error_msg:
+                resdict['error'] = str(error_msg)
+                
+            yamldict_res = {}
+            yamldict_res['environment'] = yamldict['environment']
+            yamldict_res['request'] = reqdict
+            yamldict_res['result'] = resdict
 
+            ok = True if traj else False
 
-         with open(filename,'w') as fp:
-            yaml.safe_dump(yamldict_res, fp)
-            print ('\n{} written\n'.format(filename))
+            with open(filename,'w') as fp:
+                yaml.safe_dump(yamldict_res, fp)
+                print ('\n{} written\n'.format(filename))
 
-   # retime/view resulting trajectory
-   # if args.viewer != 'none':
-   #    env.SetViewer(args.viewer)
-   # if traj is not None: 
-   #    openravepy.planningutils.RetimeActiveDOFTrajectory(traj, robot)
+            print ("Planning time: ", planning_time)
 
-   # try:
-   #    response = raw_input('Press [Enter] to continue to the next planner, [Ctrl]+[C] to quit ...')
-   #    while traj is not None:
-   #       with env:
-   #          robot.GetController().SetPath(traj)
-   # except KeyboardInterrupt:
-   #    print ("Exiting ...")
-      
+            with open('replay-completed-'+str(actual_planner)+'.log', 'a') as fp:
+                trial_info = ' '.join(str(x) for x in [logfile, str(actual_planner), method_name, 'trial', j, ok])
+                if getattr(actual_planner, 'seed', None) is not None:
+                    trial_info += ' seed ' + str(getattr(actual_planner, 'seed', None))
+                trial_info += ' ' + str(planning_time)
+                fp.write(trial_info+"\n")
 
+    logfile_duration = time.time() - start_logfile_at
+    # with open('replay-completed.log', 'a') as fp:
+    #     fp.write(logfile+" "  + str(logfile_duration) +"\n")
+
+    print ("Took", logfile_duration, "s to finish ", logfile )
+
+    
