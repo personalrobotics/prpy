@@ -36,6 +36,7 @@ from prpy.planning.base import (
     ClonedPlanningMethod,
     Tags
 )
+from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 
 class SnapPlanner(BasePlanner):
@@ -173,18 +174,20 @@ class SnapPlanner(BasePlanner):
                                             norm_order=2,
                                             sampling_func=vdc)
 
-        # Run constraint checks at DOF resolution:
-        for t, q in checks:
-            # Set the joint positions
-            # Note: the planner is using a cloned 'robot' object
-            robot.SetActiveDOFValues(q)
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+            # Run constraint checks at DOF resolution:
+            for t, q in checks:
+                # Set the joint positions
+                # Note: the planner is using a cloned 'robot' object
+                robot.SetActiveDOFValues(q)
 
-            # Check for collisions
-            report = openravepy.CollisionReport()
-            if self.env.CheckCollision(robot, report=report):
-                raise CollisionPlanningError.FromReport(report)
-            elif robot.CheckSelfCollision(report=report):
-                raise SelfCollisionPlanningError.FromReport(report)
+                # Check for collisions
+                report = openravepy.CollisionReport()
+                if self.env.CheckCollision(robot, report=report):
+                    raise CollisionPlanningError.FromReport(report)
+                elif robot.CheckSelfCollision(report=report):
+                    raise SelfCollisionPlanningError.FromReport(report)
 
         # Tag the return trajectory as smooth (in joint space).
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
