@@ -33,10 +33,15 @@ import contextlib
 import logging
 import numpy
 import openravepy
-from ..util import SetTrajectoryTags
+from ..util import SetTrajectoryTags, GetLinearCollisionCheckPts
+from .exceptions import (
+    CollisionPlanningError,
+    SelfCollisionPlanningError
+)
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 from openravepy import CollisionOptions, CollisionOptionsStateSaver
+from prpy.util import VanDerCorputSampleGenerator, SampleTimeGenerator
 import prpy.tsr
 
 SaveParameters = openravepy.KinBody.SaveParameters.LinkEnable
@@ -227,24 +232,12 @@ class CHOMPPlanner(BasePlanner):
             cspec.InsertDeltaTime(waypoint, .1)
             traj.Insert(i, waypoint, True)
         
-        try:
-            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                            CollisionOptions.ActiveDOFs):
-                traj = self.module.runchomp(robot=robot, starttraj=traj,
-                    lambda_=lambda_, n_iter=n_iter, **kw_args)
-        except Exception as e:
-            raise PlanningError(str(e))
-
-        # Strip the extra groups added by CHOMP.
-        cspec = robot.GetActiveConfigurationSpecification('linear')
-        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
-
-        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
-        return traj
+        return self._Plan(robot=robot, starttraj=traj, lambda_=lambda_,
+            n_iter=n_iter, **kw_args)
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15,
-                            **kw_args):
+                            **kwargs):
         """
         Plan to a single configuration with single-goal CHOMP.
         @param robot
@@ -254,18 +247,39 @@ class CHOMPPlanner(BasePlanner):
         """
         self.distance_fields.sync(robot)
 
+        return self._Plan(robot=robot, adofgoal=goal, lambda_=lambda_,
+            n_iter=n_iter, **kwargs)
+
+    def _Plan(self, robot, sampling_func=VanDerCorputSampleGenerator, **kwargs):
         try:
-            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                            CollisionOptions.ActiveDOFs):
-                traj = self.module.runchomp(robot=robot, adofgoal=goal,
-                                            lambda_=lambda_, n_iter=n_iter,
-                                            releasegil=True, **kw_args)
+            # Disable collision checking since we will perform them below.
+            traj = self.module.runchomp(robot=robot, no_collision_check=True,
+                    releasegil=True, **kwargs)
         except Exception as e:
             raise PlanningError(str(e))
 
-        # Strip the extra groups added by CHOMP.
+        # Strip the extra groups added by CHOMP and change the trajectory to be
+        # linearly interpolated, as required by GetLinearCollisionCheckPts.
         cspec = robot.GetActiveConfigurationSpecification('linear')
         openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
 
+        # Collision check the trajectory at DOF resolution. We do this in
+        # Python, instead of using CHOMP's native support for this, so we have
+        # access to the CollisionReport object.
+        checks = GetLinearCollisionCheckPts(robot, traj, norm_order=2,
+            sampling_func=sampling_func)
+
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+            for t, q in checks:
+                robot.SetActiveDOFValues(q)
+
+                report = openravepy.CollisionReport()
+                if self.env.CheckCollision(robot, report=report):
+                    raise CollisionPlanningError.FromReport(report)
+                elif robot.CheckSelfCollision(report=report):
+                    raise SelfCollisionPlanningError.FromReport(report)
+
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
+
         return traj
