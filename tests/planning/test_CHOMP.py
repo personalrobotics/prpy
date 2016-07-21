@@ -171,9 +171,7 @@ class DistanceFieldManagerTest(TestCase):
 
 class CHOMPPlannerTest(BasePlannerTest,
                        PlanToConfigurationTest,
-                       PlanToConfigurationCompleteTest,
-                       # TODO: This should be possible to implement in CHOMP.
-                       #PlanToConfigurationTestCollisionTest,
+                       PlanToConfigurationTestCollisionTest,
                        PlanToConfigurationStraightLineTest,
                        TestCase):
     planner_factory = CHOMPPlanner
