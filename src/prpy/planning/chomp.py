@@ -33,10 +33,18 @@ import contextlib
 import logging
 import numpy
 import openravepy
-from ..util import SetTrajectoryTags
+from ..util import SetTrajectoryTags, GetLinearCollisionCheckPts
+from .exceptions import (
+    CollisionPlanningError,
+    SelfCollisionPlanningError
+)
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
+from openravepy import CollisionOptions, CollisionOptionsStateSaver
+from prpy.util import VanDerCorputSampleGenerator, SampleTimeGenerator
 import prpy.tsr
+
+SaveParameters = openravepy.KinBody.SaveParameters.LinkEnable
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +77,6 @@ class DistanceFieldManager(object):
 
                 body_name = body.GetName()
                 current_state = self.get_geometric_state(body)
-                print 'state for', body_name, 'is', current_state
                 logger.debug('Computed state for "%s": %s', body_name, current_state)
 
                 # Check if the distance field is already loaded. Clear the
@@ -93,7 +100,11 @@ class DistanceFieldManager(object):
                         if other_body == body:
                             continue
                         other_bodies.append(other_body)
-                    other_savers = [openravepy.KinBodyStateSaver(other_body,openravepy.KinBody.SaveParameters.LinkEnable) for other_body in other_bodies]
+
+                    other_savers = [
+                        other_body.CreateKinBodyStateSaver(SaveParameters.LinkEnable)
+                        for other_body in other_bodies]
+
                     with contextlib.nested(*other_savers):
                         for other_body in other_bodies:
                             other_body.Enable(False)
@@ -129,17 +140,12 @@ class DistanceFieldManager(object):
                                          joint.GetDOFIndex() + joint.GetDOF())
                     break
 
-        def roundval(val):
-            val = float('{:.5f}'.format(v))
-            if val == 0.0:
-                val = 0.0
-            return val
-
         return DistanceFieldKey(
             kinematics_hash = body.GetKinematicsGeometryHash(),
             enabled_mask = tuple(enabled_mask),
             dof_indices = tuple(dof_indices),
-            dof_values = tuple([roundval(v) for v in body.GetDOFValues(dof_indices)]),
+            # adding zero does -0.0 -> 0.0
+            dof_values = tuple([round(v,5)+0 for v in body.GetDOFValues(dof_indices)]),
         )
 
     @staticmethod
@@ -173,13 +179,15 @@ class CHOMPPlanner(BasePlanner):
             from orcdchomp import orcdchomp
             module = openravepy.RaveCreateModule(self.env, 'orcdchomp')
         except ImportError:
-            raise UnsupportedPlanningError('Unable to import orcdchomp.')
+            raise UnsupportedPlanningError(
+                'Unable to import "orcdchomp". Is or_cdchomp installed?')
         except openravepy.openrave_exception as e:
             raise UnsupportedPlanningError(
-                'Unable to create orcdchomp module: ' + str(e))
+                'Failed loading "orcdchomp" module: ' + str(e))
 
         if module is None:
-            raise UnsupportedPlanningError('Failed loading CHOMP module.')
+            raise UnsupportedPlanningError(
+                'Failed loading "orcdchomp" module. Is or_cdchomp installed?')
 
         # This is a hack to prevent leaking memory.
         class CHOMPBindings(object):
@@ -203,7 +211,8 @@ class CHOMPPlanner(BasePlanner):
 
         # Create a DistanceFieldManager to track which distance fields are
         # currently loaded.
-        self.distance_fields = DistanceFieldManager(self.module, require_cache=self.require_cache)
+        self.distance_fields = DistanceFieldManager(
+            self.module, require_cache=self.require_cache)
 
     def __str__(self):
         return 'CHOMP'
@@ -226,18 +235,12 @@ class CHOMPPlanner(BasePlanner):
             cspec.InsertDeltaTime(waypoint, .1)
             traj.Insert(i, waypoint, True)
         
-        try:
-            traj = self.module.runchomp(robot=robot, starttraj=traj,
-                lambda_=lambda_, n_iter=n_iter, **kw_args)
-        except Exception as e:
-            raise PlanningError(str(e))
-
-        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
-        return traj
+        return self._Plan(robot=robot, starttraj=traj, lambda_=lambda_,
+            n_iter=n_iter, **kw_args)
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, lambda_=100.0, n_iter=15,
-                            **kw_args):
+                            **kwargs):
         """
         Plan to a single configuration with single-goal CHOMP.
         @param robot
@@ -247,104 +250,39 @@ class CHOMPPlanner(BasePlanner):
         """
         self.distance_fields.sync(robot)
 
+        return self._Plan(robot=robot, adofgoal=goal, lambda_=lambda_,
+            n_iter=n_iter, **kwargs)
+
+    def _Plan(self, robot, sampling_func=VanDerCorputSampleGenerator, **kwargs):
         try:
-            traj = self.module.runchomp(robot=robot, adofgoal=goal,
-                                        lambda_=lambda_, n_iter=n_iter,
-                                        releasegil=True, **kw_args)
+            # Disable collision checking since we will perform them below.
+            traj = self.module.runchomp(robot=robot, no_collision_check=True,
+                    releasegil=True, **kwargs)
         except Exception as e:
             raise PlanningError(str(e))
 
-        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
-        return traj
+        # Strip the extra groups added by CHOMP and change the trajectory to be
+        # linearly interpolated, as required by GetLinearCollisionCheckPts.
+        cspec = robot.GetActiveConfigurationSpecification('linear')
+        openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
 
-    @ClonedPlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, lambda_=100.0,
-                              n_iter=100, goal_tolerance=0.01, **kw_args):
-        """
-        Plan to a desired end-effector pose using GSCHOMP
-        @param robot
-        @param goal_pose desired end-effector pose
-        @param lambda_ step size
-        @param n_iter number of iterations
-        @param goal_tolerance tolerance in meters
-        @return traj
-        """
-        self.distance_fields.sync(robot)
+        # Collision check the trajectory at DOF resolution. We do this in
+        # Python, instead of using CHOMP's native support for this, so we have
+        # access to the CollisionReport object.
+        checks = GetLinearCollisionCheckPts(robot, traj, norm_order=2,
+            sampling_func=sampling_func)
 
-        # CHOMP only supports start sets. Instead, we plan backwards from the
-        # goal TSR to the starting configuration. Afterwards, we reverse the
-        # trajectory.
-        manipulator_index = robot.GetActiveManipulatorIndex()
-        goal_tsr = prpy.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
-        start_config = robot.GetActiveDOFValues()
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+            for t, q in checks:
+                robot.SetActiveDOFValues(q)
 
-        try:
-            traj = self.module.runchomp(
-                robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
-                lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
-                releasegil=True, **kw_args
-            )
-            traj = openravepy.planningutils.ReverseTrajectory(traj)
-        except RuntimeError as e:
-            raise PlanningError(str(e))
-        except openravepy.openrave_exception as e:
-            raise PlanningError(str(e))
-
-        # Verify that CHOMP didn't converge to the wrong goal. This is a
-        # workaround for a bug in GSCHOMP where the constraint projection
-        # fails because of joint limits.
-        config_spec = traj.GetConfigurationSpecification()
-        last_waypoint = traj.GetWaypoint(traj.GetNumWaypoints() - 1)
-        final_config = config_spec.ExtractJointValues(
-                last_waypoint, robot, robot.GetActiveDOFIndices())
-        robot.SetActiveDOFValues(final_config)
-        final_pose = robot.GetActiveManipulator().GetEndEffectorTransform()
-
-        # TODO: Also check the orientation.
-        goal_distance = numpy.linalg.norm(final_pose[0:3, 3]
-                                         - goal_pose[0:3, 3])
-        if goal_distance > goal_tolerance:
-            raise PlanningError(
-                'CHOMP deviated from the goal pose by {0:f} meters.'.format(
-                    goal_distance))
+                report = openravepy.CollisionReport()
+                if self.env.CheckCollision(robot, report=report):
+                    raise CollisionPlanningError.FromReport(report)
+                elif robot.CheckSelfCollision(report=report):
+                    raise SelfCollisionPlanningError.FromReport(report)
 
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
+
         return traj
-
-    # JK - Disabling. This is not working reliably.
-    '''
-    @ClonedPlanningMethod
-    def PlanToTSR(self, robot, tsrchains, lambda_=100.0, n_iter=100,
-                  goal_tolerance=0.01, **kw_args):
-        """
-        Plan to a goal TSR.
-        @param robot
-        @param tsrchains A TSR chain with a single goal tsr
-        @return traj
-        """
-        self.distance_fields.sync(robot)
-
-        manipulator_index = robot.GetActiveManipulatorIndex()
-        start_config = robot.GetActiveDOFValues()
-        
-        if len(tsrchains) != 1:
-            raise UnsupportedPlanningError('CHOMP')
-        
-        tsrchain = tsrchains[0]
-        if not tsrchain.sample_goal or len(tsrchain.TSRs) > 1:
-            raise UnsupportedPlanningError(
-                'CHOMP only supports TSR chains that contain a single goal'
-                ' TSR.'
-            )
-        
-        try:
-            goal_tsr = tsrchain.TSRs[0]
-            traj = self.module.runchomp(
-                robot=robot, adofgoal=start_config, start_tsr=goal_tsr,
-                lambda_=lambda_, n_iter=n_iter, goal_tolerance=goal_tolerance,
-                releasegil=True, **kw_args
-            )
-            return openravepy.planningutils.ReverseTrajectory(traj)
-        except RuntimeError as e:
-            raise PlanningError(str(e))
-    '''
