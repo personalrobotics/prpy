@@ -228,8 +228,10 @@ class CHOMPPlanner(BasePlanner):
             traj.Insert(i, waypoint, True)
         
         try:
-            traj = self.module.runchomp(robot=robot, starttraj=traj,
-                lambda_=lambda_, n_iter=n_iter, **kw_args)
+            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                            CollisionOptions.ActiveDOFs):
+                traj = self.module.runchomp(robot=robot, starttraj=traj,
+                    lambda_=lambda_, n_iter=n_iter, **kw_args)
         except Exception as e:
             raise PlanningError(str(e))
 
@@ -249,9 +251,11 @@ class CHOMPPlanner(BasePlanner):
         self.distance_fields.sync(robot)
 
         try:
-            traj = self.module.runchomp(robot=robot, adofgoal=goal,
-                                        lambda_=lambda_, n_iter=n_iter,
-                                        releasegil=True, **kw_args)
+            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                            CollisionOptions.ActiveDOFs):
+                traj = self.module.runchomp(robot=robot, adofgoal=goal,
+                                            lambda_=lambda_, n_iter=n_iter,
+                                            releasegil=True, **kw_args)
         except Exception as e:
             raise PlanningError(str(e))
 
