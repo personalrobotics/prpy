@@ -48,7 +48,11 @@ def get_filename(logfile, planner, method, outputdir, trial, seed=None):
         os.makedirs(savedir)
 
     filename = '_'.join(str(x) for x in ['replay', logfile, method, planner, 'trial', trial])
+<<<<<<< Updated upstream
     if seed is not None:
+=======
+    if seed:
+>>>>>>> Stashed changes
         filename += '_seed_'+str(seed)
     filename += '.yaml'
 
@@ -59,12 +63,20 @@ def get_filename(logfile, planner, method, outputdir, trial, seed=None):
 parser = argparse.ArgumentParser(description='replay planning request log file')
 parser.add_argument('--logfile', required=True)
 parser.add_argument('--planner', required=True, help=('cbirrt OMPL_RRTConnect snap chomp vectorfield' 
+<<<<<<< Updated upstream
                                                         ' greedy-ik trajopt lemur cachedlemur'))
+=======
+                                                        'greedy-ik trajopt lemur'))
+>>>>>>> Stashed changes
 parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
 args = parser.parse_args()
 
 planner_list = args.planner.split(' ')
+<<<<<<< Updated upstream
 randomized = [x.lower() for x in ['cbirrt', 'OMPL RRTConnect', 'CachedLemur', 'Lemur']]
+=======
+randomized = ['cbirrt', 'OMPL_RRTConnect', 'CachedLemur', 'Lemur']
+>>>>>>> Stashed changes
 
 planners = []
 for pl in planner_list: 
@@ -86,23 +98,37 @@ for pl in planner_list:
         for i in range(10):
             planner = prpy_lemur.lemur.LEMURPlanner(
                 roadmap=prpy_lemur.roadmaps.CachedHaltonOffDens(
+<<<<<<< Updated upstream
                     is_cache_required=True, num_per_batch=10000,
                     gamma_factor=1.0, scaling='loglog_n', seed=i))
             setattr(planner, 'seed', i)
             setattr(planner, 'name', 'CachedLemur')
+=======
+                    is_chache_required=True, num_per_batch=10000,
+                    gamma_factor=1.0, scaling='loglog_n', seed=i))
+            setattr(planner, 'seed', i)
+>>>>>>> Stashed changes
             planners.append(planner)
 
     elif pl == 'Lemur':
         for i in range(10):
+<<<<<<< Updated upstream
             planner = prpy_lemur.lemur.LEMURPlanner(
                 roadmap=prpy_lemur.roadmaps.HaltonOffDens(
                     num_per_batch=10000, gamma_factor=1.0, scaling='loglog_n', seed=i))
             setattr(planner, 'seed', i)
             setattr(planner, 'name', 'Lemur')
+=======
+            planner = planners.append(prpy_lemur.lemur.LEMURPlanner(
+                roadmap=prpy_lemur.roadmaps.HaltonOffDens(
+                    num_per_batch=10000, gamma_factor=1.0, scaling='loglog_n', seed=i)))
+            setattr(planner, 'seed', i)
+>>>>>>> Stashed changes
             planners.append(planner)
     else:
       raise ValueError("Unrecognized planner")
 
+<<<<<<< Updated upstream
 logfile = args.logfile
 print ("Reading ", logfile)
 start_logfile_at = time.time()
@@ -118,6 +144,17 @@ env, robot = herbpy.initialize(sim=True)
 
 for actual_planner in planners:
 
+=======
+# read log file
+print ("Reading ", args.logfile)
+yamldict = yaml.safe_load(open(args.logfile))
+method_name = yamldict['request']['method']
+if method_name.lower() == 'plantotsr':
+    print ("Skipping PlanToTSR...")
+    return
+
+for actual_planner in planners:
+>>>>>>> Stashed changes
     planner = FirstSupported(
       Sequence(actual_planner,
                 TSRPlanner(delegate_planner=actual_planner)),
@@ -131,6 +168,11 @@ for actual_planner in planners:
         continue
 
     # deserialize environment
+<<<<<<< Updated upstream
+=======
+    import herbpy
+    env, robot = herbpy.initialize(sim=True)
+>>>>>>> Stashed changes
     prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
 
     method_args = []
@@ -168,7 +210,6 @@ for actual_planner in planners:
 
         filename = get_filename(logfile, getattr(actual_planner, 'name', str(actual_planner)), method_name, 
                                 args.outdir, j, getattr(actual_planner, 'seed', None))
-
         start_time = time.time()
         try:
             traj = method(robot, *method_args, **method_kwargs)    
@@ -217,5 +258,4 @@ logfile_duration = time.time() - start_logfile_at
 #     fp.write(logfile+" "  + str(logfile_duration) +"\n")
 
 print ("Took", logfile_duration, "s to finish ", logfile )
-
 
