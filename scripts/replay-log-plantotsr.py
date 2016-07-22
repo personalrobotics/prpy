@@ -112,6 +112,11 @@ traj = None
 num_trials = 5 
 
 filename = get_filename(logfile, getattr(planner, 'name', str(planner)), method_name, args.outdir)
+if os.path.isfile(filename):
+    print (filename, "exists...")
+    import sys
+    sys.exit(0)
+
 reqdict = dict()
 resdict = {'planner_used':[],
            'ok':[],
@@ -132,8 +137,9 @@ for j in range(num_trials):
         pass
     finally:
         planning_time = time.time() - start_time
-    tags = GetTrajectoryTags(traj)
-    resdict['planner_used'].append(None if not traj else tags[Tags.PLANNER])
+    if traj:
+        tags = GetTrajectoryTags(traj)
+    	resdict['planner_used'].append(None if not traj else tags[Tags.PLANNER])
     resdict['ok'].append(True if traj else False)
     resdict['planning_time'].append(planning_time)
 
