@@ -145,7 +145,6 @@ class TSRPlanner(BasePlanner):
 
         # Configure the robot to use the active manipulator for planning.
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
-
         p = openravepy.KinBody.SaveParameters
         with robot.CreateRobotStateSaver(p.ActiveDOF),\
               CollisionOptionsStateSaver(self.env.GetCollisionChecker(), 
@@ -153,7 +152,11 @@ class TSRPlanner(BasePlanner):
             
             robot.SetActiveDOFs(manipulator.GetArmIndices())
 
+            # Attempt num_attempts planning attempts
             for i_attempt in xrange(num_attempts):
+
+                # Build a set of the next chunk_size collision-free
+                # IK solutions (considered in ranked order).
                 ik_set = []
                 while len(ik_set) < chunk_size and ranked_ik_solutions:
                     ik_solution = ranked_ik_solutions.pop(0)
@@ -162,7 +165,6 @@ class TSRPlanner(BasePlanner):
                         ik_set.append(ik_solution)
 
                 # Try planning to each solution set in descending cost order.
-                # for i, ik_set in ik_set_list:
                 try:
                     if len(ik_set) > 1: 
                         traj = delegate_planner.PlanToConfigurations(
