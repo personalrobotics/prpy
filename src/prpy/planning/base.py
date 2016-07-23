@@ -360,7 +360,8 @@ class Sequence(MetaPlanner):
 
                 errors[planner] = e
 
-        raise MetaPlanningError('All planners failed.', errors)
+        raise MetaPlanningError(
+            'All planners failed.', errors, deterministic=is_sequence_deterministic)
 
 
 class Ranked(MetaPlanner):
