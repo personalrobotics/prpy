@@ -491,7 +491,7 @@ class VectorFieldPlanner(BasePlanner):
 
             # Check joint position limits.
             # We do this before setting the joint angles.
-            util.CheckJointLimits(robot, q)
+            util.CheckJointLimits(robot, q, deterministic=True)
 
             robot.SetActiveDOFValues(q)
 

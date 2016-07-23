@@ -118,7 +118,8 @@ class SnapPlanner(BasePlanner):
                 elif robot.CheckSelfCollision(report=report):
                     raise SelfCollisionPlanningError.FromReport(report, deterministic=True)
 
-            raise PlanningError('There is no IK solution at the goal pose.')
+            raise PlanningError(
+                'There is no IK solution at the goal pose.', deterministic=True)
 
         return self._Snap(robot, ik_solution, **kw_args)
 
@@ -138,7 +139,7 @@ class SnapPlanner(BasePlanner):
         # Check the start position is within joint limits,
         # this can throw a JointLimitError
         start = robot.GetActiveDOFValues()
-        CheckJointLimits(robot, start)
+        CheckJointLimits(robot, start, deterministic=True)
 
         # Add the start waypoint
         start_waypoint = numpy.zeros(cspec.GetDOF())
@@ -150,7 +151,7 @@ class SnapPlanner(BasePlanner):
         # Make the trajectory end at the goal configuration, as
         # long as it is not in collision and is not identical to
         # the start configuration.
-        CheckJointLimits(robot, goal)
+        CheckJointLimits(robot, goal, deterministic=True)
         if not numpy.allclose(start, goal):
             goal_waypoint = numpy.zeros(cspec.GetDOF())
             cspec.InsertJointValues(goal_waypoint, goal, robot,
