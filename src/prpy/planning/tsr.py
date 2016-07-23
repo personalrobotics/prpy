@@ -35,6 +35,8 @@ import openravepy
 from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 from openravepy import (
+    CollisionOptions,
+    CollisionOptionsStateSaver,
     IkFilterOptions,
     IkParameterization,
     IkParameterizationType
@@ -150,6 +152,11 @@ class TSRPlanner(BasePlanner):
             'num_ik_solutions': 0
         }
 
+        # We assume the active manipulator's DOFs are active when computing IK,
+        # calling the delegate planners, and collision checking with the
+        # ActiveDOFs option set.
+        robot.SetActiveDOFs(manipulator.GetArmIndices())
+
         configuration_generator = itertools.chain.from_iterable(
             itertools.ifilter(
                 lambda configurations: configurations.shape[0] > 0,
@@ -162,27 +169,32 @@ class TSRPlanner(BasePlanner):
             configurations_chunk = []
             time_start = time.time()
 
-            while is_time_available() and len(configurations_chunk) < chunk_size:
-                # Generate num_candidates candidates and rank them using the
-                # user-supplied IK ranker.
-                candidates = list(itertools.islice(configuration_generator, num_candidates))
-                if not candidates:
-                    break
+            # Set ActiveDOFs for IK collision checking. We intentionally
+            # restore the original collision checking options before calling
+            # the planner to give it a pristine environment.
+            with CollisionOptionsStateSaver(
+                    self.env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
+                while is_time_available() and len(configurations_chunk) < chunk_size:
+                    # Generate num_candidates candidates and rank them using the
+                    # user-supplied IK ranker.
+                    candidates = list(itertools.islice(configuration_generator, num_candidates))
+                    if not candidates:
+                        break
 
-                candidates_scores = ranker(robot, numpy.array(candidates))
-                candidates_scored = zip(candidates_scores, candidates)
-                candidates_scored.sort(key=lambda (score, _): score)
-                candidates_ranked = [q for _, q in candidates_scored]
+                    candidates_scores = ranker(robot, numpy.array(candidates))
+                    candidates_scored = zip(candidates_scores, candidates)
+                    candidates_scored.sort(key=lambda (score, _): score)
+                    candidates_ranked = [q for _, q in candidates_scored]
 
-                # Select valid IK solutions from the chunk.
-                candidates_valid = itertools.islice(
-                    itertools.ifilter(
-                        is_configuration_valid,
-                        itertools.takewhile(
-                            is_time_available,
-                            candidates_ranked)),
-                    chunk_size - len(configurations_chunk))
-                configurations_chunk.extend(candidates_valid)
+                    # Select valid IK solutions from the chunk.
+                    candidates_valid = itertools.islice(
+                        itertools.ifilter(
+                            is_configuration_valid,
+                            itertools.takewhile(
+                                is_time_available,
+                                candidates_ranked)),
+                        chunk_size - len(configurations_chunk))
+                    configurations_chunk.extend(candidates_valid)
 
             time_expired += time.time() - time_start
 
