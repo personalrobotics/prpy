@@ -214,7 +214,7 @@ class TSRPlanner(BasePlanner):
                 return traj
             except PlanningError as e:
                 logger.warning('Planning attempt %d of %d failed: %s',
-                    i_attempt + 1, num_attempts, e)
+                    iattempt + 1, num_attempts, e)
 
         raise PlanningError('Failed to find a solution in {:d} attempts.'.format(
             iattempt + 1))
