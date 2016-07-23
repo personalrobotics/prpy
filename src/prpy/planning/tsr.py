@@ -160,9 +160,10 @@ class TSRPlanner(BasePlanner):
                 ik_set = []
                 while len(ik_set) < chunk_size and ranked_ik_solutions:
                     ik_solution = ranked_ik_solutions.pop(0)
-                    robot.SetActiveDOFValues(ik_solution)
-                    if not self.env.CheckCollision(robot) and not robot.CheckSelfCollision():
-                        ik_set.append(ik_solution)
+                    with robot.CreateRobotStateSaver(p.LinkTransformation):
+                        robot.SetActiveDOFValues(ik_solution)
+                        if not self.env.CheckCollision(robot) and not robot.CheckSelfCollision():
+                            ik_set.append(ik_solution)
 
                 # Try planning to each solution set in descending cost order.
                 try:
