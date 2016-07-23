@@ -204,7 +204,7 @@ for actual_planner in planners:
 
         print ("Planning time: ", planning_time)
 
-        with open('replay-completed-'+str(actual_planner)+'.log', 'a') as fp:
+        with open('replay-completed-'+str(actual_planner).split(' ')[0]+'.log', 'a') as fp:
             trial_info = ' '.join(str(x) for x in [logfile, str(actual_planner), method_name, 'trial', j, ok])
             if getattr(actual_planner, 'seed', None) is not None:
                 trial_info += ' seed ' + str(getattr(actual_planner, 'seed', None))
