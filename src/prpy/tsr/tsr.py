@@ -46,21 +46,26 @@ class TSR(object):
             Tw_e = numpy.eye(4)
         if Bw is None:
             Bw = numpy.zeros((6, 2))
-        if numpy.any(Bw[0:3, 0] > Bw[0:3, 1]):
-            raise ValueError('Bw translation bounds must be [min, max]', Bw)
 
-        self.T0_w = T0_w
-        self.Tw_e = Tw_e
-        self.Bw = Bw
+        self.T0_w = numpy.array(T0_w)
+        self.Tw_e = numpy.array(Tw_e)
+        self.Bw = numpy.array(Bw)
+
+        if numpy.any(self.Bw[0:3, 0] > self.Bw[0:3, 1]):
+            raise ValueError('Bw translation bounds must be [min, max]', Bw)
 
         # We will now create a continuous version of the bound to maintain:
         # 1. Bw[i,1] > Bw[i,0] which is necessary for LBFGS-B
         # 2. signed rotations, necessary for expressiveness
-        Bw_cont = numpy.copy(Bw)
-        Bw_cont[3:6, :] = (Bw_cont[3:6, :] + pi) % (2*pi) - pi
-        for rot_idx in range(3, 6):
-            if Bw_cont[rot_idx, 0] > Bw_cont[rot_idx, 1] + EPSILON:
-                Bw_cont[rot_idx, 1] += 2*pi
+        Bw_cont = numpy.copy(self.Bw)
+
+        Bw_interval = Bw_cont[3:6, 1] - Bw_cont[3:6, 0]
+        Bw_interval = numpy.minimum(Bw_interval, 2*pi)
+
+        from prpy.util import wrap_to_interval
+        Bw_cont[3:6, 0] = wrap_to_interval(Bw_cont[3:6, 0])
+        Bw_cont[3:6, 1] = Bw_cont[3:6, 0] + Bw_interval
+
         self._Bw_cont = Bw_cont
 
         if manip is None:
@@ -175,8 +180,9 @@ class TSR(object):
         @param Bw bounds on rpy
         @return check a (3,) vector of True if within and False if outside
         """
-        # Unwrap rpy to [-pi, pi].
-        rpy = (numpy.array(rpy) + pi) % (2*pi) - pi
+        # Unwrap rpy to Bw_cont.
+        from prpy.util import wrap_to_interval
+        rpy = wrap_to_interval(rpy, lower=Bw[:, 0])
 
         # Check bounds condition on RPY component.
         rpycheck = [False] * 3
@@ -280,7 +286,7 @@ class TSR(object):
                                 trans,
                                 numpy.linalg.inv(self.Tw_e)])
         xyz, rot = Tw[0:3, 3], Tw[0:3, 0:3]
-        rpycheck, rpy = TSR.rot_within_rpy_bounds(rot, self.Bw)
+        rpycheck, rpy = TSR.rot_within_rpy_bounds(rot, self._Bw_cont)
         if not all(rpycheck):
             rpy = TSR.rot_to_rpy(rot)
         return numpy.hstack((xyz, rpy))
@@ -295,7 +301,7 @@ class TSR(object):
         @return a 6x1 vector of True if bound is valid and False if not
         """
         # Extract XYZ and RPY components of input and TSR.
-        Bw_xyz, Bw_rpy = self.Bw[0:3, :], self.Bw[3:6, :]
+        Bw_xyz, Bw_rpy = self._Bw_cont[0:3, :], self._Bw_cont[3:6, :]
         xyz, rpy = xyzrpy[0:3], xyzrpy[3:6]
 
         # Check bounds condition on XYZ component.
@@ -320,7 +326,7 @@ class TSR(object):
         @return a 6x1 vector of True if bound is valid and False if not
         """
         # Extract XYZ and rot components of input and TSR.
-        Bw_xyz, Bw_rpy = self.Bw[0:3, :], self.Bw[3:6, :]
+        Bw_xyz, Bw_rpy = self._Bw_cont[0:3, :], self._Bw_cont[3:6, :]
         xyz, rot = trans[0:3, :], trans[0:3, 0:3]
         # Check bounds condition on XYZ component.
         xyzcheck = TSR.xyz_within_bounds(xyz, Bw_xyz)
@@ -374,7 +380,8 @@ class TSR(object):
                                 if numpy.isnan(x) else x
                                 for i, x in enumerate(xyzrpy)])
         # Unwrap rpy to [-pi, pi]
-        Bw_sample[3:6] = (Bw_sample[3:6] + pi) % (2*pi) - pi
+        from prpy.util import wrap_to_interval
+        Bw_sample[3:6] = wrap_to_interval(Bw_sample[3:6])
         return Bw_sample
 
     def sample(self, xyzrpy=NANBW):

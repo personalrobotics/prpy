@@ -30,9 +30,10 @@
 
 import logging
 import openravepy
+from copy import deepcopy
 from ..util import (CreatePlannerParametersString, CopyTrajectory,
                     SimplifyTrajectory, HasAffineDOFs, IsTimedTrajectory)
-from base import (BasePlanner, PlanningError, PlanningMethod,
+from base import (BasePlanner, PlanningError, ClonedPlanningMethod,
                   UnsupportedPlanningError)
 from openravepy import PlannerStatus, Planner
 
@@ -57,7 +58,7 @@ class OpenRAVERetimer(BasePlanner):
     def __str__(self):
         return self.algorithm
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
         from copy import deepcopy
@@ -154,12 +155,19 @@ class HauserParabolicSmoother(OpenRAVERetimer):
             'time_limit': float(timelimit),
         })
 
+    @ClonedPlanningMethod
+    def RetimeTrajectory(self, robot, path, options=None, **kw_args):
+        new_options = deepcopy(options) if options else dict()
+        if 'timelimit' in kw_args:
+          new_options['time_limit'] = kw_args['timelimit']
+        return super(HauserParabolicSmoother, self).RetimeTrajectory(
+            robot, path, options=new_options, **kw_args)
 
 class OpenRAVEAffineRetimer(BasePlanner):
     def __init__(self,):
         super(OpenRAVEAffineRetimer, self).__init__()
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def RetimeTrajectory(self, robot, path, **kw_args):
 
         RetimeTrajectory = openravepy.planningutils.RetimeAffineTrajectory
@@ -201,3 +209,23 @@ class OpenRAVEAffineRetimer(BasePlanner):
                                 str(status)))
 
         return output_traj
+
+
+class OptimizingPlannerSmoother(BasePlanner):
+
+    def __init__(self, optimizing_planner, **kwargs):
+        super(OptimizingPlannerSmoother, self).__init__()
+        self.planner = optimizing_planner
+        self.saved_kwargs = kwargs
+
+    def __str__(self):
+        return 'OptimizingPlannerSmoother({})'.format(str(self.planner))
+
+    @ClonedPlanningMethod
+    def RetimeTrajectory(self, robot, path, options=None, **kwargs):
+        logger.warning(
+            'OptimizingPlannerSmoother is very experimental!')
+        this_kwargs = dict(kwargs)
+        this_kwargs.update(self.saved_kwargs)
+        traj = self.planner.OptimizeTrajectory(robot, path, **this_kwargs)
+        return traj

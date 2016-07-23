@@ -1,5 +1,9 @@
 from prpy.clone import CloneException
 from prpy.planning.base import PlanningError
+from prpy.planning.exceptions import (
+    CollisionPlanningError,
+    SelfCollisionPlanningError,
+    JointLimitError)
 
 class PlanToConfigurationTest(object):
     def test_PlanToConfiguration_StartInCollision_Throws(self):
@@ -68,6 +72,11 @@ class PlanToConfigurationTest(object):
 
 
 class PlanToConfigurationStraightLineTest(object):
+    def test_PlanToConfiguration_AlreadyAtGoal_FindsSolution(self):
+        self.PlanFromStartToGoalConfiguration(self.waypoint1, self.waypoint1)
+        self.PlanFromStartToGoalConfiguration(self.waypoint2, self.waypoint2)
+        self.PlanFromStartToGoalConfiguration(self.waypoint3, self.waypoint3)
+
     def test_PlanToConfiguration_StraightLineIsFeasible_FindsSolution(self):
         self.PlanFromStartToGoalConfiguration(self.waypoint1, self.waypoint2)
         self.PlanFromStartToGoalConfiguration(self.waypoint2, self.waypoint3)
@@ -77,6 +86,20 @@ class PlanToConfigurationStraightLineTest(object):
 class PlanToConfigurationCompleteTest(object):
     def test_PlanToConfiguration_GoalIsFeasible_FindsSolution(self):
         self.PlanFromStartToGoalConfiguration(
-            self.config_feasible_start, self.config_feasible_goal)
+            self.config_feasible_start2, self.config_feasible_goal)
 
 
+class PlanToConfigurationTestCollisionTest(object): 
+    """ Expects collision-specific error"""
+
+    def test_PlanToConfiguration_GoalInCollision_Throws_Collision(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_start)
+
+        # Test/Assert
+        with self.assertRaises((CollisionPlanningError,
+            SelfCollisionPlanningError,
+            JointLimitError)):
+                self.planner.PlanToConfiguration(
+                self.robot, self.config_env_collision)

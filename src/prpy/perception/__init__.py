@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2013, Carnegie Mellon University
+# Copyright (c) 2015, Carnegie Mellon University
 # All rights reserved.
-# Authors: Michael Koval <mkoval@cs.cmu.edu>
+# Authors: Jennifer King <jeking@cs.cmu.edu>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -28,15 +28,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import logging, openravepy, numpy
-from .. import util
-from robot import Robot
-import prpy.rave
-from .. import exceptions
-
-class WAMRobot(Robot):
-    def __init__(self, robot_name=None):
-        Robot.__init__(self, robot_name=robot_name)
-
-    def CloneBindings(self, parent):
-        Robot.CloneBindings(self, parent)
+from base import PerceptionModule, PerceptionMethod
+from apriltags import ApriltagsModule
+from simulated import SimulatedPerceptionModule
+from rock_module import RockModule
+from simtrack import SimtrackModule

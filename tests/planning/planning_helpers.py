@@ -1,5 +1,8 @@
 import numpy
-from prpy.planning.base import BasePlanner, PlanningMethod
+from collections import namedtuple
+from prpy.planning.base import BasePlanner, ClonedPlanningMethod
+
+CHOMPSphere = namedtuple('CHOMPSphere', ['position', 'radius'])
 
 class BasePlannerTest(object):
     is_setup = False
@@ -10,6 +13,14 @@ class BasePlannerTest(object):
         +2.35061574,  0.61043555,  0.85000000,  1.80684444, -0.08639935,
         -0.69750474,  1.31656172
     ])
+
+    # This configuration is easier for Trajopt (and harder for most other
+    # planners) because teh pole introduces a local minimum (maybe?).
+    config_feasible_start2 = numpy.array([
+        -2.61799387,  0.66440338,  0.19853743,  2.00944286, -0.08639925,
+        -0.69750467,  1.31656153
+    ])
+
     config_feasible_goal = numpy.array([
         -0.84085883,  1.44573701,  0.20000000,  1.72620231, -0.81124757,
         -1.39363597,  1.29233111
@@ -48,8 +59,32 @@ class BasePlannerTest(object):
         1.90265540
     ])
 
+    orcdchomp_spheres = {
+        'wam0': [CHOMPSphere(position=(0.220, 0.140, 0.346), radius=0.15)],
+        'wam2': [
+            CHOMPSphere(position=(0.0, 0.0, 0.2), radius=0.06),
+            CHOMPSphere(position=(0.0, 0.0, 0.3), radius=0.06),
+            CHOMPSphere(position=(0.0, 0.0, 0.4), radius=0.06),
+            CHOMPSphere(position=(0.0, 0.0, 0.5), radius=0.06)
+        ],
+        'wam3': [CHOMPSphere(position=(0.0, 0.0, 0.0), radius=0.06)],
+        'wam4': [
+            CHOMPSphere(position=(0.0, 0.0, 0.1), radius=0.06),
+            CHOMPSphere(position=(0.0, 0.0, 0.2), radius=0.06),
+            CHOMPSphere(position=(0.0, 0.0, 0.3), radius=0.06)
+        ],
+        'wam6': [CHOMPSphere(position=(0.0, 0.0, 0.1), radius=0.06)],
+        'Finger0-1': [CHOMPSphere(position=(0.05, -0.01, 0.0), radius=0.04)],
+        'Finger1-1': [CHOMPSphere(position=(0.05, -0.01, 0.0), radius=0.04)],
+        'Finger2-1': [CHOMPSphere(position=(0.05, -0.01, 0.0), radius=0.04)],
+        'Finger0-2': [CHOMPSphere(position=(0.05,  0.00, 0.0), radius=0.04)],
+        'Finger1-2': [CHOMPSphere(position=(0.05,  0.00, 0.0), radius=0.04)],
+        'Finger2-2': [CHOMPSphere(position=(0.05,  0.00, 0.0), radius=0.04)],
+    }
+
     def setUp(self):
         import openravepy
+        GeometryInfo = openravepy.KinBody.Link.GeometryInfo
 
         if not self.is_setup:
             openravepy.RaveInitialize(True)
@@ -63,10 +98,30 @@ class BasePlannerTest(object):
             self.robot = self.env.GetRobot('BarrettWAM')
             self.manipulator = self.robot.GetManipulator('arm')
 
+            # Add sphere geometry to the robot for CHOMP.
+            for link_name, spheres in self.orcdchomp_spheres.iteritems():
+                link = self.robot.GetLink(link_name)
+                assert link is not None
+
+                geometry_infos = []
+                for sphere in spheres:
+                    geometry_info = GeometryInfo()
+                    geometry_info._type = openravepy.GeometryType.Sphere
+                    geometry_info._t = numpy.eye(4)
+                    geometry_info._t[0:3, 3] = sphere.position
+                    geometry_info._bModifiable = False
+                    geometry_info._bVisible = False
+                    geometry_info._vGeomData = numpy.array([sphere.radius] * 3)
+                    geometry_infos.append(geometry_info)
+
+                link.SetGroupGeometries('spheres', geometry_infos)
+
+            # Remove the floor because it can cause spurious collisions.
             self.env.Remove(self.env.GetKinBody('floor'))
 
             self.robot.SetActiveManipulator(self.manipulator)
             self.robot.SetActiveDOFs(self.active_dof_indices)
+
 
         self.planner = self.planner_factory()
 
@@ -191,15 +246,14 @@ class SuccessPlanner(MockPlanner):
         from openravepy import RaveCreateTrajectory
 
         MockPlanner.__init__(self, delay=delay)
-        
+
         with self.env:
             # Clone the template trajectory into the planning environment.
             self.traj = RaveCreateTrajectory(self.env, template_traj.GetXMLId())
             self.traj.Clone(template_traj, 0)
 
-    @PlanningMethod
-    def PlanTest(self, robot, defer=False):
-        assert not defer
+    @ClonedPlanningMethod
+    def PlanTest(self, robot):
 
         def Success_impl(robot):
             import numpy
@@ -216,9 +270,8 @@ class SuccessPlanner(MockPlanner):
 
 
 class FailPlanner(MockPlanner):
-    @PlanningMethod
-    def PlanTest(self, robot, defer=False):
-        assert not defer
+    @ClonedPlanningMethod
+    def PlanTest(self, robot):
 
         def Failure_impl(robot):
             from prpy.planning import PlanningError

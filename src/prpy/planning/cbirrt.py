@@ -6,7 +6,7 @@
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # - Redistributions of source code must retain the above copyright notice, this
 #   list of conditions and the following disclaimer.
 # - Redistributions in binary form must reproduce the above copyright notice,
@@ -15,7 +15,7 @@
 # - Neither the name of Carnegie Mellon University nor the names of its
 #   contributors may be used to endorse or promote products derived from this
 #   software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -28,11 +28,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy, openravepy
+import numpy
+import openravepy
 from ..util import SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  PlanningMethod, Tags)
-import prpy.kin, prpy.tsr
+                  ClonedPlanningMethod, Tags)
+import prpy.kin
+import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
@@ -46,7 +48,7 @@ class CBiRRTPlanner(BasePlanner):
     def __str__(self):
         return 'CBiRRT'
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to multiple goal configurations with CBiRRT. This adds each goal
@@ -56,9 +58,10 @@ class CBiRRTPlanner(BasePlanner):
         @param goals list of goal configurations
         @return traj output path
         """
-        return self.Plan(robot, jointgoals=goals, smoothingitrs=0, **kw_args)
+        kw_args.setdefault('smoothingitrs', 0)
+        return self.Plan(robot, jointgoals=goals, **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a single goal configuration with CBiRRT.
@@ -66,9 +69,10 @@ class CBiRRTPlanner(BasePlanner):
         @param goal goal configuration
         @return traj output path
         """
-        return self.Plan(robot, jointgoals=[goal], smoothingitrs=0, **kw_args)
+        kw_args.setdefault('smoothingitrs', 0)
+        return self.Plan(robot, jointgoals=[goal], **kw_args)
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Plan to a desired end-effector pose.
@@ -81,10 +85,12 @@ class CBiRRTPlanner(BasePlanner):
         goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
         tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
 
-        return self.Plan(robot, tsr_chains=[tsr_chain], psample=0.1,
-                         smoothingitrs=0, **kw_args)
+        kw_args.setdefault('psample', 0.1)
+        kw_args.setdefault('smoothingitrs', 0)
 
-    @PlanningMethod
+        return self.Plan(robot, tsr_chains=[tsr_chain], **kw_args)
+
+    @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 smoothingitrs=100, **kw_args):
         """
@@ -108,21 +114,21 @@ class CBiRRTPlanner(BasePlanner):
             H_world_ee = manip.GetEndEffectorTransform()
 
             # 'object frame w' is at ee, z pointed along direction to move
-            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3,3], direction)
+            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3, 3], direction)
             H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
 
             # Serialize TSR string (goal)
             Hw_end = numpy.eye(4)
-            Hw_end[2,3] = distance
+            Hw_end[2, 3] = distance
 
-            goaltsr = prpy.tsr.tsr.TSR(T0_w = numpy.dot(H_world_w,Hw_end), 
-                                     Tw_e = H_w_ee, 
-                                     Bw = numpy.zeros((6,2)), 
-                                     manip = robot.GetActiveManipulatorIndex())
-            goal_tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal = True,
-                                                 TSRs = [goaltsr])
+            goaltsr = prpy.tsr.tsr.TSR(T0_w=numpy.dot(H_world_w, Hw_end),
+                                       Tw_e=H_w_ee,
+                                       Bw=numpy.zeros((6, 2)),
+                                       manip=robot.GetActiveManipulatorIndex())
+            goal_tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True,
+                                                   TSRs=[goaltsr])
             # Serialize TSR string (whole-trajectory constraint)
-            Bw = numpy.zeros((6,2))
+            Bw = numpy.zeros((6, 2))
             epsilon = 0.001
             Bw = numpy.array([[-epsilon,            epsilon],
                               [-epsilon,            epsilon],
@@ -131,21 +137,23 @@ class CBiRRTPlanner(BasePlanner):
                               [-epsilon,            epsilon],
                               [-epsilon,            epsilon]])
 
-            trajtsr = prpy.tsr.tsr.TSR(T0_w = H_world_w, 
-                                   Tw_e = H_w_ee, 
-                                   Bw = Bw, 
-                                   manip = robot.GetActiveManipulatorIndex())
-            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True, TSRs=[trajtsr])
+            traj_tsr = prpy.tsr.tsr.TSR(
+                T0_w=H_world_w, Tw_e=H_w_ee, Bw=Bw,
+                manip=robot.GetActiveManipulatorIndex())
+            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True,
+                                                   TSRs=[traj_tsr])
 
-        return self.Plan(robot,
-            psample=0.1,
+        kw_args.setdefault('psample', 0.1)
+
+        return self.Plan(
+            robot,
             tsr_chains=[goal_tsr_chain, traj_tsr_chain],
             # Smooth since this is a constrained trajectory.
             smoothingitrs=smoothingitrs,
             **kw_args
         )
 
-    @PlanningMethod
+    @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsr_chains, smoothingitrs=100, **kw_args):
         """
         Plan to a goal specified as a list of TSR chains. CBiRRT supports an
@@ -157,12 +165,11 @@ class CBiRRTPlanner(BasePlanner):
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
-        psample = None
         is_constrained = False
 
         for chain in tsr_chains:
             if chain.sample_start or chain.sample_goal:
-                psample = 0.1
+                kw_args.setdefault('psample', 0.1)
 
             if chain.constrain:
                 is_constrained = True
@@ -171,8 +178,8 @@ class CBiRRTPlanner(BasePlanner):
         if not is_constrained:
             smoothingitrs = 0
 
-        return self.Plan(robot,
-            psample=psample,
+        return self.Plan(
+            robot,
             smoothingitrs=smoothingitrs,
             tsr_chains=tsr_chains,
             **kw_args
@@ -183,41 +190,42 @@ class CBiRRTPlanner(BasePlanner):
              extra_args=None, **kw_args):
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
-        # TODO We may need this work-around because CBiRRT doesn't like it when
-        # an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
-        #self.ClearIkSolver(robot.GetActiveManipulator())
+        # TODO We may need this work-around because CBiRRT doesn't like it
+        # when an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
+        # self.ClearIkSolver(robot.GetActiveManipulator())
 
         self.env.LoadProblem(self.problem, robot.GetName())
 
-        args = [ 'RunCBiRRT' ]
+        args = ['RunCBiRRT']
 
         if extra_args is not None:
             args += extra_args
 
         if smoothingitrs is not None:
             if smoothingitrs < 0:
-                raise ValueError('Invalid number of smoothing iterations. Value'
-                                 'must be non-negative; got  {:d}.'.format(
-                                    smoothingitrs))
+                raise ValueError('Invalid number of smoothing iterations. '
+                                 'Value must be non-negative; got  {:d}.'
+                                 .format(smoothingitrs))
 
-            args += [ 'smoothingitrs', str(smoothingitrs) ]
+            args += ['smoothingitrs', str(smoothingitrs)]
 
         if timelimit is not None:
             if not (timelimit > 0):
                 raise ValueError('Invalid value for "timelimit". Limit must be'
                                  ' non-negative; got {:f}.'.format(timelimit))
 
-            args += [ 'timelimit', str(timelimit) ]
+            args += ['timelimit', str(timelimit)]
 
         if allowlimadj is not None:
-            args += [ 'allowlimadj', str(int(allowlimadj)) ]
+            args += ['allowlimadj', str(int(allowlimadj))]
 
         if psample is not None:
             if not (0 <= psample <= 1):
-                raise ValueError('Invalid value for "psample". Value must be in'
-                                 ' the range [0, 1]; got {:f}.'.format(psample))
+                raise ValueError('Invalid value for "psample". Value must be '
+                                 'in the range [0, 1]; got {:f}.'
+                                 .format(psample))
 
-            args += [ 'psample', str(psample) ]
+            args += ['psample', str(psample)]
 
         if jointstarts is not None:
             for start_config in jointstarts:
@@ -229,7 +237,8 @@ class CBiRRTPlanner(BasePlanner):
                         )
                     )
 
-                args += ['jointstarts'] + self.serialize_dof_values(start_config)
+                args += (['jointstarts'] +
+                         self.serialize_dof_values(start_config))
 
         if jointgoals is not None:
             for goal_config in jointgoals:
@@ -250,7 +259,7 @@ class CBiRRTPlanner(BasePlanner):
         # FIXME: Why can't we write to anything other than cmovetraj.txt or
         # /tmp/cmovetraj.txt with CBiRRT?
         traj_path = 'cmovetraj.txt'
-        args += [ 'filename', traj_path ]
+        args += ['filename', traj_path]
         args_str = ' '.join(args)
 
         with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
@@ -263,12 +272,13 @@ class CBiRRTPlanner(BasePlanner):
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
-            traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+            traj = openravepy.RaveCreateTrajectory(
+                self.env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
 
         # Tag the trajectory as constrained if a constraint TSR is present.
-        if (tsr_chains is not None
-                and any(tsr_chain.constrain for tsr_chain in tsr_chains)):
+        if (tsr_chains is not None and
+                any(tsr_chain.constrain for tsr_chain in tsr_chains)):
             SetTrajectoryTags(traj, {Tags.CONSTRAINED: True}, append=True)
 
         # Strip extraneous groups from the output trajectory.
@@ -285,11 +295,10 @@ class CBiRRTPlanner(BasePlanner):
         if manip.GetIkSolver() is not None:
             raise ValueError('Unable to clear IkSolver')
 
-
     @staticmethod
     def serialize_dof_values(dof_values):
-        return [ str(len(dof_values)), 
-                 ' '.join([ str(x) for x in dof_values]) ]
+        return [str(len(dof_values)),
+                ' '.join([str(x) for x in dof_values])]
 
 
 def SerializeTransform12Col(tm, format='%.5f'):

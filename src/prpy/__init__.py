@@ -28,7 +28,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import base, dependency_manager, logger, ik_ranking, planning, simulation, tsr, viz
+import base, dependency_manager, logger, ik_ranking, planning, perception, simulation, tsr, viz
 from named_config import ConfigurationLibrary
 from clone import Clone, Cloned
 from bind import bind_subclass

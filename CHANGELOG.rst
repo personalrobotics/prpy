@@ -2,6 +2,102 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.0.1 (2016-05-12)
+------------------
+* Changed `SetPosition` to match OpenRAVE `Controller` `SetDesired` API.
+* Contributors: Clint Liddick
+
+3.0.0 (2016-05-11)
+------------------
+* Migrate HERB to `ros_control`. `#233 <https://github.com/personalrobotics/prpy/issues/233>`_
+* Move `BarrettHand`, `WAM`, and `WAMRobot` classes to HerbPy.
+* Contributors: Clint Liddick, Michael Koval
+
+2.0.0 (2016-05-11)
+------------------
+* Changes VanDerCorputSampleGenerator to include goal. `#304 <https://github.com/personalrobotics/prpy/issues/304>`_
+* PEP8 and lint fixes. `#302 <https://github.com/personalrobotics/prpy/issues/302>`_ `#276 <https://github.com/personalrobotics/prpy/issues/276>`_
+* Fixed bug in Apriltags `DetectObjects`. `#292 <https://github.com/personalrobotics/prpy/issues/292>`_ `#294 <https://github.com/personalrobotics/prpy/issues/294>`_ 
+* Moved MICO files to `adapy`. `#301 <https://github.com/personalrobotics/prpy/issues/301>`_
+* Fixed spurious `CloneException` errors in planning stack. `#298 <https://github.com/personalrobotics/prpy/issues/298>`_
+* Added support for TracIK solver. `#299 <https://github.com/personalrobotics/prpy/issues/299>`_
+* Added separate `@LockedPlanningMethod` and `@ClonedPlanningMethod` calls. `#280 <https://github.com/personalrobotics/prpy/issues/280>`_
+* Reuse postprocessing environments in a safer way. `#286 <https://github.com/personalrobotics/prpy/issues/286>`_
+* Removes the ill-fated Trollius support from `@PlanningMethod`. `#278 <https://github.com/personalrobotics/prpy/issues/278>`_
+* Fixed bug introduced by clone refactor. `#284 <https://github.com/personalrobotics/prpy/issues/284>`_
+* Copy trajectory description in `CopyTrajectory`. `#282 <https://github.com/personalrobotics/prpy/issues/282>`_ `#278 <https://github.com/personalrobotics/prpy/issues/278>`_.
+* Moved `Clone` regrab logic into env equality check. `#279 <https://github.com/personalrobotics/prpy/issues/279>`_
+* Fixed HauserParabolicSmoother overriding `timelimit` `#277 <https://github.com/personalrobotics/prpy/issues/277>`_
+* Remove HauserParabolicSmoother as default smoother. `#274 <https://github.com/personalrobotics/prpy/issues/274>`_
+* Added `PlanWorkspacePath()` method to `VectorFieldPlanner` `#269 <https://github.com/personalrobotics/prpy/issues/269>`_
+* Added ability to get a list of named configurations `#271 <https://github.com/personalrobotics/prpy/issues/271>`_
+* Remove un-used argument `dt_multiplier` from `VectorFieldPlanner`.
+* Use prpy `CheckJointLimits()` function in `VectorFieldPlanner`.
+* Add convenience function to compute forward kinematics `#251 <https://github.com/personalrobotics/prpy/issues/251>`_
+* Workaround for `CloseFingers` on `MicoHand`. `#254 <https://github.com/personalrobotics/prpy/issues/254>`_
+* Merge pull request `#263 <https://github.com/personalrobotics/prpy/issues/263>`_
+* Refactored robot `__getattr__` to resist infinite recursion. `#262 <https://github.com/personalrobotics/prpy/issues/262>`_ `#208 <https://github.com/personalrobotics/prpy/issues/208>`_
+* Implement `Servo()` on MicoArm. `#258 <https://github.com/personalrobotics/prpy/issues/258>`_
+* Add minimal implementation of `OptimizingPlannerSmoother`, e.g. for CHOMP as a smoother. `#235 <https://github.com/personalrobotics/prpy/issues/235>`_
+* Add a helper function to extract joint groups. `#259 <https://github.com/personalrobotics/prpy/issues/259>`_
+* Add a timing check to `JointStatesFromTraj()`. `#260 <https://github.com/personalrobotics/prpy/issues/260>`_
+* Add perception README. `#261 <https://github.com/personalrobotics/prpy/issues/261>`_
+* Add `util` function for RoGuE. `#253 <https://github.com/personalrobotics/prpy/issues/253>`_
+* Add a `Future` class. `#250 <https://github.com/personalrobotics/prpy/issues/250>`_
+* Make `Cloned()` handle `None`. `#249 <https://github.com/personalrobotics/prpy/issues/249>`_
+* Add a TSR README. `#246 <https://github.com/personalrobotics/prpy/issues/246>`_
+* `PlanWorkspacePath` detects collision only on failure. `#247 <https://github.com/personalrobotics/prpy/issues/247>`_
+* Add missing robot state saver to GreedyIK. `#240 <https://github.com/personalrobotics/prpy/issues/240>`_
+* Add missing 'import'. `#242 <https://github.com/personalrobotics/prpy/issues/242>`_
+* Add method for collision checking trajectories. `#228 <https://github.com/personalrobotics/prpy/issues/228>`_
+* Fix bug in `ComputeUnitTiming`. `#239 <https://github.com/personalrobotics/prpy/issues/239>`_
+* Added SimTrack integration. `#237 <https://github.com/personalrobotics/prpy/issues/237>`_
+* Fix `ComputeUnitTiming` velocity bug. `#234 <https://github.com/personalrobotics/prpy/issues/234>`_
+* Fix CHOMP `OptimizeTrajectory` to return the optimized trajectory, not the original. `#236 <https://github.com/personalrobotics/prpy/issues/236>`_
+* Fix `setup.py` bug in perception module. `#231 <https://github.com/personalrobotics/prpy/issues/231>`_
+* Removed package-specific environment files on Travis. `#229 <https://github.com/personalrobotics/prpy/issues/229>`_
+* Fixed Trajopt tests. `#227 <https://github.com/personalrobotics/prpy/issues/227>`_ `#221 <https://github.com/personalrobotics/prpy/issues/221>`_ `#213 <https://github.com/personalrobotics/prpy/issues/213>`_
+* Add helper functions to check if the robot is at a goal configuration. `#210 <https://github.com/personalrobotics/prpy/issues/210>`_
+* Removed rosbuild support. `#225 <https://github.com/personalrobotics/prpy/issues/225>`_
+* Fix incorrect indent in `JointStatesFromTraj`. `#224 <https://github.com/personalrobotics/prpy/issues/224>`_
+* Add or_trajopt as a `<test_depend>`. `#219 <https://github.com/personalrobotics/prpy/issues/219>`_
+* Add `GetManipIndex` function to `util`. `#215 <https://github.com/personalrobotics/prpy/issues/215>`_
+* Add a render flag to `RenderTrajectory`. `#214 <https://github.com/personalrobotics/prpy/issues/214>`_
+* Fixing bug that references `env` instead of `robot.GetEnv()`. `#212 <https://github.com/personalrobotics/prpy/issues/212>`_
+* Disabled failing TSR test. `#202 <https://github.com/personalrobotics/prpy/issues/202>`_
+* Fixed whitespace in `test_GreedyIKPlanner.py`. `#206 <https://github.com/personalrobotics/prpy/issues/206>`_
+* Modified `SnapPlanner` and `GreedyIKPlanner` to raise `CollisionException`. `#205 <https://github.com/personalrobotics/prpy/issues/205>`_
+* Fixed smoothingitrs and psample args in CBiRRT. `#203 <https://github.com/personalrobotics/prpy/issues/203>`_
+* Fixed `IsTimedTrajectory` on empty trajectories. `#201 <https://github.com/personalrobotics/prpy/issues/201>`_
+* Contributors: Chris Dellin, Clint Liddick, David Butterworth, Gilwoo Lee, Jennifer King, Michael Koval, Pras Velagapudi, Rachel Holladay, Shervin Javdani, Shushman Choudhury, Stefanos Nikolaidis, Aaron Johnson, Matt Klingensmith
+
+1.3.0 (2015-10-12)
+------------------
+* Added a perception pipeline (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_ `#200 <https://github.com/personalrobotics/prpy/issues/200>`_)
+* Added actions (and other functionality) for the block sorting demo (`#189 <https://github.com/personalrobotics/prpy/issues/189>`_, `#194 <https://github.com/personalrobotics/prpy/issues/194>`_)
+* Added unit tests for planners (`#169 <https://github.com/personalrobotics/prpy/issues/169>`_)
+* Added helper functions for computing body point acceleration twists (`#166 <https://github.com/personalrobotics/prpy/issues/166>`_)
+* Added a common base class for trajectory exceptions and an exception for precondition violation (`#196 <https://github.com/personalrobotics/prpy/issues/196>`_)
+* Added documentation for `prpy.base.Tags` (`#193 <https://github.com/personalrobotics/prpy/issues/193>`_)
+* Added missing trajectory flags to VectorFieldPlanner (`#191 <https://github.com/personalrobotics/prpy/issues/191>`_)
+* Added UntimeTrajectory() to strip timing from trajectories (`#187 <https://github.com/personalrobotics/prpy/issues/187>`_)
+* Added ComputeEnabledAABB function
+* Added a better error message when or_ompl is missing (`#178 <https://github.com/personalrobotics/prpy/issues/178>`_)
+* Added support for OWD execution options
+* Refactored TSR and TSRChain classes (`#159 <https://github.com/personalrobotics/prpy/issues/159>`_)
+* Refactored MoveUntilTouch and fixed simulation (`#180 <https://github.com/personalrobotics/prpy/issues/180>`_ `#173 <https://github.com/personalrobotics/prpy/issues/173>`_)
+* Refactored and cleaned up the Planner and MetaPlanner base classes (`#176 <https://github.com/personalrobotics/prpy/issues/176>`_, `#162 <https://github.com/personalrobotics/prpy/issues/162>`_)
+* Refactored  VectorFieldPlanner to use a numerical integrator (`#184 <https://github.com/personalrobotics/prpy/issues/184>`_)
+* Fixed acceleration limits on ADA for the MICO2 hardware upgrade (`#186 <https://github.com/personalrobotics/prpy/issues/186>`_)
+* Fixed _PlanWrapper on Manipulator to default to execute=False (`#183 <https://github.com/personalrobotics/prpy/issues/183>`_)
+* Fixed sign on tolerance in ComputeJointVelocityFromTwist (`#177 <https://github.com/personalrobotics/prpy/issues/177>`_) 
+* Fixed GreedyIK planner in MoveUntilTouch (`#174 <https://github.com/personalrobotics/prpy/issues/174>`_)
+* Fixed the name of the timelimit argument in HauserParabolicSmoother
+* Fixed PostProcessPath to preserve trajectory tags
+* Removed unnecessary sleep in WAM tare command
+* Deprecated the GetVelocityLimits override on WAM (`#175 <https://github.com/personalrobotics/prpy/issues/175>`_)
+* Contributors: Anton Kuznetsov, Chris Dellin, Jennifer King, Michael Koval, Pras Velagapudi, Rachel Holladay, Shervin Javdani, Shushman, Shushman Choudhury, Siddhartha Srinivasa, Stefanos Nikolaidis, Aaron Johnson, Matt Klingsmith
+
 1.2.0 (2015-08-06)
 ------------------
 * Add support for numpy <1.8 which don't support norm(axis=1)

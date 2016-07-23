@@ -1,6 +1,11 @@
 import numpy
 from prpy.clone import CloneException
 from prpy.planning.base import PlanningError
+from prpy.planning.exceptions import (
+    CollisionPlanningError,
+    SelfCollisionPlanningError,
+    ConstraintViolationPlanningError,
+    JointLimitError)
 
 
 class PlanToEndEffectorOffsetTest(object):
@@ -86,7 +91,7 @@ class PlanToEndEffectorOffsetTest(object):
             self.planner.PlanToEndEffectorOffset(
                 self.robot, direction=self.direction, distance=self.distance)
 
-    def test_PlanToEndEffectorOffset_GoalInCollision_Throws(self):
+    def test_PlanToEndEffectorOffset_GoalInEnvCollision_Throws(self):
         # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_infeasible_env_movement)
@@ -96,7 +101,7 @@ class PlanToEndEffectorOffsetTest(object):
             self.planner.PlanToEndEffectorOffset(
                 self.robot, direction=self.direction, distance=self.distance)
 
-    def test_PlanToEndEffectorOffset_GoalInCollision_Throws(self):
+    def test_PlanToEndEffectorOffset_GoalInSelfCollision_Throws(self):
         # Setup
         with self.env:
             self.robot.SetActiveDOFValues(self.config_infeasible_self_movement)
@@ -106,3 +111,40 @@ class PlanToEndEffectorOffsetTest(object):
             self.planner.PlanToEndEffectorOffset(
                 self.robot, direction=numpy.array([0., 0., -1.]),
                 distance=0.1)
+
+class PlanToEndEffectorOffsetCollisionTest(object):
+    """ Expects collision-specific error"""
+    def setUp(self):
+        self.direction = numpy.array([ 0., 0., 1. ])
+        self.distance = 0.1
+
+    def test_PlanToEndEffectorOffset_StartInCollision_Throws_CollisionError(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(self.config_feasible_goal)
+            goal_ik = self.manipulator.GetEndEffectorTransform()
+            self.robot.SetActiveDOFValues(self.config_env_collision)
+
+        # Test/Assert
+        with self.assertRaises((CollisionPlanningError,
+            SelfCollisionPlanningError,
+            JointLimitError,
+            ConstraintViolationPlanningError
+            )):
+            self.planner.PlanToEndEffectorOffset(
+                self.robot, direction=self.direction, distance=self.distance)
+
+    def test_PlanToEndEffectorOffset_GoalInEnvCollision_Throws_CollisionError(self):
+        # Setup
+        with self.env:
+            self.robot.SetActiveDOFValues(
+                PlanToEndEffectorOffsetTest.config_infeasible_env_movement)
+
+        # Test/Assert
+        with self.assertRaises((CollisionPlanningError,
+            SelfCollisionPlanningError,
+            JointLimitError,
+            ConstraintViolationPlanningError,
+            )):
+            self.planner.PlanToEndEffectorOffset(
+                self.robot, direction=self.direction, distance=self.distance)
