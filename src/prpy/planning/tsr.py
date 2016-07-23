@@ -34,6 +34,8 @@ import numpy
 import openravepy
 from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
+from .base import Tags
+from ..util import SetTrajectoryTags
 
 logger = logging.getLogger(__name__)
 
