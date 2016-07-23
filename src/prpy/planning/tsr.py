@@ -136,9 +136,11 @@ class TSRPlanner(BasePlanner):
             return ik_solutions
 
         def is_configuration_valid(ik_solution):
-            robot.SetActiveDOFValues(ik_solution)
-            return (not self.env.CheckCollision(robot)
-                and not robot.CheckSelfCollision())
+            p = openravepy.KinBody.SaveParameters
+            with robot.CreateRobotStateSaver(p.LinkTransformation):
+                robot.SetActiveDOFValues(ik_solution)
+                return (not self.env.CheckCollision(robot)
+                    and not robot.CheckSelfCollision())
 
         def is_time_available(*args):
             # time_start and time_expired are defined below.
