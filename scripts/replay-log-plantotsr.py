@@ -112,37 +112,43 @@ traj = None
 num_trials = 5 
 
 filename = get_filename(logfile, getattr(planner, 'name', str(planner)), method_name, args.outdir)
-if os.path.isfile(filename):
-    print (filename, "exists...")
-    import sys
-    sys.exit(0)
-
+#if os.path.isfile(filename):
+#    print (filename, "exists...")
+#    import sys
+#    sys.exit(0)
+#
 reqdict = dict()
 resdict = {'planner_used':[],
            'ok':[],
-           'planning_time':[]}
+           'planning_time':[],
+           'error':[]}
 
 reqdict['method'] = yamldict['request']['method']
 reqdict['planner_name'] = str(planner)
 
-for j in range(num_trials):
 
+for j in range(num_trials):
+    error_msg = ''
+    traj = None
     start_time = time.time()
     try:
         traj = method(robot, *method_args, **method_kwargs)    
+    except prpy.planning.exceptions.UnsupportedPlanningError as e:
+        print (e)
+        import sys
+        sys.exit(0)
     except PlanningError as e: 
         error_msg = str(e)
         print (error_msg)
-    except AttributeError as e:
-        pass
     finally:
         planning_time = time.time() - start_time
     if traj:
         tags = GetTrajectoryTags(traj)
     	resdict['planner_used'].append(None if not traj else tags[Tags.PLANNER])
+
     resdict['ok'].append(True if traj else False)
     resdict['planning_time'].append(planning_time)
-
+    resdict['error'].append(error_msg)
     ok = True if traj else False
     planner_name = getattr(planner, 'name', str(planner))
     with open('replay-completed-'+planner_name+'.log', 'a') as fp:
