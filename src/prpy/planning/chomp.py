@@ -283,6 +283,13 @@ class CHOMPPlanner(BasePlanner):
                 elif robot.CheckSelfCollision(report=report):
                     raise SelfCollisionPlanningError.FromReport(report)
 
-        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
+        # Tag the trajectory as non-determistic since CBiRRT is a randomized
+        # planner. Additionally tag the goal as non-deterministic if CBiRRT
+        # chose from a set of more than one goal configuration.
+        SetTrajectoryTags(traj, {
+            Tags.SMOOTH: True,
+            Tags.DETERMINISTIC_TRAJECTORY: not kwargs.get('use_hmc', False),
+            Tags.DETERMINISTIC_ENDPOINT: True
+        }, append=True)
 
         return traj

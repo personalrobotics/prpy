@@ -83,6 +83,17 @@ class Tags(object):
     The amount of time that was spent actually running a trajectory.
     """
 
+    DETERMINISTIC_TRAJECTORY = 'deterministic'
+    """
+    Whether repeating the same planning query will produce the same trajectory.
+    """
+
+    DETERMINISTIC_ENDPOINT = 'deterministic_endpoint'
+    """
+    Whether repeating the same planning query will produce a trajectory with
+    the same endpoint as this trajectory.
+    """
+
 
 class LockedPlanningMethod(object):
     """

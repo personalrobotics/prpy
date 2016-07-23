@@ -169,6 +169,13 @@ class TSRPlanner(BasePlanner):
 
                     logger.info('Planned to IK solution set %d of %d.',
                                 i + 1, num_attempts)
+
+                    # We sampled the goal non-deterministically from the TSR.
+                    SetTrajectoryTags(traj, {
+                        Tags.DETERMINISTIC_TRAJECTORY: False,
+                        Tags.DETERMINISTIC_ENDPOINT: False,
+                    }, append=True)
+
                     return traj
                 except PlanningError as e:
                     logger.warning(

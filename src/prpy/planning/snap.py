@@ -189,6 +189,10 @@ class SnapPlanner(BasePlanner):
                 elif robot.CheckSelfCollision(report=report):
                     raise SelfCollisionPlanningError.FromReport(report)
 
-        # Tag the return trajectory as smooth (in joint space).
-        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
+        SetTrajectoryTags(traj, {
+            Tags.SMOOTH: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return traj

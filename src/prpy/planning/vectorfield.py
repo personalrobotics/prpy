@@ -589,11 +589,11 @@ class VectorFieldPlanner(BasePlanner):
                            path.Sample(t_cache),
                            cspec)
 
-        # Flag this trajectory as constrained.
-        util.SetTrajectoryTags(
-            output_path, {
-                Tags.CONSTRAINED: 'true',
-                Tags.SMOOTH: 'true'
-            }, append=True
-        )
+        util.SetTrajectoryTags(output_path, {
+            Tags.SMOOTH: True,
+            Tags.CONSTRAINED: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return output_path
