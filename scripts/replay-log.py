@@ -63,14 +63,15 @@ parser.add_argument('--planner', required=True, help=('cbirrt OMPL_RRTConnect sn
 parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
 args = parser.parse_args()
 
-planner_list = args.planner.split(' ')
+planner_list = args.planner.lower().split(' ')
 randomized = [x.lower() for x in ['cbirrt', 'OMPL RRTConnect', 'CachedLemur', 'Lemur']]
 
 planners = []
 for pl in planner_list: 
+    print (pl)
     if pl == 'cbirrt':
         planners.append(CBiRRTPlanner())
-    elif pl == 'OMPL_RRTConnect':
+    elif pl == 'ompl_rrtconnect':
         planners.append(prpy.planning.ompl.OMPLPlanner('RRTConnect'))
     elif pl == "snap":
         planners.append(SnapPlanner())
@@ -82,7 +83,7 @@ for pl in planner_list:
         planners.append(GreedyIKPlanner())
     elif pl == 'trajopt':
         planners.append(TrajoptPlanner())
-    elif pl == 'CachedLemur':
+    elif pl == 'cachedlemur':
         for i in range(10):
             planner = prpy_lemur.lemur.LEMURPlanner(
                 roadmap=prpy_lemur.roadmaps.CachedHaltonOffDens(
@@ -91,8 +92,7 @@ for pl in planner_list:
             setattr(planner, 'seed', i)
             setattr(planner, 'name', 'CachedLemur')
             planners.append(planner)
-
-    elif pl == 'Lemur':
+    elif pl == 'lemur':
         for i in range(10):
             planner = prpy_lemur.lemur.LEMURPlanner(
                 roadmap=prpy_lemur.roadmaps.HaltonOffDens(
@@ -109,6 +109,7 @@ start_logfile_at = time.time()
 
 yamldict = yaml.safe_load(open(logfile))
 method_name = yamldict['request']['method']
+
 if method_name.lower() == 'plantotsr':
     print ("Skipping PlanToTSR...")
 
