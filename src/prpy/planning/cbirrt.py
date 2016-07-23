@@ -278,7 +278,8 @@ class CBiRRTPlanner(BasePlanner):
             response = self.problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):
-            raise PlanningError('Unknown error: ' + response)
+            raise PlanningError('Unknown error: ' + response,
+                deterministic=False)
 
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:

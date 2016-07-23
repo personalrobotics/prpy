@@ -254,12 +254,14 @@ class CHOMPPlanner(BasePlanner):
             n_iter=n_iter, **kwargs)
 
     def _Plan(self, robot, sampling_func=VanDerCorputSampleGenerator, **kwargs):
+        is_deterministic = not kwargs.get('use_hmc', False)
+
         try:
             # Disable collision checking since we will perform them below.
             traj = self.module.runchomp(robot=robot, no_collision_check=True,
                     releasegil=True, **kwargs)
         except Exception as e:
-            raise PlanningError(str(e))
+            raise PlanningError(str(e), deterministic=is_deterministic)
 
         # Strip the extra groups added by CHOMP and change the trajectory to be
         # linearly interpolated, as required by GetLinearCollisionCheckPts.
@@ -279,16 +281,18 @@ class CHOMPPlanner(BasePlanner):
 
                 report = openravepy.CollisionReport()
                 if self.env.CheckCollision(robot, report=report):
-                    raise CollisionPlanningError.FromReport(report)
+                    raise CollisionPlanningError.FromReport(
+                        report, deterministic=is_deterministic)
                 elif robot.CheckSelfCollision(report=report):
-                    raise SelfCollisionPlanningError.FromReport(report)
+                    raise SelfCollisionPlanningError.FromReport(
+                        report, deterministic=is_deterministic)
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
         # planner. Additionally tag the goal as non-deterministic if CBiRRT
         # chose from a set of more than one goal configuration.
         SetTrajectoryTags(traj, {
             Tags.SMOOTH: True,
-            Tags.DETERMINISTIC_TRAJECTORY: not kwargs.get('use_hmc', False),
+            Tags.DETERMINISTIC_TRAJECTORY: is_deterministic,
             Tags.DETERMINISTIC_ENDPOINT: True
         }, append=True)
 

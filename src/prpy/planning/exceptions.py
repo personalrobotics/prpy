@@ -1,18 +1,27 @@
 
 class PlanningError(Exception):
-    pass
+    KNOWN_KWARGS = set(['deterministic'])
+
+    def __init__(self, *args, **kwargs):
+        super(PlanningError, self).__init__(*args)
+
+        assert self.KNOWN_KWARGS.issuperset(kwargs.keys())
+        self.deterministic = kwargs.get('deterministic', None)
 
 
 class UnsupportedPlanningError(PlanningError):
-    pass
+    def __init__(self, *args):
+        super(UnsupportedPlanningError, self).__init__(
+            *args, deterministic=True)
 
 
 class ConstraintViolationPlanningError(PlanningError):
     def __init__(self, 
                 constraint_name, 
-                threshold = None,
-                violation_by = None, 
-                base_message='Violates constraint'):
+                threshold=None,
+                violation_by=None, 
+                base_message='Violates constraint',
+                deterministic=None):
         self.constraint_name = constraint_name 
         self.threshold = threshold
         self.violation_by = violation_by
@@ -21,14 +30,14 @@ class ConstraintViolationPlanningError(PlanningError):
             '{:s}: {:s}'.format(
                 base_message,
                 self.constraint_name
-            )
+            ),
+            deterministic=deterministic
         )
-
-    pass
 
 
 class CollisionPlanningError(PlanningError):
-    def __init__(self, link1, link2, base_message='Detected collision'):
+    def __init__(self, link1, link2, base_message='Detected collision',
+            deterministic=None):
         self.link1 = link1
         self.link2 = link2
 
@@ -37,12 +46,13 @@ class CollisionPlanningError(PlanningError):
                 base_message,
                 self._get_link_str(link1),
                 self._get_link_str(link2)
-            )
+            ),
+            deterministic=deterministic
         )
 
     @classmethod
-    def FromReport(cls, report):
-        return cls(report.plink1, report.plink2)
+    def FromReport(cls, report, deterministic=None):
+        return cls(report.plink1, report.plink2, deterministic=deterministic)
 
     @staticmethod
     def _get_link_str(link):
@@ -54,7 +64,8 @@ class CollisionPlanningError(PlanningError):
 
 
 class JointLimitError(PlanningError):
-    def __init__(self, robot, dof_index, dof_value, dof_limit, description):
+    def __init__(self, robot, dof_index, dof_value, dof_limit, description,
+            deterministic=None):
         self.robot = robot
         self.dof_index = dof_index
         self.dof_value = dof_value
@@ -79,7 +90,8 @@ class JointLimitError(PlanningError):
                 dof_limit=dof_limit,
                 comparison=comparison,
                 direction=direction,
-                description=description))
+                description=description),
+            deterministic=deterministic)
 
 
 class SelfCollisionPlanningError(CollisionPlanningError):
@@ -87,13 +99,14 @@ class SelfCollisionPlanningError(CollisionPlanningError):
 
 
 class TimeoutPlanningError(PlanningError):
-    def __init__(self, timelimit=None):
+    def __init__(self, timelimit=None, deterministic=None):
         if timelimit is not None:
             message = 'Exceeded {:.3f} s time limit.'.format(timelimit)
         else:
             message = 'Exceeded time limit.'
 
-        super(TimeoutPlanningError, self).__init__(message)
+        super(TimeoutPlanningError, self).__init__(
+            message, deterministic=deterministic)
 
 
 class MetaPlanningError(PlanningError):
@@ -102,8 +115,8 @@ class MetaPlanningError(PlanningError):
     more other planners internally failed due to the internal planning calls
     failing.
     """
-    def __init__(self, message, errors):
-        PlanningError.__init__(self, message)
+    def __init__(self, message, errors, deterministic=None):
+        PlanningError.__init__(self, message, deterministic=deterministic)
         self.errors = errors
 
     # TODO: Print the inner exceptions.
@@ -120,5 +133,6 @@ class ClonedPlanningError(PlanningError):
     """
     def __init__(self, cloning_error):
         super(ClonedPlanningError, self).__init__(
-            "Failed to clone: {:s}".format(cloning_error))
+            "Failed to clone: {:s}".format(cloning_error),
+            deterministic=True)
         self.error = cloning_error

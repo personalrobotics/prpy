@@ -114,9 +114,9 @@ class SnapPlanner(BasePlanner):
                 robot.SetActiveDOFValues(q)
                 report = openravepy.CollisionReport()
                 if self.env.CheckCollision(robot, report=report):
-                    raise CollisionPlanningError.FromReport(report)
+                    raise CollisionPlanningError.FromReport(report, deterministic=True)
                 elif robot.CheckSelfCollision(report=report):
-                    raise SelfCollisionPlanningError.FromReport(report)
+                    raise SelfCollisionPlanningError.FromReport(report, deterministic=True)
 
             raise PlanningError('There is no IK solution at the goal pose.')
 
@@ -185,9 +185,11 @@ class SnapPlanner(BasePlanner):
                 # Check for collisions
                 report = openravepy.CollisionReport()
                 if self.env.CheckCollision(robot, report=report):
-                    raise CollisionPlanningError.FromReport(report)
+                    raise CollisionPlanningError.FromReport(
+                        report, deterministic=True)
                 elif robot.CheckSelfCollision(report=report):
-                    raise SelfCollisionPlanningError.FromReport(report)
+                    raise SelfCollisionPlanningError.FromReport(
+                        report, deterministic=True)
 
         SetTrajectoryTags(traj, {
             Tags.SMOOTH: True,

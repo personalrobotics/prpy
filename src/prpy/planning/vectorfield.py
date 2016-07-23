@@ -498,9 +498,11 @@ class VectorFieldPlanner(BasePlanner):
             # Check collision.
             report = CollisionReport()
             if env.CheckCollision(robot, report=report):
-                raise CollisionPlanningError.FromReport(report)
+                raise CollisionPlanningError.FromReport(
+                    report, deterministic=True)
             elif robot.CheckSelfCollision(report=report):
-                raise SelfCollisionPlanningError.FromReport(report)
+                raise SelfCollisionPlanningError.FromReport(
+                    report, deterministic=True)
 
             # Check the termination condition.
             status = fn_terminate()
@@ -569,7 +571,8 @@ class VectorFieldPlanner(BasePlanner):
         exception = nonlocals['exception']
 
         if t_cache is None:
-            raise exception or PlanningError('An unknown error has occurred.')
+            raise exception or PlanningError(
+                'An unknown error has occurred.', deterministic=True)
         elif exception:
             logger.warning('Terminated early: %s', str(exception))
 

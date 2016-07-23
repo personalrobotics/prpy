@@ -188,10 +188,14 @@ class GreedyIKPlanner(BasePlanner):
             try:
                 while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
+                    # TODO: This is not really deterministic because we do not
+                    # have control over CPU time. However, it is exceedingly
+                    # unlikely that running the query again will change the
+                    # outcome unless there is a significant change in CPU load.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        raise TimeoutPlanningError(timelimit)
+                        raise TimeoutPlanningError(timelimit, deterministic=True)
 
                     # Hypothesize new configuration as closest IK to current
                     qcurr = robot.GetActiveDOFValues()  # Configuration at t.
@@ -208,7 +212,7 @@ class GreedyIKPlanner(BasePlanner):
                         # Found an IK
                         step = abs(qnew - qcurr)
                         if (max(step) < min_step) and qtraj:
-                            raise PlanningError('Not making progress.')
+                            raise PlanningError('Not making progress.', deterministic=True)
                         infeasible_step = \
                             any(step > robot.GetActiveDOFResolutions())
                     if infeasible_step:
@@ -250,10 +254,12 @@ class GreedyIKPlanner(BasePlanner):
                             cr = CollisionReport()
                             if self.env.CheckCollision(robot, report=cr):
                                 collision_error = \
-                                    CollisionPlanningError.FromReport(cr)
+                                    CollisionPlanningError.FromReport(
+                                        cr, deterministic=True)
                             elif robot.CheckSelfCollision(report=cr):
                                 collision_error = \
-                                    SelfCollisionPlanningError.FromReport(cr)
+                                    SelfCollisionPlanningError.FromReport(
+                                        cr, deterministic=True)
                             else:
                                 collision_error = None
                     if collision_error is not None:

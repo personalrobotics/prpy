@@ -129,7 +129,9 @@ class TSRPlanner(BasePlanner):
                 ik_solutions.append(ik_solution)
 
         if len(ik_solutions) == 0:
-            raise PlanningError('No collision-free IK solutions at goal TSRs.')
+            raise PlanningError(
+                'No collision-free IK solutions at goal TSRs.',
+                deterministic=False)
 
         # Sort the IK solutions in ascending order by the costs returned by the
         # ranker. Lower cost solutions are better and infinite cost solutions
@@ -180,9 +182,10 @@ class TSRPlanner(BasePlanner):
                 except PlanningError as e:
                     logger.warning(
                         'Planning to IK solution set %d of %d failed: %s',
-                        i + 1, num_attempts, e)
+                        i + 1, num_attempts, e,)
 
         # If none of the planning attempts succeeded, report failure.
         raise PlanningError(
             'Planning to the top {:d} of {:d} IK solution sets failed.'
-            .format(num_attempts, len(ranked_ik_solution_sets)))
+            .format(num_attempts, len(ranked_ik_solution_sets)),
+            deterministic=False)

@@ -121,8 +121,9 @@ class OMPLPlanner(BasePlanner):
 
             if status not in [PlannerStatus.HasSolution,
                               PlannerStatus.InterruptedWithSolution]:
-                raise PlanningError('Planner returned with status {0:s}.'
-                                    .format(str(status)))
+                raise PlanningError(
+                    'Planner returned with status {:s}.'.format(str(status)),
+                    deterministic=False)
 
         # Tag the trajectory as non-determistic since most OMPL planners are
         # randomized. Additionally tag the goal as non-deterministic if OMPL
