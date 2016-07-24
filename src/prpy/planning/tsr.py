@@ -108,14 +108,13 @@ class TSRPlanner(BasePlanner):
         delegate_planner = self.delegate_planner or robot.planner
 
         # Plan using the active manipulator.
-        with robot.GetEnv():
-            manipulator = robot.GetActiveManipulator()
+        manipulator = robot.GetActiveManipulator()
 
-            # Distance from current configuration is default ranking.
-            if ranker is None:
-                from ..ik_ranking import NominalConfiguration
-                ranker = NominalConfiguration(manipulator.GetArmDOFValues(),
-                                              max_deviation=max_deviation)
+        # Distance from current configuration is default ranking.
+        if ranker is None:
+            from ..ik_ranking import NominalConfiguration
+            ranker = NominalConfiguration(manipulator.GetArmDOFValues(),
+                                          max_deviation=max_deviation)
 
         # Test for tsrchains that cannot be handled.
         for tsrchain in tsrchains:
