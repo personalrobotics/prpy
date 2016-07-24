@@ -37,6 +37,7 @@ import scipy.misc
 import scipy.optimize
 import threading
 import time
+import warnings
 
 
 logger = logging.getLogger(__name__)
@@ -2056,6 +2057,7 @@ def GetManipulatorIndex(robot, manip=None):
     @param manip The robot manipulator
     @return (manip, manip_idx) The manipulator and its index
     """
+    from openravepy import DebugLevel, RaveGetDebugLevel, RaveSetDebugLevel
 
     with robot.GetEnv():
         if manip is None:
@@ -2064,7 +2066,14 @@ def GetManipulatorIndex(robot, manip=None):
         with robot.CreateRobotStateSaver(
                 robot.SaveParameters.ActiveManipulator):
             robot.SetActiveManipulator(manip)
-            manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+
+            # Ignore GetActiveManipulatorIndex's DeprecationWarning.
+            debug_level = RaveGetDebugLevel()
+            try:
+                RaveSetDebugLevel(DebugLevel.Error)
+                manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+            finally:
+                RaveSetDebugLevel(debug_level)
 
     return (manip, manip_idx)
 
