@@ -1545,10 +1545,11 @@ def VanDerCorputSampleGenerator(start, end, step=2):
             return
 
         idx = numpy.digitize((s,), check_bins, right=True)
-        if is_checked[idx]:
+        assert idx.shape == (1,)
+        if is_checked[idx[0]]:
             continue
 
-        is_checked[idx] = True
+        is_checked[idx[0]] = True
         yield float(check_bins[idx])
 
 
