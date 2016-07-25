@@ -1,21 +1,19 @@
 import numpy
+import warnings
 from prpy.tsr.tsrlibrary import TSRFactory
 from prpy.tsr.tsr import TSR, TSRChain
+from ..util import GetManipulatorIndex
 
 def get_manip_idx(robot, manip=None):
     """
-    Helper function for getting the manipulator index
-    to be used by the TSR
+    Helper function for getting the manipulator index to be used by the TSR.
+
+    Deprecated. Please use util.GetActiveManipulatorIndex instead.
     """
-    if manip is None:
-        manip_idx = robot.GetActiveManipulatorIndex()
-    else:
-        import openravepy
-        p = openravepy.KinBody.SaveParameters
-        with robot.CreateRobotStateSaver(p.ActiveManipulator):
-            robot.SetActiveManipulator(manip)
-            manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
-    return manip_idx
+    warnings.warn(
+      'tsr.get_manip_idx is deprecated. Please use'
+      ' util.GetActiveManipulatorIndex instead.', DeprecationWarning)
+    return GetActiveManipulatorIndex(robot, manip)
 
 def cylinder_grasp(robot, obj, obj_radius, obj_height, 
                    lateral_offset = 0.0, 
@@ -60,7 +58,7 @@ def cylinder_grasp(robot, obj, obj_radius, obj_height,
                         'than or equal to the second (current values [%f, %f])' 
                         % (yaw_range[0], yaw_range[1]))
 
-    manip_idx = get_manip_idx(robot, manip=manip)
+    manip_idx = GetManipulatorIndex(robot, manip=manip)
 
     T0_w = obj.GetTransform()
     total_offset = lateral_offset + obj_radius
@@ -135,7 +133,7 @@ def box_grasp(robot, box, length, width, height,
     if lateral_tolerance < 0.0:
         raise Exception('lateral_tolerance must be >= 0.0')
 
-    manip_idx = get_manip_idx(robot, manip=manip)
+    manip_idx = GetManipulatorIndex(robot, manip=manip)
 
     T0_w = box.GetTransform()
 
@@ -251,7 +249,7 @@ def place_object(robot, obj, pose_tsr_chain, manip=None,
        manipulator of the robot is used
     """
 
-    manip_idx = get_manip_idx(robot, manip=manip)
+    manip_idx = GetManipulatorIndex(robot, manip=manip)
     if manip is None:
         manip = robot.GetManipulators()[manip_idx]
 
@@ -300,7 +298,7 @@ def transport_upright(robot, obj,
     if yaw_epsilon < 0.0:
         raise Exception('yaw_epsilon must be >= 0')
 
-    manip_idx = get_manip_idx(robot, manip=manip)
+    manip_idx = GetManipulatorIndex(robot, manip=manip)
     if manip is None:
         manip = robot.GetManipulators()[manip_idx]
 

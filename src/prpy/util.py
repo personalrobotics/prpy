@@ -37,6 +37,7 @@ import scipy.misc
 import scipy.optimize
 import threading
 import time
+import warnings
 
 
 logger = logging.getLogger(__name__)
@@ -1545,10 +1546,11 @@ def VanDerCorputSampleGenerator(start, end, step=2):
             return
 
         idx = numpy.digitize((s,), check_bins, right=True)
-        if is_checked[idx]:
+        assert idx.shape == (1,)
+        if is_checked[idx[0]]:
             continue
 
-        is_checked[idx] = True
+        is_checked[idx[0]] = True
         yield float(check_bins[idx])
 
 
@@ -2053,6 +2055,7 @@ def GetManipulatorIndex(robot, manip=None):
     @param manip The robot manipulator
     @return (manip, manip_idx) The manipulator and its index
     """
+    from openravepy import DebugLevel, RaveGetDebugLevel, RaveSetDebugLevel
 
     with robot.GetEnv():
         if manip is None:
@@ -2061,7 +2064,14 @@ def GetManipulatorIndex(robot, manip=None):
         with robot.CreateRobotStateSaver(
                 robot.SaveParameters.ActiveManipulator):
             robot.SetActiveManipulator(manip)
-            manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+
+            # Ignore GetActiveManipulatorIndex's DeprecationWarning.
+            debug_level = RaveGetDebugLevel()
+            try:
+                RaveSetDebugLevel(DebugLevel.Error)
+                manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+            finally:
+                RaveSetDebugLevel(debug_level)
 
     return (manip, manip_idx)
 
