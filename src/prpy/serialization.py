@@ -105,7 +105,10 @@ def serialize_kinbody(body, uri_only=False):
 
     uri = body.GetXMLFilename()
     
-    if not uri:
+    if uri_only and not uri:
+        serialization_logger.warn(
+            'uri_only passed, but kinbody {} doesn\'t have a URI.'.format(
+            body.GetName()))
         uri_only = False
     
     data = {
@@ -113,7 +116,8 @@ def serialize_kinbody(body, uri_only=False):
         'name': body.GetName(),
         'uri': uri,
     }
-    
+
+    # only add uri_only to serialization so that older deserializers work
     if uri_only:
         data['uri_only'] = True
     
@@ -149,12 +153,10 @@ def serialize_kinbody_state(body, uri_only=False):
 
     link_transforms, dof_branches = body.GetLinkTransformations(True)
     data.update({
+        'link_transforms': map(serialize_transform, link_transforms),
+        'dof_branches': dof_branches.tolist(),
         'dof_values': body.GetDOFValues().tolist(),
     })
-    if not uri_only:
-        data.update({
-            'link_transforms': map(serialize_transform, link_transforms),
-        })
 
     return data
 
@@ -214,6 +216,17 @@ def serialize_transform(t):
     }
 
 # Deserialization.
+
+class UnitaryMemoizer:
+    def __init__(self, func):
+        self.func = func
+        self.called = False
+    def __call__(self):
+        if not self.called:
+            self.result = self.func()
+            self.called = True
+        return self.result
+
 def _deserialize_internal(env, data, data_type):
     from numpy import array, ndarray
     from openravepy import (Environment, KinBody, Robot, Trajectory,
@@ -317,12 +330,16 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
             deserialization_logger.debug('Purging body "%s".', body.GetName())
             env.Remove(body)
 
+    # Create a or_ordf module on demand
+    urdf_module_getter = UnitaryMemoizer(lambda: openravepy.RaveCreateModule(env,'urdf'))
+
     # Deserialize the kinematic structure.
     deserialized_bodies = []
     for body_data in data['bodies']:
         body = reuse_bodies_dict.get(body_data['name'], None)
         if body is None:
-            body = deserialize_kinbody(env, body_data, state=False)
+            body = deserialize_kinbody(env, body_data, state=False,
+                urdf_module_getter=urdf_module_getter)
 
         deserialization_logger.debug('Deserialized body "%s".', body.GetName())
         deserialized_bodies.append((body, body_data))
@@ -337,8 +354,13 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
 
     return env
 
-def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
+def deserialize_kinbody(env, data, name=None, anonymous=False, state=True,
+        urdf_module_getter=None):
+
     from openravepy import RaveCreateKinBody, RaveCreateRobot
+
+    if urdf_module_getter is None:
+        urdf_module_getter = UnitaryMemoizer(lambda: openravepy.RaveCreateModule(env,'urdf'))
 
     deserialization_logger.debug('Deserializing %s "%s".',
         'Robot' if data['is_robot'] else 'KinBody',
@@ -347,27 +369,32 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
     
     name_desired = name or data['name']
     
-    if 'uri_only' in data and data['uri_only']:
+    if data.get('uri_only', False):
         
         if data['is_robot']:
-            
-            if data['uri'].endswith('.robot.xml'):
-                kinbody = env.ReadRobotXMLFile('robots/barrettwam.robot.xml')
-                kinbody.SetName(name_desired)
-                env.Add(kinbody, anonymous)
-            else:
-                urdf,srdf = data['uri'].split()
-                m_urdf = openravepy.RaveCreateModule(env, 'urdf')
-                robot_name = m_urdf.SendCommand('Load {:s} {:s}'.format(urdf,srdf))
+
+            parts = data['uri'].split()
+            if len(parts)==2 and parts[0].endswith('.urdf') and parts[1].endswith('.srdf'):
+                robot_name = urdf_module_getter().SendCommand('Load {}'.format(data['uri']))
                 if robot_name != name_desired:
                     raise RuntimeError('error, or_urdf name mismatch!')
                 kinbody = env.GetRobot(robot_name)
+            else:
+                kinbody = env.ReadRobotXMLFile(data['uri'])
+                kinbody.SetName(name_desired)
+                env.Add(kinbody, anonymous)
             
         else:
-            
-            kinbody = env.ReadKinBodyXMLFile(data['uri'])
-            kinbody.SetName(name_desired)
-            env.Add(kinbody)
+
+            if data['uri'].endswith('.urdf'):
+                kinbody_name = urdf_module_getter().SendCommand('Load {}'.format(data['uri']))
+                if kinbody_name != name_desired:
+                    raise RuntimeError('error, or_urdf name mismatch!')
+                kinbody = env.GetKinBody(kinbody_name)
+            else:
+                kinbody = env.ReadKinBodyXMLFile(data['uri'])
+                kinbody.SetName(name_desired)
+                env.Add(kinbody)
         
     else:
         
@@ -426,14 +453,20 @@ def deserialize_kinbody_state(body, data):
                 body.GetName(), key, e.message
             )
             raise
-    
-    body.SetDOFValues(data['dof_values'])
-    
-    if 'link_transforms' in data:
+
+    link_transforms = data.get('link_transforms')
+    dof_branches = data.get('dof_branches')
+    if link_transforms is not None and dof_branches is not None:
         body.SetLinkTransformations(
-            map(deserialize_transform, data['link_transforms']),
-            data['dof_branches']
+            map(deserialize_transform, link_transforms),
+            dof_branches
         )
+
+    else:
+        deserialization_logger.warn(
+            ('KinBody "{}" does not have link_transforms/dof_branches'
+            + 'saved; falling back to dof_values').format(body.GetName()))
+        body.SetDOFValues(data['dof_values'])
 
 def deserialize_robot_state(body, data):
     deserialization_logger.debug('Deserializing "%s" Robot state.',
