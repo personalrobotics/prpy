@@ -439,7 +439,7 @@ class VectorFieldPlanner(BasePlanner):
             SelfCollisionPlanningError,
         )
         from openravepy import CollisionReport, RaveCreateTrajectory
-        from ..util import GetCollisionCheckPts
+        from ..util import GetLinearCollisionCheckPts
         import time
         import scipy.integrate
 
@@ -526,11 +526,13 @@ class VectorFieldPlanner(BasePlanner):
                 if path.GetNumWaypoints() == 1:
                     checks = [(t, q)]
                 else:
-                    # TODO: This should start at t_check. Unfortunately, a bug
-                    # in GetCollisionCheckPts causes this to enter an infinite
-                    # loop.
-                    checks = GetCollisionCheckPts(robot, path,
-                                                  include_start=False)
+                    # TODO: This will recheck the entire trajectory
+                    #  Ideally should just check the new portion of the trajectory
+                    from prpy.util import VanDerCorputSampleGenerator
+                    vdc = VanDerCorputSampleGenerator
+                    checks = GetLinearCollisionCheckPts(robot, path,
+                                                        norm_order=2,
+                                                        sampling_func=vdc)
                     # start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
