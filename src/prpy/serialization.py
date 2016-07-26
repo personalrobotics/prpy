@@ -16,8 +16,10 @@ def serialize(obj):
 
     NoneType = type(None)
 
-    if isinstance(obj, numpy.float64):
+    if isinstance(obj, numpy.floating):
         return float(obj)
+    elif isinstance(obj, (numpy.signedinteger, numpy.unsignedinteger)):
+        return int(obj)
     elif isinstance(obj, (int, float, basestring, NoneType)):
         return obj
     elif isinstance(obj, (list, tuple)):
@@ -107,7 +109,8 @@ def serialize_kinbody(body, uri_only=False):
     
     if uri_only and not uri:
         serialization_logger.warn(
-            'uri_only passed, but kinbody {} doesn\'t have a URI.'.format(
+            'uri_only passed, but KinBody "{}"\'s GetXMLFilename()'
+            'returns an empty URI.'.format(
             body.GetName()))
         uri_only = False
     
@@ -117,7 +120,8 @@ def serialize_kinbody(body, uri_only=False):
         'uri': uri,
     }
 
-    # only add uri_only to serialization so that older deserializers work
+    # Only add uri_only to the serialization if uri_only is set
+    # so older deserializers work.
     if uri_only:
         data['uri_only'] = True
     
@@ -128,7 +132,7 @@ def serialize_kinbody(body, uri_only=False):
         data['links'] = map(serialize_link, body.GetLinks())
         data['joints'] = map(serialize_joint, all_joints)
     
-    data['kinbody_state'] = serialize_kinbody_state(body, uri_only=uri_only)
+    data['kinbody_state'] = serialize_kinbody_state(body)
 
     if body.IsRobot():
         data.update(serialize_robot(body, uri_only=uri_only))
@@ -145,7 +149,7 @@ def serialize_robot(robot, uri_only=False):
         })
     return data
 
-def serialize_kinbody_state(body, uri_only=False):
+def serialize_kinbody_state(body):
     data = {
         name: get_fn(body)
         for name, (get_fn, _) in KINBODY_STATE_MAP.iteritems()
@@ -218,6 +222,13 @@ def serialize_transform(t):
 # Deserialization.
 
 class UnitaryMemoizer:
+    """Memoizer which calls the given non-argument callable at most once.
+
+    An instance of this class is initialized with a callable which
+    takes no arguments.  When the instance is called the first time,
+    it invokes the callable, saves the result, and returns it.
+    Subsequent calls return the cached value.
+    """
     def __init__(self, func):
         self.func = func
         self.called = False
@@ -375,10 +386,15 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True,
 
             parts = data['uri'].split()
             if len(parts)==2 and parts[0].endswith('.urdf') and parts[1].endswith('.srdf'):
-                robot_name = urdf_module_getter().SendCommand('Load {}'.format(data['uri']))
-                if robot_name != name_desired:
-                    raise RuntimeError('error, or_urdf name mismatch!')
+                module_urdf = urdf_module_getter()
+                if module_urdf is None:
+                    raise UnsupportedTypeDeserializationException('urdf srdf')
+                robot_name = module_urdf.SendCommand('Load {}'.format(data['uri']))
                 kinbody = env.GetRobot(robot_name)
+                if robot_name != name_desired:
+                    env.Remove(kinbody)
+                    kinbody.SetName(name_desired)
+                    env.Add(kinbody, anonymous)
             else:
                 kinbody = env.ReadRobotXMLFile(data['uri'])
                 kinbody.SetName(name_desired)
@@ -387,10 +403,15 @@ def deserialize_kinbody(env, data, name=None, anonymous=False, state=True,
         else:
 
             if data['uri'].endswith('.urdf'):
-                kinbody_name = urdf_module_getter().SendCommand('Load {}'.format(data['uri']))
-                if kinbody_name != name_desired:
-                    raise RuntimeError('error, or_urdf name mismatch!')
+                module_urdf = urdf_module_getter()
+                if module_urdf is None:
+                    raise UnsupportedTypeDeserializationException('urdf')
+                kinbody_name = module_urdf.SendCommand('Load {}'.format(data['uri']))
                 kinbody = env.GetKinBody(kinbody_name)
+                if kinbody_name != name_desired:
+                    env.Remove(kinbody)
+                    kinbody.SetName(name_desired)
+                    env.Add(kinbody)
             else:
                 kinbody = env.ReadKinBodyXMLFile(data['uri'])
                 kinbody.SetName(name_desired)
@@ -461,11 +482,10 @@ def deserialize_kinbody_state(body, data):
             map(deserialize_transform, link_transforms),
             dof_branches
         )
-
     else:
         deserialization_logger.warn(
-            ('KinBody "{}" does not have link_transforms/dof_branches'
-            + 'saved; falling back to dof_values').format(body.GetName()))
+            'KinBody "{}" does not have link_transforms/dof_branches'
+            'saved; falling back to dof_values'.format(body.GetName()))
         body.SetDOFValues(data['dof_values'])
 
 def deserialize_robot_state(body, data):
