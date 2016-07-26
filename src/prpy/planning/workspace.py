@@ -141,7 +141,7 @@ class GreedyIKPlanner(BasePlanner):
 
     @ClonedPlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
-                          min_waypoint_index=None, **kw_args):
+                          min_waypoint_index=None, norm_order=2, **kw_args):
         """
         Plan a configuration space path given a workspace path.
         All timing information is ignored.
@@ -150,6 +150,11 @@ class GreedyIKPlanner(BasePlanner):
                     represented as OpenRAVE AffineTrajectory
         @param min_waypoint_index minimum waypoint index to reach
         @param timelimit timeout in seconds
+        @param norm_order: 1  ==>  The L1 norm
+                           2  ==>  The L2 norm
+                           inf  ==>  The L_infinity norm
+               Used to determine the resolution of collision checked waypoints
+               in the trajectory
         @return qtraj configuration space path
         """
         from .exceptions import (
@@ -179,6 +184,8 @@ class GreedyIKPlanner(BasePlanner):
             t = 0.
             dt = traj.GetDuration()
 
+            q_resolutions = robot.GetActiveDOFResolutions()
+            
             # Smallest CSpace step at which to give up
             min_step = min(robot.GetActiveDOFResolutions()) / 100.
             ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
@@ -206,11 +213,14 @@ class GreedyIKPlanner(BasePlanner):
                     infeasible_step = True
                     if qnew is not None:
                         # Found an IK
-                        step = abs(qnew - qcurr)
-                        if (max(step) < min_step) and qtraj:
+                        steps = abs(qnew - qcurr) / q_resolutions;
+                        norm = numpy.linalg.norm(steps, ord=norm_order)
+
+                        if (norm < min_step) and qtraj:
                             raise PlanningError('Not making progress.')
-                        infeasible_step = \
-                            any(step > robot.GetActiveDOFResolutions())
+
+                        infeasible_step = norm > 1.0
+
                     if infeasible_step:
                         # Backtrack and try half the step
                         dt = dt / 2.0
