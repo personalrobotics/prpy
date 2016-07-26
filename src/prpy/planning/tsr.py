@@ -96,7 +96,7 @@ class TSRPlanner(BasePlanner):
         @param robot the robot whose active manipulator will be used
         @param tsrchains a list of TSR chains that define a goal set
         @param num_attempts the maximum number of planning attempts to make
-        @param candidate_size the number of candidates to consider per chunk
+        @param num_candidates the number of candidates to consider per chunk
         @param chunk_size the number of sampled goals to use per planning call
         @param tsr_timeout the maximum time to spend sampling goal TSR chains
         @param ranker an IK ranking function to use over the IK solutions
