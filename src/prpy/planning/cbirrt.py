@@ -236,12 +236,14 @@ class CBiRRTPlanner(BasePlanner):
                             robot.GetActiveDOF(), len(start_config)
                         )
                     )
-
                 args += (['jointstarts'] +
                          self.serialize_dof_values(start_config))
 
+        #TODO need to change robot.GetActiveDOF() to something else
+        # That can take into account another robot
         if jointgoals is not None:
             for goal_config in jointgoals:
+                '''
                 if len(goal_config) != robot.GetActiveDOF():
                     raise ValueError(
                         'Incorrect number of DOFs in goal configuration;'
@@ -249,12 +251,14 @@ class CBiRRTPlanner(BasePlanner):
                             robot.GetActiveDOF(), len(goal_config)
                         )
                     )
-
+                '''
                 args += ['jointgoals'] + self.serialize_dof_values(goal_config)
 
         if tsr_chains is not None:
             for tsr_chain in tsr_chains:
                 args += ['TSRChain', SerializeTSRChain(tsr_chain)]
+
+        print args
 
         # FIXME: Why can't we write to anything other than cmovetraj.txt or
         # /tmp/cmovetraj.txt with CBiRRT?
@@ -276,6 +280,14 @@ class CBiRRTPlanner(BasePlanner):
                 self.env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
 
+        #TODO Mimic traj processing. Change format?
+        self.mimic_traj = prpy.util.CopyTrajectory(traj)
+        full_cspec = self.mimic_traj.GetConfigurationSpecification()
+        traj_bodies = full_cspec.ExtractUsedBodies(robot.GetEnv())
+        object_body = [body for body in traj_bodies if body.GetName() != robot.GetName()][0]
+        object_cspec = object_body.GetActiveConfigurationSpecification('GenericTrajectory')
+        openravepy.planningutils.ConvertTrajectorySpecification(self.mimic_traj, object_cspec)
+
         # Tag the trajectory as constrained if a constraint TSR is present.
         if (tsr_chains is not None and
                 any(tsr_chain.constrain for tsr_chain in tsr_chains)):
@@ -287,6 +299,10 @@ class CBiRRTPlanner(BasePlanner):
         openravepy.planningutils.ConvertTrajectorySpecification(traj, cspec)
 
         return traj
+
+    def GetLastMimicTraj(self):
+        #FIXME how to handle if no traj exists?
+        return self.mimic_traj
 
     def ClearIkSolver(self, manip):
         manip.SetIkSolver(None)
