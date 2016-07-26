@@ -32,7 +32,6 @@ import time
 import itertools
 import numpy
 import openravepy
-import warnings
 from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 from openravepy import (
@@ -83,7 +82,7 @@ class TSRPlanner(BasePlanner):
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=0.5,
                   num_attempts=3, chunk_size=1, num_candidates=50, ranker=None,
-                  max_deviation=2 * numpy.pi, num_samples=None, **kw_args):
+                  max_deviation=2 * numpy.pi, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
         samples a fixed number of goals from the specified TSRs up-front, then
@@ -97,7 +96,7 @@ class TSRPlanner(BasePlanner):
         @param robot the robot whose active manipulator will be used
         @param tsrchains a list of TSR chains that define a goal set
         @param num_attempts the maximum number of planning attempts to make
-        @param num_candidates the number of candidates to consider per chunk
+        @param num_candidates the number of candidate IK solutions to rank
         @param chunk_size the number of sampled goals to use per planning call
         @param tsr_timeout the maximum time to spend sampling goal TSR chains
         @param ranker an IK ranking function to use over the IK solutions
@@ -105,10 +104,6 @@ class TSRPlanner(BasePlanner):
                              that can be considered a valid sample.
         @return traj a trajectory that satisfies the specified TSR chains
         """
-        if num_samples is not None:
-            warnings.warn('num_samples is deprecated and has no effect.',
-                DeprecationWarning)
-
         # Delegate to robot.planner by default.
         delegate_planner = self.delegate_planner or robot.planner
 
