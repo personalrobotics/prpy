@@ -189,7 +189,7 @@ class SnapPlanner(BasePlanner):
                 robot.SetActiveDOFValues(q)
 
                 # Check collision (throws an exception on collision)
-                robot_checker.CheckCollision()
+                robot_checker.VerifyCollisionFree()
 
         # Tag the return trajectory as smooth (in joint space).
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)

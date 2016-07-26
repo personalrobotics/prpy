@@ -284,7 +284,7 @@ class CHOMPPlanner(BasePlanner):
                 robot.SetActiveDOFValues(q)
 
                 # Check collision (throws an exception on collision)
-                robot_checker.CheckCollision()
+                robot_checker.VerifyCollisionFree()
 
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
 

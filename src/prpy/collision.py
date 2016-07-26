@@ -48,7 +48,14 @@ class SimpleRobotCollisionChecker:
         self.robot = robot
         self.env = robot.GetEnv()
 
-    def CheckCollision(self):
+    def CheckCollision(self, report=None):
+        if self.env.CheckCollision(self.robot, report=report):
+            return True
+        elif self.robot.CheckSelfCollision(report=report):
+            return True
+        return False
+
+    def VerifyCollisionFree(self):
         report = openravepy.CollisionReport()
         if self.env.CheckCollision(self.robot, report=report):
             raise CollisionPlanningError.FromReport(report)
@@ -89,8 +96,13 @@ class BakedRobotCollisionChecker:
         self.baked = openravepy.RaveCreateKinBody(self.env, kb_type)
         self.checker.SendCommand('BakeEnd')
 
-    def CheckCollision(self):
-        report = openravepy.CollisionReport()
+    def CheckCollision(self, report=None):
         # The baked check is performed by checking self collision on baked
         if self.checker.CheckSelfCollision(self.baked, report):
+            return True
+        return False
+
+    def VerifyCollisionFree(self):
+        report = openravepy.CollisionReport()
+        if self.CheckCollision(report=report):
             raise CollisionPlanningError.FromReport(report)

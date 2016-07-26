@@ -504,7 +504,7 @@ class VectorFieldPlanner(BasePlanner):
                 robot.SetActiveDOFValues(q)
 
                 # Check collision (throws an exception on collision)
-                robot_checker.CheckCollision()
+                robot_checker.VerifyCollisionFree()
 
                 # Check the termination condition.
                 status = fn_terminate()
