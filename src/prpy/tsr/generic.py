@@ -13,7 +13,7 @@ def get_manip_idx(robot, manip=None):
     warnings.warn(
       'tsr.get_manip_idx is deprecated. Please use'
       ' util.GetActiveManipulatorIndex instead.', DeprecationWarning)
-    return GetActiveManipulatorIndex(robot, manip)
+    return GetActiveManipulatorIndex(robot, manip)[1]
 
 def cylinder_grasp(robot, obj, obj_radius, obj_height, 
                    lateral_offset = 0.0, 
@@ -58,7 +58,7 @@ def cylinder_grasp(robot, obj, obj_radius, obj_height,
                         'than or equal to the second (current values [%f, %f])' 
                         % (yaw_range[0], yaw_range[1]))
 
-    manip_idx = GetManipulatorIndex(robot, manip=manip)
+    manip, manip_idx = GetManipulatorIndex(robot, manip=manip)
 
     T0_w = obj.GetTransform()
     total_offset = lateral_offset + obj_radius
@@ -133,7 +133,7 @@ def box_grasp(robot, box, length, width, height,
     if lateral_tolerance < 0.0:
         raise Exception('lateral_tolerance must be >= 0.0')
 
-    manip_idx = GetManipulatorIndex(robot, manip=manip)
+    manip, manip_idx = GetManipulatorIndex(robot, manip=manip)
 
     T0_w = box.GetTransform()
 
@@ -249,7 +249,7 @@ def place_object(robot, obj, pose_tsr_chain, manip=None,
        manipulator of the robot is used
     """
 
-    manip_idx = GetManipulatorIndex(robot, manip=manip)
+    manip, manip_idx = GetManipulatorIndex(robot, manip=manip)
     if manip is None:
         manip = robot.GetManipulators()[manip_idx]
 
@@ -298,7 +298,7 @@ def transport_upright(robot, obj,
     if yaw_epsilon < 0.0:
         raise Exception('yaw_epsilon must be >= 0')
 
-    manip_idx = GetManipulatorIndex(robot, manip=manip)
+    manip, manip_idx = GetManipulatorIndex(robot, manip=manip)
     if manip is None:
         manip = robot.GetManipulators()[manip_idx]
 
