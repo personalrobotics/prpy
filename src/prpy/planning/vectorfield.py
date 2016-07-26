@@ -35,7 +35,7 @@ import numpy
 import openravepy
 from .. import util
 from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
-from prpy.collision import SimpleRobotCollisionChecker
+from ..collision import SimpleRobotCollisionChecker
 from enum import Enum
 from openravepy import CollisionOptions, CollisionOptionsStateSaver
 

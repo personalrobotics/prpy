@@ -36,7 +36,7 @@ from prpy.planning.base import (
     ClonedPlanningMethod,
     Tags
 )
-from prpy.collision import SimpleRobotCollisionChecker
+from ..collision import SimpleRobotCollisionChecker
 from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 
