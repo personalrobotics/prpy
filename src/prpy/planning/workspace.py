@@ -187,7 +187,7 @@ class GreedyIKPlanner(BasePlanner):
             q_resolutions = robot.GetActiveDOFResolutions()
             
             # Smallest CSpace step at which to give up
-            min_step = min(robot.GetActiveDOFResolutions()) / 100.
+            min_step = numpy.linalg.norm(robot.GetActiveDOFResolutions() / 100., ord=norm_order)
             ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
             start_time = time.time()
             epsilon = 1e-6
@@ -195,10 +195,14 @@ class GreedyIKPlanner(BasePlanner):
             try:
                 while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
+                    # TODO: This is not really deterministic because we do not
+                    # have control over CPU time. However, it is exceedingly
+                    # unlikely that running the query again will change the
+                    # outcome unless there is a significant change in CPU load.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        raise TimeoutPlanningError(timelimit)
+                        raise TimeoutPlanningError(timelimit, deterministic=True)
 
                     # Hypothesize new configuration as closest IK to current
                     qcurr = robot.GetActiveDOFValues()  # Configuration at t.
@@ -260,10 +264,12 @@ class GreedyIKPlanner(BasePlanner):
                             cr = CollisionReport()
                             if self.env.CheckCollision(robot, report=cr):
                                 collision_error = \
-                                    CollisionPlanningError.FromReport(cr)
+                                    CollisionPlanningError.FromReport(
+                                        cr, deterministic=True)
                             elif robot.CheckSelfCollision(report=cr):
                                 collision_error = \
-                                    SelfCollisionPlanningError.FromReport(cr)
+                                    SelfCollisionPlanningError.FromReport(
+                                        cr, deterministic=True)
                             else:
                                 collision_error = None
                     if collision_error is not None:
@@ -276,6 +282,10 @@ class GreedyIKPlanner(BasePlanner):
                     logger.warning('Terminated early at time %f < %f: %s',
                                    t, traj.GetDuration(), str(e))
 
-        # Return as much of the trajectory as we have solved.
-        SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: True}, append=True)
+        SetTrajectoryTags(qtraj, {
+            Tags.CONSTRAINED: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return qtraj

@@ -1326,7 +1326,7 @@ def ComputeGeodesicUnitTiming(traj, env=None, alpha=1.0):
     return new_traj
 
 
-def CheckJointLimits(robot, q):
+def CheckJointLimits(robot, q, deterministic=None):
     """
     Check if a configuration is within a robot's joint position limits.
 
@@ -1353,7 +1353,8 @@ def CheckJointLimits(robot, q):
             dof_index=active_dof_indices[index],
             dof_value=q[index],
             dof_limit=q_limit_min[index],
-            description='position')
+            description='position',
+            deterministic=deterministic)
 
     upper_position_violations = (q > q_limit_max)
     if upper_position_violations.any():
@@ -1363,7 +1364,8 @@ def CheckJointLimits(robot, q):
             dof_index=active_dof_indices[index],
             dof_value=q[index],
             dof_limit=q_limit_max[index],
-            description='position')
+            description='position',
+            deterministic=deterministic)
 
 
 def GetForwardKinematics(robot, q, manipulator=None, frame=None):

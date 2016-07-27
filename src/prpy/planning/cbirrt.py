@@ -190,6 +190,9 @@ class CBiRRTPlanner(BasePlanner):
              extra_args=None, **kw_args):
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
+        is_endpoint_deterministic = True
+        is_constrained = False
+
         # TODO We may need this work-around because CBiRRT doesn't like it
         # when an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
         # self.ClearIkSolver(robot.GetActiveManipulator())
@@ -197,6 +200,11 @@ class CBiRRTPlanner(BasePlanner):
         self.env.LoadProblem(self.problem, robot.GetName())
 
         args = ['RunCBiRRT']
+
+        # By default, CBiRRT interprets the DOF resolutions as an
+        # L-infinity norm; this flag turns on the L-2 norm instead.
+        args += ['bdofresl2norm', '1']
+        args += ['steplength', '0.05999']
 
         if extra_args is not None:
             args += extra_args
@@ -252,9 +260,17 @@ class CBiRRTPlanner(BasePlanner):
 
                 args += ['jointgoals'] + self.serialize_dof_values(goal_config)
 
+            if len(jointgoals) > 1:
+                is_endpoint_deterministic = False
+
         if tsr_chains is not None:
             for tsr_chain in tsr_chains:
                 args += ['TSRChain', SerializeTSRChain(tsr_chain)]
+
+                if tsr_chain.sample_goal:
+                    is_endpoint_deterministic = False
+                if tsr_chain.constrain:
+                    is_constrained = True
 
         # FIXME: Why can't we write to anything other than cmovetraj.txt or
         # /tmp/cmovetraj.txt with CBiRRT?
@@ -267,7 +283,8 @@ class CBiRRTPlanner(BasePlanner):
             response = self.problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):
-            raise PlanningError('Unknown error: ' + response)
+            raise PlanningError('Unknown error: ' + response,
+                deterministic=False)
 
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
@@ -276,10 +293,14 @@ class CBiRRTPlanner(BasePlanner):
                 self.env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
 
-        # Tag the trajectory as constrained if a constraint TSR is present.
-        if (tsr_chains is not None and
-                any(tsr_chain.constrain for tsr_chain in tsr_chains)):
-            SetTrajectoryTags(traj, {Tags.CONSTRAINED: True}, append=True)
+        # Tag the trajectory as non-determistic since CBiRRT is a randomized
+        # planner. Additionally tag the goal as non-deterministic if CBiRRT
+        # chose from a set of more than one goal configuration.
+        SetTrajectoryTags(traj, {
+            Tags.CONSTRAINED: is_constrained,
+            Tags.DETERMINISTIC_TRAJECTORY: False,
+            Tags.DETERMINISTIC_ENDPOINT: is_endpoint_deterministic,
+        }, append=True)
 
         # Strip extraneous groups from the output trajectory.
         # TODO: Where are these groups coming from!?
