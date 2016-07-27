@@ -125,6 +125,11 @@ class TSRPlanner(BasePlanner):
                     'Cannot handle start or trajectory-wide TSR constraints.')
         tsrchains = [t for t in tsrchains if t.sample_goal]
 
+        # We assume the active manipulator's DOFs are active when computing IK,
+        # calling the delegate planners, and collision checking with the
+        # ActiveDOFs option set.
+        robot.SetActiveDOFs(manipulator.GetArmIndices())
+
         def compute_ik_solutions(tsrchain):
             pose = tsrchain.sample()
             ik_param = IkParameterization(pose,
@@ -158,11 +163,6 @@ class TSRPlanner(BasePlanner):
             'num_tsr_samples': 0,
             'num_ik_solutions': 0
         }
-
-        # We assume the active manipulator's DOFs are active when computing IK,
-        # calling the delegate planners, and collision checking with the
-        # ActiveDOFs option set.
-        robot.SetActiveDOFs(manipulator.GetArmIndices())
 
         configuration_generator = itertools.chain.from_iterable(
             itertools.ifilter(
