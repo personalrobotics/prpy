@@ -34,7 +34,11 @@ import openravepy
 from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
-from openravepy import PlannerStatus
+from openravepy import (
+    CollisionOptions,
+    CollisionOptionsStateSaver,
+    PlannerStatus
+)
 from .cbirrt import SerializeTSRChain
 
 logger = logging.getLogger(__name__)
@@ -106,7 +110,10 @@ class OMPLPlanner(BasePlanner):
                 self.planner.InitPlan(robot, params)
                 self.setup = True
 
-            status = self.planner.PlanPath(traj, releasegil=True)
+            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                            CollisionOptions.ActiveDOFs):
+                status = self.planner.PlanPath(traj, releasegil=True)
+
             if status not in [PlannerStatus.HasSolution,
                               PlannerStatus.InterruptedWithSolution]:
                 raise PlanningError('Planner returned with status {0:s}.'

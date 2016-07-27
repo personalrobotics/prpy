@@ -36,6 +36,7 @@ import openravepy
 from .. import util
 from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 from enum import Enum
+from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 logger = logging.getLogger(__name__)
 
@@ -558,9 +559,11 @@ class VectorFieldPlanner(BasePlanner):
                                   rtol=1e-3)
         # Set function to be called at every successful integration step.
         integrator.set_solout(fn_callback)
-        # Initial conditions
         integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
-        integrator.integrate(t=integration_time_interval)
+
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+            integrator.integrate(t=integration_time_interval)
 
         t_cache = nonlocals['t_cache']
         exception = nonlocals['exception']
