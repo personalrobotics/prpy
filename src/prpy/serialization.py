@@ -110,7 +110,7 @@ def serialize_kinbody(body, uri_only=False):
     if uri_only and not uri:
         serialization_logger.warn(
             'uri_only passed, but KinBody "{}"\'s GetXMLFilename()'
-            'returns an empty URI.'.format(
+            ' returns an empty URI.'.format(
             body.GetName()))
         uri_only = False
     
@@ -485,7 +485,7 @@ def deserialize_kinbody_state(body, data):
     else:
         deserialization_logger.warn(
             'KinBody "{}" does not have link_transforms/dof_branches'
-            'saved; falling back to dof_values'.format(body.GetName()))
+            ' saved; falling back to dof_values'.format(body.GetName()))
         body.SetDOFValues(data['dof_values'])
 
 def deserialize_robot_state(body, data):

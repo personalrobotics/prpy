@@ -62,9 +62,10 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
      - log-20160101-010203.567890.yaml
     """
 
-    def __init__(self, planner):
+    def __init__(self, planner, uri_only=True):
         super(LoggedPlanner, self).__init__()
         self.planner = planner
+        self.uri_only = uri_only
     
     def __str__(self):
         return 'Logged({0:s})'.format(self.planner)
@@ -96,7 +97,7 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
             raise RuntimeError('could not retrieve env from planning request!')
         
         # serialize environment
-        envdict = prpy.serialization.serialize_environment(env, uri_only=True)
+        envdict = prpy.serialization.serialize_environment(env, uri_only=self.uri_only)
         
         # serialize planning request
         reqdict = {}
@@ -129,7 +130,7 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         
         except:
             resdict['ok'] = False
-            resdict['exception'] = 'unknown exception type'
+            resdict['exception'] = 'Unknown exception type: {}'.format(repr(sys.exc_info()[1]))
             raise
         
         finally:
