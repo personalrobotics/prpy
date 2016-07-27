@@ -98,7 +98,7 @@ class BakedRobotCollisionChecker:
 
     def CheckCollision(self, report=None):
         # The baked check is performed by checking self collision on baked
-        return self.checker.CheckSelfCollision(self.baked, report):
+        return self.checker.CheckSelfCollision(self.baked, report)
 
     def VerifyCollisionFree(self):
         report = openravepy.CollisionReport()
