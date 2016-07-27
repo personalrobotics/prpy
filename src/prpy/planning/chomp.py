@@ -34,6 +34,7 @@ import logging
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags, GetLinearCollisionCheckPts
+from ..collision import SimpleRobotCollisionChecker
 from .exceptions import (
     CollisionPlanningError,
     SelfCollisionPlanningError
@@ -166,9 +167,10 @@ class DistanceFieldManager(object):
 
 
 class CHOMPPlanner(BasePlanner):
-    def __init__(self, require_cache=False):
+    def __init__(self, require_cache=False, robot_collision_checker=SimpleRobotCollisionChecker):
         super(CHOMPPlanner, self).__init__()
         self.require_cache = require_cache
+        self.robot_collision_checker = robot_collision_checker
         self.setupEnv(self.env)
 
     def setupEnv(self, env):
@@ -276,16 +278,15 @@ class CHOMPPlanner(BasePlanner):
 
         with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
+
+            # Instantiate a robot checker
+            robot_checker = self.robot_collision_checker(robot)
+
             for t, q in checks:
                 robot.SetActiveDOFValues(q)
 
-                report = openravepy.CollisionReport()
-                if self.env.CheckCollision(robot, report=report):
-                    raise CollisionPlanningError.FromReport(
-                        report, deterministic=is_deterministic)
-                elif robot.CheckSelfCollision(report=report):
-                    raise SelfCollisionPlanningError.FromReport(
-                        report, deterministic=is_deterministic)
+                # Check collision (throws an exception on collision)
+                robot_checker.VerifyCollisionFree()
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
         # planner. Additionally tag the goal as non-deterministic if CBiRRT
