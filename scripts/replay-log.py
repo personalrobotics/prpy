@@ -59,7 +59,7 @@ def get_filename(logfile, planner, method, outputdir, trial, seed=None):
 parser = argparse.ArgumentParser(description='replay planning request log file')
 parser.add_argument('--logfile', required=True)
 parser.add_argument('--planner', required=True, help=('cbirrt OMPL_RRTConnect snap chomp vectorfield' 
-                                                        ' greedy-ik trajopt lemur cachedlemur'))
+                                                        ' greedy-ik trajopt lemur cachedlemur combined'))
 parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
 args = parser.parse_args()
 
@@ -100,6 +100,19 @@ for pl in planner_list:
             setattr(planner, 'seed', i)
             setattr(planner, 'name', 'Lemur')
             planners.append(planner)
+    elif pl.lower() == 'combined':
+        actual_planner = Sequence(
+            SnapPlanner(),
+            TrajoptPlanner()
+        )
+        planner = FirstSupported(
+            Sequence(actual_planner,
+                     TSRPlanner(delegate_planner=actual_planner),
+                     CBiRRTPlanner()),
+            NamedPlanner(delegate_planner=Sequence(actual_planner,
+                CBiRRTPlanner())))
+        setattr(planner,'name','combined')
+        planners.append(planner)
     else:
       raise ValueError("Unrecognized planner")
 
@@ -119,10 +132,13 @@ env, robot = herbpy.initialize(sim=True)
 
 for actual_planner in planners:
 
-    planner = FirstSupported(
-      Sequence(actual_planner,
-                TSRPlanner(delegate_planner=actual_planner)),
-                NamedPlanner(delegate_planner=actual_planner))
+    if getattr(actual_planner, 'name', None) == 'combined':
+        planner = actual_planner
+    else:
+        planner = FirstSupported(
+          Sequence(actual_planner,
+                    TSRPlanner(delegate_planner=actual_planner)),
+                    NamedPlanner(delegate_planner=actual_planner))
 
     # load planning request
     try:
@@ -160,7 +176,7 @@ for actual_planner in planners:
     from prpy.util import Timer, SetTrajectoryTags
     from prpy.planning.base import Tags
     
-    num_trials = 5 if str(actual_planner).lower() in randomized else 1
+    num_trials = 3 #if str(actual_planner).lower() in randomized else 1
     for j in range(num_trials):
         error_msg = None
         traj = None
@@ -174,8 +190,8 @@ for actual_planner in planners:
         except PlanningError as e: 
             error_msg = str(e)
             print (error_msg)
-        except AttributeError as e:
-            pass
+        # except AttributeError as e:
+        #     pass
         finally:
             planning_time = time.time() - start_time
 
@@ -183,11 +199,14 @@ for actual_planner in planners:
         resdict = {}
         reqdict['method'] = yamldict['request']['method'] 
         reqdict['seed'] = getattr(actual_planner, 'seed', None)
-        reqdict['planner_name'] = str(planner)
+        reqdict['planner_name'] = getattr(actual_planner, 'name', str(planner))
         resdict['ok'] = True if traj else False
         resdict['planning_time'] = planning_time
         if traj is not None: 
-            resdict['traj'] = traj.serialize()
+            from prpy.util import GetTrajectoryTags
+            from prpy.planning.base import Tags
+            tags = GetTrajectoryTags(traj)
+            resdict['planner_used'] = tags.get(Tags.PLANNER, 'None')
         if error_msg is not None:
             resdict['error'] = str(error_msg)
             
@@ -203,9 +222,11 @@ for actual_planner in planners:
             print ('\n{} written\n'.format(filename))
 
         print ("Planning time: ", planning_time)
-
-        with open('replay-completed-'+str(actual_planner).split(' ')[0]+'.log', 'a') as fp:
-            trial_info = ' '.join(str(x) for x in [logfile, str(actual_planner), method_name, 'trial', j, ok])
+        
+        name = getattr(actual_planner, 'name', str(actual_planner))
+        with open('replay-completed-'+name+'.log', 'a') as fp:
+            
+            trial_info = ' '.join(str(x) for x in [logfile, name, method_name, 'trial', j, ok])
             if getattr(actual_planner, 'seed', None) is not None:
                 trial_info += ' seed ' + str(getattr(actual_planner, 'seed', None))
             trial_info += ' ' + str(planning_time)
