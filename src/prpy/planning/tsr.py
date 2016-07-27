@@ -80,8 +80,8 @@ class TSRPlanner(BasePlanner):
     """
 
     @ClonedPlanningMethod
-    def PlanToTSR(self, robot, tsrchains, tsr_timeout=0.5,
-                  num_attempts=3, chunk_size=1, num_candidates=50, ranker=None,
+    def PlanToTSR(self, robot, tsrchains, tsr_timeout=0.7,
+                  num_attempts=6, chunk_size=1, num_candidates=50, ranker=None,
                   max_deviation=2 * numpy.pi, num_samples=10, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
