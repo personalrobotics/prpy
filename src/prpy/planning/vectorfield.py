@@ -35,7 +35,9 @@ import numpy
 import openravepy
 from .. import util
 from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
+from ..collision import SimpleRobotCollisionChecker
 from enum import Enum
+from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +75,9 @@ class Status(Enum):
 
 
 class VectorFieldPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, robot_collision_checker=SimpleRobotCollisionChecker):
         super(VectorFieldPlanner, self).__init__()
+        self.robot_collision_checker = robot_collision_checker
 
     def __str__(self):
         return 'VectorFieldPlanner'
@@ -494,12 +497,8 @@ class VectorFieldPlanner(BasePlanner):
 
             robot.SetActiveDOFValues(q)
 
-            # Check collision.
-            report = CollisionReport()
-            if env.CheckCollision(robot, report=report):
-                raise CollisionPlanningError.FromReport(report)
-            elif robot.CheckSelfCollision(report=report):
-                raise SelfCollisionPlanningError.FromReport(report)
+            # Check collision (throws an exception on collision)
+            robot_checker.VerifyCollisionFree()
 
             # Check the termination condition.
             status = fn_terminate()
@@ -545,29 +544,36 @@ class VectorFieldPlanner(BasePlanner):
                 nonlocals['exception'] = e
                 return -1  # Stop.
 
-        # Integrate the vector field to get a configuration space path.
-        #
-        # TODO: Tune the integrator parameters.
-        #
-        # Integrator: 'dopri5'
-        # DOPRI (Dormand & Prince 1980) is an explicit method for solving ODEs.
-        # It is a member of the Runge-Kutta family of solvers.
-        integrator = scipy.integrate.ode(f=fn_wrapper)
-        integrator.set_integrator(name='dopri5',
-                                  first_step=0.1,
-                                  atol=1e-3,
-                                  rtol=1e-3)
-        # Set function to be called at every successful integration step.
-        integrator.set_solout(fn_callback)
-        # Initial conditions
-        integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
-        integrator.integrate(t=integration_time_interval)
+        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                        CollisionOptions.ActiveDOFs):
+
+            # Instantiate a robot checker
+            robot_checker = self.robot_collision_checker(robot)
+
+            # Integrate the vector field to get a configuration space path.
+            #
+            # TODO: Tune the integrator parameters.
+            #
+            # Integrator: 'dopri5'
+            # DOPRI (Dormand & Prince 1980) is an explicit method for solving ODEs.
+            # It is a member of the Runge-Kutta family of solvers.
+            integrator = scipy.integrate.ode(f=fn_wrapper)
+            integrator.set_integrator(name='dopri5',
+                                      first_step=0.1,
+                                      atol=1e-3,
+                                      rtol=1e-3)
+            # Set function to be called at every successful integration step.
+            integrator.set_solout(fn_callback)
+            integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
+
+            integrator.integrate(t=integration_time_interval)
 
         t_cache = nonlocals['t_cache']
         exception = nonlocals['exception']
 
         if t_cache is None:
-            raise exception or PlanningError('An unknown error has occurred.')
+            raise exception or PlanningError(
+                'An unknown error has occurred.', deterministic=True)
         elif exception:
             logger.warning('Terminated early: %s', str(exception))
 
@@ -587,11 +593,11 @@ class VectorFieldPlanner(BasePlanner):
                            path.Sample(t_cache),
                            cspec)
 
-        # Flag this trajectory as constrained.
-        util.SetTrajectoryTags(
-            output_path, {
-                Tags.CONSTRAINED: 'true',
-                Tags.SMOOTH: 'true'
-            }, append=True
-        )
+        util.SetTrajectoryTags(output_path, {
+            Tags.SMOOTH: True,
+            Tags.CONSTRAINED: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return output_path

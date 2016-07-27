@@ -37,6 +37,7 @@ import scipy.misc
 import scipy.optimize
 import threading
 import time
+import warnings
 
 
 logger = logging.getLogger(__name__)
@@ -1325,7 +1326,7 @@ def ComputeGeodesicUnitTiming(traj, env=None, alpha=1.0):
     return new_traj
 
 
-def CheckJointLimits(robot, q):
+def CheckJointLimits(robot, q, deterministic=None):
     """
     Check if a configuration is within a robot's joint position limits.
 
@@ -1352,7 +1353,8 @@ def CheckJointLimits(robot, q):
             dof_index=active_dof_indices[index],
             dof_value=q[index],
             dof_limit=q_limit_min[index],
-            description='position')
+            description='position',
+            deterministic=deterministic)
 
     upper_position_violations = (q > q_limit_max)
     if upper_position_violations.any():
@@ -1362,7 +1364,8 @@ def CheckJointLimits(robot, q):
             dof_index=active_dof_indices[index],
             dof_value=q[index],
             dof_limit=q_limit_max[index],
-            description='position')
+            description='position',
+            deterministic=deterministic)
 
 
 def GetForwardKinematics(robot, q, manipulator=None, frame=None):
@@ -1510,8 +1513,7 @@ def VanDerCorputSampleGenerator(start, end, step=2):
     Generates a sequence of values from start to end, with specified
     step size, using an approximate binary Van der Corput sequence.
 
-    The end value is also returned if it's more than half the
-    distance from the closest value.
+    The start and end values will always be checked first.
 
     For example, on the interval [0.0, 13.7], the sequence is:
     [0.0, 13.7, 12.0, 6.0, 4.0, 8.0, 2.0, 10.0]
@@ -1522,8 +1524,6 @@ def VanDerCorputSampleGenerator(start, end, step=2):
 
     @returns generator: A sequence of float values.
     """
-    import itertools
-
     # 'start' and 'end' must be positive because
     # itertools.islice() only accepts a positive integer
     if end <= start:
@@ -1532,48 +1532,28 @@ def VanDerCorputSampleGenerator(start, end, step=2):
     if not (step > 0):
         raise ValueError("The 'step' value must be positive.")
 
-    # The duration, rounded to nearest step-size
-    mod_end = int(end - (end % step))
-    steps_to_take = mod_end / float(step)
-    leftover_time = end - float(mod_end)
+    # Construct the points at which checks must occur to cover this range.
+    check_bins = numpy.arange(start, end, step)
+    is_checked = [False] * len(check_bins)
 
-    # Keep a list to make sure we return all the sample values
-    times_sampled = [False for i in range(mod_end + 1)]
+    # Always return the start and end points first.
+    is_checked[0] = True
+    yield start
+    yield end
 
-    vdc = VanDerCorputSequence(start, steps_to_take)
-    vdc_seq = itertools.islice(vdc, steps_to_take + 1)
-    count = 0
-    for s in vdc_seq:
-        # Snap this sample value to the desired step-size
-        idx = int(step * numpy.round(s))
-        if (idx % step) != 0:
-            idx = idx + 1
+    # Return a collision-checking sequence that eventually covers the range.
+    vdc = VanDerCorputSequence(lower=start, upper=end, include_endpoints=False)
+    for s in vdc:
+        if numpy.all(is_checked):
+            return
 
-        # If required, return the actual end-point value (a float) as
-        # the 2nd sample point to be returned. Then the next sample
-        # point is the end-point rounded to step-size.
-        if count == 1:
-            if leftover_time > (step / 2.0):
-                yield float(end)
+        idx = numpy.digitize((s,), check_bins, right=True)
+        assert idx.shape == (1,)
+        if is_checked[idx[0]]:
+            continue
 
-        count = count + 1
-        while True:
-            if times_sampled[idx] is False:
-                times_sampled[idx] = True
-                yield float(idx)
-                break
-            else:
-                # We have already sampled at this value of t,
-                # so lets try a different value of t.
-                decimals = (s % 1)
-                if decimals < 0.5:
-                    idx = idx - step
-                    if (idx < 0):  # handle wrap past zero
-                        idx = int(end - 1)
-                else:
-                    idx = idx + step
-                    if (idx > end):  # handle wrap past end
-                        idx = int(start + 1)
+        is_checked[idx[0]] = True
+        yield float(check_bins[idx])
 
 
 def GetCollisionCheckPts(robot, traj, include_start=True, start_time=0.,
@@ -2077,6 +2057,7 @@ def GetManipulatorIndex(robot, manip=None):
     @param manip The robot manipulator
     @return (manip, manip_idx) The manipulator and its index
     """
+    from openravepy import DebugLevel, RaveGetDebugLevel, RaveSetDebugLevel
 
     with robot.GetEnv():
         if manip is None:
@@ -2085,7 +2066,14 @@ def GetManipulatorIndex(robot, manip=None):
         with robot.CreateRobotStateSaver(
                 robot.SaveParameters.ActiveManipulator):
             robot.SetActiveManipulator(manip)
-            manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+
+            # Ignore GetActiveManipulatorIndex's DeprecationWarning.
+            debug_level = RaveGetDebugLevel()
+            try:
+                RaveSetDebugLevel(DebugLevel.Error)
+                manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+            finally:
+                RaveSetDebugLevel(debug_level)
 
     return (manip, manip_idx)
 
