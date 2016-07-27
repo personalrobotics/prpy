@@ -36,6 +36,7 @@ from prpy.planning.base import (
     ClonedPlanningMethod,
     Tags
 )
+from ..collision import SimpleRobotCollisionChecker
 from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 
@@ -52,8 +53,9 @@ class SnapPlanner(BasePlanner):
     most commonly used as the first item in a Sequence meta-planner to
     avoid calling a motion planner when the trivial solution is valid.
     """
-    def __init__(self):
+    def __init__(self, robot_collision_checker=SimpleRobotCollisionChecker):
         super(SnapPlanner, self).__init__()
+        self.robot_collision_checker = robot_collision_checker
 
     def __str__(self):
         return 'SnapPlanner'
@@ -176,18 +178,18 @@ class SnapPlanner(BasePlanner):
 
         with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
+
+            # Instantiate a robot checker
+            robot_checker = self.robot_collision_checker(robot)
+
             # Run constraint checks at DOF resolution:
             for t, q in checks:
                 # Set the joint positions
                 # Note: the planner is using a cloned 'robot' object
                 robot.SetActiveDOFValues(q)
 
-                # Check for collisions
-                report = openravepy.CollisionReport()
-                if self.env.CheckCollision(robot, report=report):
-                    raise CollisionPlanningError.FromReport(report)
-                elif robot.CheckSelfCollision(report=report):
-                    raise SelfCollisionPlanningError.FromReport(report)
+                # Check collision (throws an exception on collision)
+                robot_checker.VerifyCollisionFree()
 
         # Tag the return trajectory as smooth (in joint space).
         SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
