@@ -1738,9 +1738,9 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
     seq = None
     if sampling_func is None:
         # (default) Linear sequence, from start to end
-        seq = SampleTimeGenerator(0, required_checks, step=2)
+        seq = SampleTimeGenerator(0, required_checks, step=1)
     else:
-        seq = sampling_func(0, required_checks, step=2)
+        seq = sampling_func(0, required_checks, step=1)
 
     # Sample a check and return the associated time in the original
     # trajectory and joint position
