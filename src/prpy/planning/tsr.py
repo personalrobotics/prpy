@@ -34,6 +34,9 @@ import numpy
 import openravepy
 from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
+from .base import Tags
+from ..util import SetTrajectoryTags
+from ..collision import SimpleRobotCollisionChecker
 from openravepy import (
     CollisionOptions,
     CollisionOptionsStateSaver,
@@ -57,9 +60,10 @@ def grouper(n, iterable):
 
 
 class TSRPlanner(BasePlanner):
-    def __init__(self, delegate_planner=None):
+    def __init__(self, delegate_planner=None, robot_collision_checker=SimpleRobotCollisionChecker):
         super(TSRPlanner, self).__init__()
         self.delegate_planner = delegate_planner
+        self.robot_collision_checker = robot_collision_checker
 
     def __str__(self):
         if self.delegate_planner is not None:
@@ -123,6 +127,11 @@ class TSRPlanner(BasePlanner):
                     'Cannot handle start or trajectory-wide TSR constraints.')
         tsrchains = [t for t in tsrchains if t.sample_goal]
 
+        # We assume the active manipulator's DOFs are active when computing IK,
+        # calling the delegate planners, and collision checking with the
+        # ActiveDOFs option set.
+        robot.SetActiveDOFs(manipulator.GetArmIndices())
+
         def compute_ik_solutions(tsrchain):
             pose = tsrchain.sample()
             ik_param = IkParameterization(pose,
@@ -136,12 +145,16 @@ class TSRPlanner(BasePlanner):
 
             return ik_solutions
 
+        # Instantiate a robot checker
+        with CollisionOptionsStateSaver(
+                self.env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
+            robot_checker = self.robot_collision_checker(robot)
+
         def is_configuration_valid(ik_solution):
             p = openravepy.KinBody.SaveParameters
             with robot.CreateRobotStateSaver(p.LinkTransformation):
                 robot.SetActiveDOFValues(ik_solution)
-                return (not self.env.CheckCollision(robot)
-                    and not robot.CheckSelfCollision())
+                return not robot_checker.CheckCollision()
 
         def is_time_available(*args):
             # time_start and time_expired are defined below.
@@ -152,11 +165,6 @@ class TSRPlanner(BasePlanner):
             'num_tsr_samples': 0,
             'num_ik_solutions': 0
         }
-
-        # We assume the active manipulator's DOFs are active when computing IK,
-        # calling the delegate planners, and collision checking with the
-        # ActiveDOFs option set.
-        robot.SetActiveDOFs(manipulator.GetArmIndices())
 
         configuration_generator = itertools.chain.from_iterable(
             itertools.ifilter(
@@ -223,6 +231,11 @@ class TSRPlanner(BasePlanner):
                 else:
                     traj = delegate_planner.PlanToConfigurations(
                         robot, configurations_chunk, **kw_args)
+
+                SetTrajectoryTags(traj, {
+                    Tags.DETERMINISTIC_TRAJECTORY: False,
+                    Tags.DETERMINISTIC_ENDPOINT: False,
+                }, append=True)
 
                 return traj
             except PlanningError as e:
