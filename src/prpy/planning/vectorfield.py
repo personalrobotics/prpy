@@ -421,9 +421,9 @@ class VectorFieldPlanner(BasePlanner):
 
     @ClonedPlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
-                          integration_time_interval=10.0,
-                          timelimit=5.0,
-                          **kw_args):
+                          integration_time_interval=10.0, timelimit=5.0,
+                          sampling_func=util.SampleTimeGenerator,
+                          norm_order=2, **kw_args):
         """
         Follow a joint space vectorfield to termination.
 
@@ -433,6 +433,11 @@ class VectorFieldPlanner(BasePlanner):
         @param integration_time_interval The time interval to integrate
                                          over.
         @param timelimit time limit before giving up
+        @param sampling_func sample generator to compute validity checks
+           Note: Function will terminate as soon as invalid configuration is 
+                 encountered. No more samples will be requested from the 
+                 sampling_func after this occurs.
+        @param norm_order order of norm to use for collision checking
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
@@ -441,7 +446,7 @@ class VectorFieldPlanner(BasePlanner):
             SelfCollisionPlanningError,
         )
         from openravepy import CollisionReport, RaveCreateTrajectory
-        from ..util import GetCollisionCheckPts
+        from ..util import GetLinearCollisionCheckPts
         import time
         import scipy.integrate
 
@@ -524,11 +529,11 @@ class VectorFieldPlanner(BasePlanner):
                 if path.GetNumWaypoints() == 1:
                     checks = [(t, q)]
                 else:
-                    # TODO: This should start at t_check. Unfortunately, a bug
-                    # in GetCollisionCheckPts causes this to enter an infinite
-                    # loop.
-                    checks = GetCollisionCheckPts(robot, path,
-                                                  include_start=False)
+                    # TODO: This will recheck the entire trajectory
+                    #  Ideally should just check the new portion of the trajectory
+                    checks = GetLinearCollisionCheckPts(robot, path,
+                                                        norm_order=norm_order,
+                                                        sampling_func=sampling_func)
                     # start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
