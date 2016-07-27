@@ -528,11 +528,14 @@ class VectorFieldPlanner(BasePlanner):
                 else:
                     # TODO: This will recheck the entire trajectory
                     #  Ideally should just check the new portion of the trajectory
-                    from prpy.util import VanDerCorputSampleGenerator
-                    vdc = VanDerCorputSampleGenerator
+
+                    # Use SampleTimeGenerator so that the time points we get
+                    # to check are in order
+                    from prpy.util import SampleTimeGenerator
+                    stg = SampleTimeGenerator
                     checks = GetLinearCollisionCheckPts(robot, path,
                                                         norm_order=2,
-                                                        sampling_func=vdc)
+                                                        sampling_func=stg)
                     # start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:

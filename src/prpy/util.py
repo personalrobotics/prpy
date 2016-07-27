@@ -1649,10 +1649,6 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
                         time and joint configuration.
     """
 
-    # If trajectory is already timed, strip the deltatime values
-    if IsTimedTrajectory(traj):
-        traj = UntimeTrajectory(traj)
-
     traj_cspec = traj.GetConfigurationSpecification()
 
     # Make sure trajectory is linear in joint space
@@ -1679,24 +1675,17 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
 
     env = robot.GetEnv()
 
-    # Create a temporary trajectory that we will use
-    # for sampling the points to collision check,
-    # because there is no method to modify the 'deltatime'
-    # values of waypoints in an OpenRAVE trajectory.
-    temp_traj_cspec = traj.GetConfigurationSpecification()
-    temp_traj_cspec.AddDeltaTimeGroup()
-    temp_traj = openravepy.RaveCreateTrajectory(env, '')
-    temp_traj.Init(temp_traj_cspec)
-
-    # Set timing of first waypoint in temporary trajectory to t=0
-    waypoint = traj.GetWaypoint(0, temp_traj_cspec)
-    q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
-    delta_time = 0.0
-    temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
-    temp_traj.Insert(0, waypoint)
 
     # Get the resolution (in radians) for each joint
     q_resolutions = robot.GetDOFResolutions()[dof_indices]
+
+    # Create a list such that element i contains the number of collision
+    # checks to check the trajectory from the start up to waypoint i
+    checks = [0.0] * num_waypoints
+
+    # Get the first waypoint to initialize the iteration
+    waypoint = traj.GetWaypoint(0)
+    q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
 
     # Iterate over each segment in the trajectory and set
     # the timing of each waypoint in the temporary trajectory
@@ -1728,29 +1717,49 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
         norm = numpy.linalg.norm(num_steps, ord=norm_order)
 
         # Set timing of this waypoint
-        waypoint = traj.GetWaypoint(i, temp_traj_cspec)
-        delta_time = norm
-        temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
-        temp_traj.Insert(i, waypoint)
+        checks[i] = checks[i-1] + norm
 
         # The last waypoint becomes the first in the next segment
         q0 = q1
 
-    traj_duration = temp_traj.GetDuration()
+    required_checks = checks[-1]
 
     # Sample the trajectory using the specified sample generator
     seq = None
     if sampling_func is None:
         # (default) Linear sequence, from start to end
-        seq = SampleTimeGenerator(0, traj_duration, step=2)
+        seq = SampleTimeGenerator(0, required_checks, step=2)
     else:
-        seq = sampling_func(0, traj_duration, step=2)
+        seq = sampling_func(0, required_checks, step=2)
 
-    # Sample the trajectory in time
-    # and return time value and joint positions
-    for t in seq:
-        sample = temp_traj.Sample(t)
-        q = temp_traj_cspec.ExtractJointValues(sample, robot, dof_indices)
+    # If traj is not timed, apply unit timing to allow easier sampling
+    # but remember it was untimed so we don't return meaningless time values
+    is_traj_timed = IsTimedTrajectory(traj)
+    if not is_traj_timed:
+        traj_timed = ComputeUnitTiming(robot, traj)
+    else:
+        traj_timed = traj
+    
+    # Sample a check and return the associated time in the original
+    # trajectory and joint position
+    checks = numpy.array(checks)
+    for c in seq:
+        # Convert the check number into a time in the original trajectory
+        sidx = numpy.searchsorted(checks, c)
+        if sidx == 0:
+            t = 0.0
+            wpt = traj_timed.GetWaypoint(0)
+        else:
+            # Find the correct linear interpolation time
+            dt_start = traj_cspec.ExtractDeltaTime(traj_timed.GetWaypoint(sidx-1))
+            dt_end = traj_cspec.ExtractDeltaTime(traj_timed.GetWaypoint(sidx))
+            p = (c - checks[sidx-1]) / (checks[sidx] - checks[sidx-1])
+            t = dt_start + p * (dt_end - dt_start)
+            wpt = traj_timed.Sample(t)
+
+        q = traj_cspec.ExtractJointValues(wpt, robot, dof_indices)
+        if not is_traj_timed:
+            t = None
         yield t, q
 
 
