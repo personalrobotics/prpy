@@ -1683,6 +1683,11 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
     # checks to check the trajectory from the start up to waypoint i
     checks = [0.0] * num_waypoints
 
+    # If traj is timed, we want to return meaningful t values, keep track
+    # of trajectory durations up to each waypoint to make this easier
+    traj_timed = IsTimedTrajectory(traj)
+    durations = [0.0] * num_waypoints
+
     # Get the first waypoint to initialize the iteration
     waypoint = traj.GetWaypoint(0)
     q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
@@ -1719,6 +1724,9 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
         # Set timing of this waypoint
         checks[i] = checks[i-1] + norm
 
+        if traj_timed:
+            durations[i] = durations[i-1] + traj_cspec.ExtractDeltaTime(waypoint)
+
         # The last waypoint becomes the first in the next segment
         q0 = q1
 
@@ -1732,35 +1740,29 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
     else:
         seq = sampling_func(0, required_checks, step=2)
 
-    # If traj is not timed, apply unit timing to allow easier sampling
-    # but remember it was untimed so we don't return meaningless time values
-    is_traj_timed = IsTimedTrajectory(traj)
-    if not is_traj_timed:
-        traj_timed = ComputeUnitTiming(robot, traj)
-        traj_cspec = traj_timed.GetConfigurationSpecification()
-    else:
-        traj_timed = traj
-    
     # Sample a check and return the associated time in the original
     # trajectory and joint position
     checks = numpy.array(checks)
     for c in seq:
         # Convert the check number into a time in the original trajectory
         sidx = numpy.searchsorted(checks, c)
+        t = None
         if sidx == 0:
-            t = 0.0
-            wpt = traj_timed.GetWaypoint(0)
+            q = traj_cspec.ExtractJointValues(traj.GetWaypoint(0), robot, dof_indices)
         else:
             # Find the correct linear interpolation time
-            dt_start = traj_cspec.ExtractDeltaTime(traj_timed.GetWaypoint(sidx-1))
-            dt_end = traj_cspec.ExtractDeltaTime(traj_timed.GetWaypoint(sidx))
             p = (c - checks[sidx-1]) / (checks[sidx] - checks[sidx-1])
-            t = dt_start + p * (dt_end - dt_start)
-            wpt = traj_timed.Sample(t)
+            
+            # Interpolate
+            spt = traj_cspec.ExtractJointValues(traj.GetWaypoint(sidx-1), robot, dof_indices)
+            ept = traj_cspec.ExtractJointValues(traj.GetWaypoint(sidx), robot, dof_indices)
+            q = spt + p*(ept - spt)
 
-        q = traj_cspec.ExtractJointValues(wpt, robot, dof_indices)
-        if not is_traj_timed:
-            t = None
+            if traj_timed:
+                stime = durations[sidx-1]
+                etime = durations[sidx]
+                t = stime + p*(etime - stime)
+                
         yield t, q
 
 
