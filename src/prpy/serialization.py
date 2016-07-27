@@ -16,7 +16,11 @@ def serialize(obj):
 
     NoneType = type(None)
 
-    if isinstance(obj, (int, float, basestring, NoneType)):
+    if isinstance(obj, numpy.floating):
+        return float(obj)
+    elif isinstance(obj, (numpy.signedinteger, numpy.unsignedinteger)):
+        return int(obj)
+    elif isinstance(obj, (int, float, basestring, NoneType)):
         return obj
     elif isinstance(obj, (list, tuple)):
         return [ serialize(x) for x in obj ]
@@ -80,9 +84,9 @@ def serialize(obj):
     else:
         raise UnsupportedTypeSerializationException(obj)
 
-def serialize_environment(env):
+def serialize_environment(env, uri_only=False):
     return {
-        'bodies': [ serialize_kinbody(body) for body in env.GetBodies() ],
+        'bodies': [ serialize_kinbody(body, uri_only=uri_only) for body in env.GetBodies() ],
     }
 
 def serialize_environment_file(env, path, writer=None):
@@ -99,30 +103,51 @@ def serialize_environment_file(env, path, writer=None):
 
     return data
 
-def serialize_kinbody(body):
-    all_joints = []
-    all_joints.extend(body.GetJoints())
-    all_joints.extend(body.GetPassiveJoints())
+def serialize_kinbody(body, uri_only=False):
 
+    uri = body.GetXMLFilename()
+    
+    if uri_only and not uri:
+        serialization_logger.warn(
+            'uri_only passed, but KinBody "{}"\'s GetXMLFilename()'
+            ' returns an empty URI.'.format(
+            body.GetName()))
+        uri_only = False
+    
     data = {
         'is_robot': body.IsRobot(),
         'name': body.GetName(),
-        'uri': body.GetXMLFilename(),
-        'links': map(serialize_link, body.GetLinks()),
-        'joints': map(serialize_joint, all_joints),
+        'uri': uri,
     }
+
+    # Only add uri_only to the serialization if uri_only is set
+    # so older deserializers work.
+    if uri_only:
+        data['uri_only'] = True
+    
+    if not uri_only:
+        all_joints = []
+        all_joints.extend(body.GetJoints())
+        all_joints.extend(body.GetPassiveJoints())
+        data['links'] = map(serialize_link, body.GetLinks())
+        data['joints'] = map(serialize_joint, all_joints)
+    
     data['kinbody_state'] = serialize_kinbody_state(body)
 
     if body.IsRobot():
-        data.update(serialize_robot(body))
+        data.update(serialize_robot(body, uri_only=uri_only))
 
     return data
 
-def serialize_robot(robot):
-    return {
-        'manipulators': map(serialize_manipulator, robot.GetManipulators()),
+def serialize_robot(robot, uri_only=False):
+    data = {
         'robot_state': serialize_robot_state(robot),
     }
+    if not uri_only:
+        data.update({
+            'manipulators': map(serialize_manipulator, robot.GetManipulators()),
+        })
+    return data
 
 def serialize_kinbody_state(body):
     data = {
@@ -195,6 +220,24 @@ def serialize_transform(t):
     }
 
 # Deserialization.
+
+class UnitaryMemoizer:
+    """Memoizer which calls the given non-argument callable at most once.
+
+    An instance of this class is initialized with a callable which
+    takes no arguments.  When the instance is called the first time,
+    it invokes the callable, saves the result, and returns it.
+    Subsequent calls return the cached value.
+    """
+    def __init__(self, func):
+        self.func = func
+        self.called = False
+    def __call__(self):
+        if not self.called:
+            self.result = self.func()
+            self.called = True
+        return self.result
+
 def _deserialize_internal(env, data, data_type):
     from numpy import array, ndarray
     from openravepy import (Environment, KinBody, Robot, Trajectory,
@@ -284,11 +327,9 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
         env = openravepy.Environment()
 
     if reuse_bodies is None:
-        reuse_bodies_dict = dict()
-        reuse_bodies_set = set()
-    else:
-        reuse_bodies_dict = { body.GetName(): body for body in reuse_bodies }
-        reuse_bodies_set = set(reuse_bodies)
+        reuse_bodies = []
+    reuse_bodies_dict = { body.GetName(): body for body in reuse_bodies }
+    reuse_bodies_set = set(reuse_bodies)
 
     # Release anything that's grabbed.
     for body in reuse_bodies:
@@ -300,12 +341,16 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
             deserialization_logger.debug('Purging body "%s".', body.GetName())
             env.Remove(body)
 
+    # Create a or_ordf module on demand
+    urdf_module_getter = UnitaryMemoizer(lambda: openravepy.RaveCreateModule(env,'urdf'))
+
     # Deserialize the kinematic structure.
     deserialized_bodies = []
     for body_data in data['bodies']:
         body = reuse_bodies_dict.get(body_data['name'], None)
         if body is None:
-            body = deserialize_kinbody(env, body_data, state=False)
+            body = deserialize_kinbody(env, body_data, state=False,
+                urdf_module_getter=urdf_module_getter)
 
         deserialization_logger.debug('Deserialized body "%s".', body.GetName())
         deserialized_bodies.append((body, body_data))
@@ -320,44 +365,93 @@ def deserialize_environment(data, env=None, purge=False, reuse_bodies=None):
 
     return env
 
-def deserialize_kinbody(env, data, name=None, anonymous=False, state=True):
+def deserialize_kinbody(env, data, name=None, anonymous=False, state=True,
+        urdf_module_getter=None):
+
     from openravepy import RaveCreateKinBody, RaveCreateRobot
+
+    if urdf_module_getter is None:
+        urdf_module_getter = UnitaryMemoizer(lambda: openravepy.RaveCreateModule(env,'urdf'))
 
     deserialization_logger.debug('Deserializing %s "%s".',
         'Robot' if data['is_robot'] else 'KinBody',
         data['name']
     )
+    
+    name_desired = name or data['name']
+    
+    if data.get('uri_only', False):
+        
+        if data['is_robot']:
 
-    link_infos = [
-        deserialize_link_info(link_data['info']) \
-        for link_data in data['links']
-    ]
-    joint_infos = [
-        deserialize_joint_info(joint_data['info']) \
-        for joint_data in data['joints']
-    ]
+            parts = data['uri'].split()
+            if len(parts)==2 and parts[0].endswith('.urdf') and parts[1].endswith('.srdf'):
+                module_urdf = urdf_module_getter()
+                if module_urdf is None:
+                    raise UnsupportedTypeDeserializationException('urdf srdf')
+                robot_name = module_urdf.SendCommand('Load {}'.format(data['uri']))
+                kinbody = env.GetRobot(robot_name)
+                if robot_name != name_desired:
+                    env.Remove(kinbody)
+                    kinbody.SetName(name_desired)
+                    env.Add(kinbody, anonymous)
+            else:
+                kinbody = env.ReadRobotXMLFile(data['uri'])
+                kinbody.SetName(name_desired)
+                env.Add(kinbody, anonymous)
+            
+        else:
 
-    if data['is_robot']:
-        # TODO: Also load sensors.
-        manipulator_infos = [
-            deserialize_manipulator_info(manipulator_data['info']) \
-            for manipulator_data in data['manipulators']
-        ]
-        sensor_infos = []
-
-        kinbody = RaveCreateRobot(env, '')
-        kinbody.Init(
-            link_infos, joint_infos,
-            manipulator_infos, sensor_infos,
-            data['uri']
-        )
+            if data['uri'].endswith('.urdf'):
+                module_urdf = urdf_module_getter()
+                if module_urdf is None:
+                    raise UnsupportedTypeDeserializationException('urdf')
+                kinbody_name = module_urdf.SendCommand('Load {}'.format(data['uri']))
+                kinbody = env.GetKinBody(kinbody_name)
+                if kinbody_name != name_desired:
+                    env.Remove(kinbody)
+                    kinbody.SetName(name_desired)
+                    env.Add(kinbody)
+            else:
+                kinbody = env.ReadKinBodyXMLFile(data['uri'])
+                kinbody.SetName(name_desired)
+                env.Add(kinbody)
+        
     else:
-        kinbody = RaveCreateKinBody(env, '')
-        kinbody.Init(link_infos, joint_infos, data['uri'])
+        
+        link_infos = [
+            deserialize_link_info(link_data['info']) \
+            for link_data in data['links']
+        ]
+        joint_infos = [
+            deserialize_joint_info(joint_data['info']) \
+            for joint_data in data['joints']
+        ]
 
-    kinbody.SetName(name or data['name'])
-    env.Add(kinbody, anonymous)
-
+        if data['is_robot']:
+            
+            # TODO: Also load sensors.
+            manipulator_infos = [
+                deserialize_manipulator_info(manipulator_data['info']) \
+                for manipulator_data in data['manipulators']
+            ]
+            sensor_infos = []
+        
+            kinbody = RaveCreateRobot(env, '')
+            kinbody.Init(
+                link_infos, joint_infos,
+                manipulator_infos, sensor_infos,
+                data['uri']
+            )
+        
+        else:
+            
+            kinbody = RaveCreateKinBody(env, '')
+            kinbody.Init(link_infos, joint_infos, data['uri'])
+        
+        kinbody.SetName(name_desired)
+        env.Add(kinbody, anonymous)
+    
     if state:
         deserialize_kinbody_state(kinbody, data['kinbody_state'])
         if kinbody.IsRobot():
@@ -381,10 +475,18 @@ def deserialize_kinbody_state(body, data):
             )
             raise
 
-    body.SetLinkTransformations(
-        map(deserialize_transform, data['link_transforms']),
-        data['dof_branches']
-    )
+    link_transforms = data.get('link_transforms')
+    dof_branches = data.get('dof_branches')
+    if link_transforms is not None and dof_branches is not None:
+        body.SetLinkTransformations(
+            map(deserialize_transform, link_transforms),
+            dof_branches
+        )
+    else:
+        deserialization_logger.warn(
+            'KinBody "{}" does not have link_transforms/dof_branches'
+            ' saved; falling back to dof_values'.format(body.GetName()))
+        body.SetDOFValues(data['dof_values'])
 
 def deserialize_robot_state(body, data):
     deserialization_logger.debug('Deserializing "%s" Robot state.',
