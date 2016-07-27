@@ -34,6 +34,8 @@ import numpy
 import openravepy
 from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
+from .base import Tags
+from ..util import SetTrajectoryTags
 from ..collision import SimpleRobotCollisionChecker
 from openravepy import (
     CollisionOptions,
@@ -229,6 +231,11 @@ class TSRPlanner(BasePlanner):
                 else:
                     traj = delegate_planner.PlanToConfigurations(
                         robot, configurations_chunk, **kw_args)
+
+                SetTrajectoryTags(traj, {
+                    Tags.DETERMINISTIC_TRAJECTORY: False,
+                    Tags.DETERMINISTIC_ENDPOINT: False,
+                }, append=True)
 
                 return traj
             except PlanningError as e:

@@ -467,87 +467,87 @@ class VectorFieldPlanner(BasePlanner):
 
         time_start = time.time()
 
+        def fn_wrapper(t, q):
+            """
+            The integrator will try to solve this equation
+            at each time step.
+            Note: t is the integration time and is non-monotonic.
+            """
+            # Set the joint values, without checking the joint limits
+            robot.SetActiveDOFValues(q, CheckLimitsAction.Nothing)
+
+            return fn_vectorfield()
+
+        def fn_status_callback(t, q):
+            """
+            Check joint-limits and collisions for a specific joint
+            configuration. This is called multiple times at DOF
+            resolution in order to check along the entire length of the
+            trajectory.
+            Note: This is called by fn_callback, which is currently
+            called after each integration time step, which means we are
+            doing more checks than required.
+            """
+            if time.time() - time_start >= timelimit:
+                raise TimeLimitError()
+
+            # Check joint position limits.
+            # We do this before setting the joint angles.
+            util.CheckJointLimits(robot, q)
+
+            robot.SetActiveDOFValues(q)
+
+            # Check collision (throws an exception on collision)
+            robot_checker.VerifyCollisionFree()
+
+            # Check the termination condition.
+            status = fn_terminate()
+
+            if Status.DoesCache(status):
+                nonlocals['t_cache'] = t
+
+            if Status.DoesTerminate(status):
+                raise TerminationError()
+
+        def fn_callback(t, q):
+            """
+            This is called at every successful integration step.
+            """
+            try:
+                # Add the waypoint to the trajectory.
+                waypoint = numpy.zeros(cspec.GetDOF())
+                cspec.InsertDeltaTime(waypoint, t - path.GetDuration())
+                cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
+                path.Insert(path.GetNumWaypoints(), waypoint)
+
+                # Run constraint checks at DOF resolution.
+                if path.GetNumWaypoints() == 1:
+                    checks = [(t, q)]
+                else:
+                    # TODO: This should start at t_check. Unfortunately, a bug
+                    # in GetCollisionCheckPts causes this to enter an infinite
+                    # loop.
+                    checks = GetCollisionCheckPts(robot, path,
+                                                  include_start=False)
+                    # start_time=nonlocals['t_check'])
+
+                for t_check, q_check in checks:
+                    fn_status_callback(t_check, q_check)
+
+                    # Record the time of this check so we continue checking at
+                    # DOF resolution the next time the integrator takes a step.
+                    nonlocals['t_check'] = t_check
+
+                return 0  # Keep going.
+            except PlanningError as e:
+                nonlocals['exception'] = e
+                return -1  # Stop.
+
         with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
 
             # Instantiate a robot checker
             robot_checker = self.robot_collision_checker(robot)
-
-            def fn_wrapper(t, q):
-                """
-                The integrator will try to solve this equation
-                at each time step.
-                Note: t is the integration time and is non-monotonic.
-                """
-                # Set the joint values, without checking the joint limits
-                robot.SetActiveDOFValues(q, CheckLimitsAction.Nothing)
-
-                return fn_vectorfield()
-
-            def fn_status_callback(t, q):
-                """
-                Check joint-limits and collisions for a specific joint
-                configuration. This is called multiple times at DOF
-                resolution in order to check along the entire length of the
-                trajectory.
-                Note: This is called by fn_callback, which is currently
-                called after each integration time step, which means we are
-                doing more checks than required.
-                """
-                if time.time() - time_start >= timelimit:
-                    raise TimeLimitError()
-
-                # Check joint position limits.
-                # We do this before setting the joint angles.
-                util.CheckJointLimits(robot, q)
-
-                robot.SetActiveDOFValues(q)
-
-                # Check collision (throws an exception on collision)
-                robot_checker.VerifyCollisionFree()
-
-                # Check the termination condition.
-                status = fn_terminate()
-
-                if Status.DoesCache(status):
-                    nonlocals['t_cache'] = t
-
-                if Status.DoesTerminate(status):
-                    raise TerminationError()
-
-            def fn_callback(t, q):
-                """
-                This is called at every successful integration step.
-                """
-                try:
-                    # Add the waypoint to the trajectory.
-                    waypoint = numpy.zeros(cspec.GetDOF())
-                    cspec.InsertDeltaTime(waypoint, t - path.GetDuration())
-                    cspec.InsertJointValues(waypoint, q, robot, active_indices, 0)
-                    path.Insert(path.GetNumWaypoints(), waypoint)
-
-                    # Run constraint checks at DOF resolution.
-                    if path.GetNumWaypoints() == 1:
-                        checks = [(t, q)]
-                    else:
-                        # TODO: This should start at t_check. Unfortunately, a bug
-                        # in GetCollisionCheckPts causes this to enter an infinite
-                        # loop.
-                        checks = GetCollisionCheckPts(robot, path,
-                                                      include_start=False)
-                        # start_time=nonlocals['t_check'])
-
-                    for t_check, q_check in checks:
-                        fn_status_callback(t_check, q_check)
-
-                        # Record the time of this check so we continue checking at
-                        # DOF resolution the next time the integrator takes a step.
-                        nonlocals['t_check'] = t_check
-
-                    return 0  # Keep going.
-                except PlanningError as e:
-                    nonlocals['exception'] = e
-                    return -1  # Stop.
 
             # Integrate the vector field to get a configuration space path.
             #
@@ -571,7 +571,8 @@ class VectorFieldPlanner(BasePlanner):
         exception = nonlocals['exception']
 
         if t_cache is None:
-            raise exception or PlanningError('An unknown error has occurred.')
+            raise exception or PlanningError(
+                'An unknown error has occurred.', deterministic=True)
         elif exception:
             logger.warning('Terminated early: %s', str(exception))
 
@@ -591,11 +592,11 @@ class VectorFieldPlanner(BasePlanner):
                            path.Sample(t_cache),
                            cspec)
 
-        # Flag this trajectory as constrained.
-        util.SetTrajectoryTags(
-            output_path, {
-                Tags.CONSTRAINED: 'true',
-                Tags.SMOOTH: 'true'
-            }, append=True
-        )
+        util.SetTrajectoryTags(output_path, {
+            Tags.SMOOTH: True,
+            Tags.CONSTRAINED: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return output_path
