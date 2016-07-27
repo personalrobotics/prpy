@@ -1737,6 +1737,7 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
     is_traj_timed = IsTimedTrajectory(traj)
     if not is_traj_timed:
         traj_timed = ComputeUnitTiming(robot, traj)
+        traj_cspec = traj_timed.GetConfigurationSpecification()
     else:
         traj_timed = traj
     
