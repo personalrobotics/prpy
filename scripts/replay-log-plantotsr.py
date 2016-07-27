@@ -25,6 +25,7 @@ from prpy.planning import (
     TSRPlanner,
     CBiRRTPlanner,
     SnapPlanner,
+    NamedPlanner
 )
 
 import time 
@@ -49,7 +50,7 @@ def get_filename(logfile, planner, method, outputdir):
 
 parser = argparse.ArgumentParser(description='replay planning request log file')
 parser.add_argument('--logfile', required=True)
-parser.add_argument('--planner', required=True, help='SnapTrajopt CBiRRT')
+parser.add_argument('--planner', required=True, help='SnapTrajopt CBiRRT combined')
 parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
 args = parser.parse_args()
 
@@ -59,9 +60,19 @@ trajopt = TrajoptPlanner()
 if args.planner == 'SnapTrajopt':
     planner = TSRPlanner(delegate_planner=Sequence(snap, trajopt))
     setattr(planner, 'name', 'SnapTrajopt')
-else:
+elif args.planner == 'CBiRRT':
     planner = CBiRRTPlanner()
-
+elif args.planner == 'combined':
+    actual_planner = Sequence(
+        SnapPlanner(),
+        TrajoptPlanner()
+    )
+    planner = FirstSupported(
+        Sequence(actual_planner,
+                 TSRPlanner(delegate_planner=actual_planner),
+                 CBiRRTPlanner()),
+        NamedPlanner(delegate_planner=actual_planner))
+    setattr(planner,'name','combined')
 
 logfile = args.logfile
 print ("Reading ", logfile)
@@ -125,6 +136,8 @@ resdict = {'planner_used':[],
 
 reqdict['method'] = yamldict['request']['method']
 reqdict['planner_name'] = str(planner)
+reqdict['args'] = yamldict['request']['args']
+reqdict['kw_args'] = yamldict['request']['kw_args']
 
 
 for j in range(num_trials):
@@ -149,6 +162,8 @@ for j in range(num_trials):
     resdict['ok'].append(True if traj else False)
     resdict['planning_time'].append(planning_time)
     resdict['error'].append(error_msg)
+    
+
     ok = True if traj else False
     planner_name = getattr(planner, 'name', str(planner))
     with open('replay-completed-'+planner_name+'.log', 'a') as fp:
