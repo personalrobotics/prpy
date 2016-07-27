@@ -419,9 +419,9 @@ class VectorFieldPlanner(BasePlanner):
 
     @ClonedPlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
-                          integration_time_interval=10.0,
-                          timelimit=5.0,
-                          **kw_args):
+                          integration_time_interval=10.0, timelimit=5.0,
+                          sampling_func=util.VanDerCorputSampleGenerator,
+                          norm_order=2, **kw_args):
         """
         Follow a joint space vectorfield to termination.
 
@@ -431,6 +431,8 @@ class VectorFieldPlanner(BasePlanner):
         @param integration_time_interval The time interval to integrate
                                          over.
         @param timelimit time limit before giving up
+        @param sampling_func sample generator to compute collion checks
+        @param norm_order order of norm to use for collision checking
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
@@ -528,11 +530,8 @@ class VectorFieldPlanner(BasePlanner):
                 else:
                     # TODO: This will recheck the entire trajectory
                     #  Ideally should just check the new portion of the trajectory
-                    from prpy.util import VanDerCorputSampleGenerator
-                    vdc = VanDerCorputSampleGenerator
                     checks = GetLinearCollisionCheckPts(robot, path,
-                                                        norm_order=2,
-                                                        sampling_func=vdc)
+                            norm_order=norm_order, sampling_func=sampling_func)
                     # start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
