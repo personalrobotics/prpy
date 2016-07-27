@@ -1473,7 +1473,7 @@ def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
     return (scale * val + lower for val in chain(endpoints, raw_seq))
 
 
-def SampleTimeGenerator(start, end, step=1):
+def SampleTimeGenerator(start, end, step=1, include_endpoints=False, **kwargs):
     """
     Generate a linear sequence of values from start to end, with
     specified step size. Works with int or float values.
@@ -1487,7 +1487,8 @@ def SampleTimeGenerator(start, end, step=1):
     @param float start: The start value of the sequence.
     @param float end:   The last value of the sequence.
     @param float step:  The step-size between values.
-
+    @param bool include_endpoints: If true, include the start and end value
+       
     @returns generator: A sequence of float values.
     """
     if end <= start:
@@ -1503,9 +1504,12 @@ def SampleTimeGenerator(start, end, step=1):
         t = t + step
     if (end - float(prev_t)) > (step / 2.0):
         yield float(end)
+        prev_t = end
+    if include_endpoints and (end - float(prev_t)) > 1e-6:
+        yield float(end)
 
 
-def VanDerCorputSampleGenerator(start, end, step=2):
+def VanDerCorputSampleGenerator(start, end, step=2, **kwargs):
     """
     This wraps VanDerCorputSequence() in a way that's useful for
     collision-checking.
@@ -1738,9 +1742,9 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
     seq = None
     if sampling_func is None:
         # (default) Linear sequence, from start to end
-        seq = SampleTimeGenerator(0, required_checks, step=1)
+        seq = SampleTimeGenerator(0, required_checks, step=1, include_enpoints=True)
     else:
-        seq = sampling_func(0, required_checks, step=1)
+        seq = sampling_func(0, required_checks, step=1, include_endpoints=True)
 
     # Sample a check and return the associated time in the original
     # trajectory and joint position
