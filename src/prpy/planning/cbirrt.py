@@ -201,6 +201,7 @@ class CBiRRTPlanner(BasePlanner):
         # By default, CBiRRT interprets the DOF resolutions as an
         # L-infinity norm; this flag turns on the L-2 norm instead.
         args += ['bdofresl2norm', '1']
+        args += ['steplength', '0.05999']
 
         if extra_args is not None:
             args += extra_args
