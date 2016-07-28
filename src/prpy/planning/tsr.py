@@ -111,8 +111,6 @@ class TSRPlanner(BasePlanner):
         # Delegate to robot.planner by default.
         delegate_planner = self.delegate_planner or robot.planner
 
-        assert(num_attempts == 6 and tsr_timeout == 0.7)
-
         # Plan using the active manipulator.
         manipulator = robot.GetActiveManipulator()
 
