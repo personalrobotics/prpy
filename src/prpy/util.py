@@ -37,6 +37,7 @@ import scipy.misc
 import scipy.optimize
 import threading
 import time
+import warnings
 
 
 logger = logging.getLogger(__name__)
@@ -1325,7 +1326,7 @@ def ComputeGeodesicUnitTiming(traj, env=None, alpha=1.0):
     return new_traj
 
 
-def CheckJointLimits(robot, q):
+def CheckJointLimits(robot, q, deterministic=None):
     """
     Check if a configuration is within a robot's joint position limits.
 
@@ -1352,7 +1353,8 @@ def CheckJointLimits(robot, q):
             dof_index=active_dof_indices[index],
             dof_value=q[index],
             dof_limit=q_limit_min[index],
-            description='position')
+            description='position',
+            deterministic=deterministic)
 
     upper_position_violations = (q > q_limit_max)
     if upper_position_violations.any():
@@ -1362,7 +1364,8 @@ def CheckJointLimits(robot, q):
             dof_index=active_dof_indices[index],
             dof_value=q[index],
             dof_limit=q_limit_max[index],
-            description='position')
+            description='position',
+            deterministic=deterministic)
 
 
 def GetForwardKinematics(robot, q, manipulator=None, frame=None):
@@ -1470,7 +1473,7 @@ def VanDerCorputSequence(lower=0.0, upper=1.0, include_endpoints=True):
     return (scale * val + lower for val in chain(endpoints, raw_seq))
 
 
-def SampleTimeGenerator(start, end, step=1):
+def SampleTimeGenerator(start, end, step=1, include_endpoints=False, **kwargs):
     """
     Generate a linear sequence of values from start to end, with
     specified step size. Works with int or float values.
@@ -1484,7 +1487,8 @@ def SampleTimeGenerator(start, end, step=1):
     @param float start: The start value of the sequence.
     @param float end:   The last value of the sequence.
     @param float step:  The step-size between values.
-
+    @param bool include_endpoints: If true, include the start and end value
+       
     @returns generator: A sequence of float values.
     """
     if end <= start:
@@ -1500,9 +1504,12 @@ def SampleTimeGenerator(start, end, step=1):
         t = t + step
     if (end - float(prev_t)) > (step / 2.0):
         yield float(end)
+        prev_t = end
+    if include_endpoints and (end - float(prev_t)) > 1e-6:
+        yield float(end)
 
 
-def VanDerCorputSampleGenerator(start, end, step=2):
+def VanDerCorputSampleGenerator(start, end, step=2, **kwargs):
     """
     This wraps VanDerCorputSequence() in a way that's useful for
     collision-checking.
@@ -1648,10 +1655,6 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
                         time and joint configuration.
     """
 
-    # If trajectory is already timed, strip the deltatime values
-    if IsTimedTrajectory(traj):
-        traj = UntimeTrajectory(traj)
-
     traj_cspec = traj.GetConfigurationSpecification()
 
     # Make sure trajectory is linear in joint space
@@ -1678,24 +1681,22 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
 
     env = robot.GetEnv()
 
-    # Create a temporary trajectory that we will use
-    # for sampling the points to collision check,
-    # because there is no method to modify the 'deltatime'
-    # values of waypoints in an OpenRAVE trajectory.
-    temp_traj_cspec = traj.GetConfigurationSpecification()
-    temp_traj_cspec.AddDeltaTimeGroup()
-    temp_traj = openravepy.RaveCreateTrajectory(env, '')
-    temp_traj.Init(temp_traj_cspec)
-
-    # Set timing of first waypoint in temporary trajectory to t=0
-    waypoint = traj.GetWaypoint(0, temp_traj_cspec)
-    q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
-    delta_time = 0.0
-    temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
-    temp_traj.Insert(0, waypoint)
 
     # Get the resolution (in radians) for each joint
     q_resolutions = robot.GetDOFResolutions()[dof_indices]
+
+    # Create a list such that element i contains the number of collision
+    # checks to check the trajectory from the start up to waypoint i
+    checks = [0.0] * num_waypoints
+
+    # If traj is timed, we want to return meaningful t values, keep track
+    # of trajectory durations up to each waypoint to make this easier
+    traj_timed = IsTimedTrajectory(traj)
+    durations = [0.0] * num_waypoints
+
+    # Get the first waypoint to initialize the iteration
+    waypoint = traj.GetWaypoint(0)
+    q0 = traj_cspec.ExtractJointValues(waypoint, robot, dof_indices)
 
     # Iterate over each segment in the trajectory and set
     # the timing of each waypoint in the temporary trajectory
@@ -1727,29 +1728,47 @@ def GetLinearCollisionCheckPts(robot, traj, norm_order=2, sampling_func=None):
         norm = numpy.linalg.norm(num_steps, ord=norm_order)
 
         # Set timing of this waypoint
-        waypoint = traj.GetWaypoint(i, temp_traj_cspec)
-        delta_time = norm
-        temp_traj_cspec.InsertDeltaTime(waypoint, delta_time)
-        temp_traj.Insert(i, waypoint)
+        checks[i] = checks[i-1] + norm
+
+        if traj_timed:
+            durations[i] = durations[i-1] + traj_cspec.ExtractDeltaTime(waypoint)
 
         # The last waypoint becomes the first in the next segment
         q0 = q1
 
-    traj_duration = temp_traj.GetDuration()
+    required_checks = checks[-1]
 
     # Sample the trajectory using the specified sample generator
     seq = None
     if sampling_func is None:
         # (default) Linear sequence, from start to end
-        seq = SampleTimeGenerator(0, traj_duration, step=2)
+        seq = SampleTimeGenerator(0, required_checks, step=1, include_enpoints=True)
     else:
-        seq = sampling_func(0, traj_duration, step=2)
+        seq = sampling_func(0, required_checks, step=1, include_endpoints=True)
 
-    # Sample the trajectory in time
-    # and return time value and joint positions
-    for t in seq:
-        sample = temp_traj.Sample(t)
-        q = temp_traj_cspec.ExtractJointValues(sample, robot, dof_indices)
+    # Sample a check and return the associated time in the original
+    # trajectory and joint position
+    checks = numpy.array(checks)
+    for c in seq:
+        # Convert the check number into a time in the original trajectory
+        sidx = numpy.searchsorted(checks, c)
+        t = None
+        if sidx == 0:
+            q = traj_cspec.ExtractJointValues(traj.GetWaypoint(0), robot, dof_indices)
+        else:
+            # Find the correct linear interpolation time
+            p = (c - checks[sidx-1]) / (checks[sidx] - checks[sidx-1])
+            
+            # Interpolate
+            spt = traj_cspec.ExtractJointValues(traj.GetWaypoint(sidx-1), robot, dof_indices)
+            ept = traj_cspec.ExtractJointValues(traj.GetWaypoint(sidx), robot, dof_indices)
+            q = spt + p*(ept - spt)
+
+            if traj_timed:
+                stime = durations[sidx-1]
+                etime = durations[sidx]
+                t = stime + p*(etime - stime)
+                
         yield t, q
 
 
@@ -2054,6 +2073,7 @@ def GetManipulatorIndex(robot, manip=None):
     @param manip The robot manipulator
     @return (manip, manip_idx) The manipulator and its index
     """
+    from openravepy import DebugLevel, RaveGetDebugLevel, RaveSetDebugLevel
 
     with robot.GetEnv():
         if manip is None:
@@ -2062,7 +2082,14 @@ def GetManipulatorIndex(robot, manip=None):
         with robot.CreateRobotStateSaver(
                 robot.SaveParameters.ActiveManipulator):
             robot.SetActiveManipulator(manip)
-            manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+
+            # Ignore GetActiveManipulatorIndex's DeprecationWarning.
+            debug_level = RaveGetDebugLevel()
+            try:
+                RaveSetDebugLevel(DebugLevel.Error)
+                manip_idx = manip.GetRobot().GetActiveManipulatorIndex()
+            finally:
+                RaveSetDebugLevel(debug_level)
 
     return (manip, manip_idx)
 

@@ -259,7 +259,7 @@ class Tests(unittest.TestCase):
         # because the L2 norm = 1.32
         q0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         q1 = 0.5 * self.dof_resolutions
-        desired_num_checks = 2
+        desired_num_checks = 3
         traj = self.CreateTrajectory(q0, q1)
         # Linear sampling
         linear = prpy.util.SampleTimeGenerator
@@ -292,7 +292,7 @@ class Tests(unittest.TestCase):
         # the actual end position does not need to be checked.
         q0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         q1 = 1.0 * self.dof_resolutions
-        desired_num_checks = 2
+        desired_num_checks = 4
         traj = self.CreateTrajectory(q0, q1)
         # Linear sampling
         linear = prpy.util.SampleTimeGenerator
@@ -301,9 +301,8 @@ class Tests(unittest.TestCase):
                                                       norm_order=2, \
                                                       sampling_func=linear)
         num_checks = 0
-        for t, q in checks:
+        for _ in checks:
             num_checks = num_checks + 1
-            prev_q = q # the robot configuration
         if num_checks != desired_num_checks:
             error = str(num_checks) + ' is the wrong number of check pts.'
             self.fail(error)
@@ -318,7 +317,7 @@ class Tests(unittest.TestCase):
         # because the L2 norm = 3.17.
         q0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         q1 = 1.2 * self.dof_resolutions
-        desired_num_checks = 3
+        desired_num_checks = 5
         traj = self.CreateTrajectory(q0, q1)
         # Linear sampling
         linear = prpy.util.SampleTimeGenerator
@@ -327,7 +326,7 @@ class Tests(unittest.TestCase):
                                                       norm_order=2, \
                                                       sampling_func=linear)
         num_checks = 0
-        for t, q in checks:
+        for _, q in checks:
             num_checks = num_checks + 1
             prev_q = q # the robot configuration
         if num_checks != desired_num_checks:
