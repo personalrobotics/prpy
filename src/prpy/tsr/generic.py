@@ -8,12 +8,12 @@ def get_manip_idx(robot, manip=None):
     """
     Helper function for getting the manipulator index to be used by the TSR.
 
-    Deprecated. Please use util.GetActiveManipulatorIndex instead.
+    Deprecated. Please use util.GetManipulatorIndex instead.
     """
     warnings.warn(
       'tsr.get_manip_idx is deprecated. Please use'
-      ' util.GetActiveManipulatorIndex instead.', DeprecationWarning)
-    return GetActiveManipulatorIndex(robot, manip)[1]
+      ' util.GetManipulatorIndex instead.', DeprecationWarning)
+    return GetManipulatorIndex(robot, manip)[1]
 
 def cylinder_grasp(robot, obj, obj_radius, obj_height, 
                    lateral_offset = 0.0, 
