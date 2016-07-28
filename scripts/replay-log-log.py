@@ -61,6 +61,9 @@ parser.add_argument('--logfile', required=True)
 parser.add_argument('--planner', required=True, help=('cbirrt OMPL_RRTConnect snap chomp vectorfield' 
                                                         ' greedy-ik trajopt lemur cachedlemur combined'))
 parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
+parser.add_argument('--collision-checker', choices=['ode','fcl'], default='fcl',
+                    help='Set collision checker')
+
 args = parser.parse_args()
 
 planner_list = args.planner.lower().split(' ')
@@ -129,6 +132,12 @@ if method_name.lower() == 'plantotsr':
 # deserialize environment
 import herbpy
 env, robot = herbpy.initialize(sim=True)
+if args.collision_checker == 'fcl':
+    env.SetCollisionChecker(openravepy.RaveCreateCollisionChecker(env, 'fcl'))
+    env.GetCollisionChecker().SetDescription('fcl')
+else:
+    env.SetCollisionChecker(openravepy.RaveCreateCollisionChecker(env, 'ode'))
+    env.GetCollisionChecker().SetDescription('ode')
 
 for actual_planner in planners:
 
@@ -197,6 +206,9 @@ for actual_planner in planners:
 
         reqdict = {}
         resdict = {}
+        reqdict['collisionchecker'] = env.GetCollisionChecker().GetDescription()
+        reqdict['args'] = yamldict['request']['args']
+        reqdict['kw_args'] = yamldict['request']['kw_args']
         reqdict['method'] = yamldict['request']['method'] 
         reqdict['seed'] = getattr(actual_planner, 'seed', None)
         reqdict['planner_name'] = getattr(actual_planner, 'name', str(planner))
@@ -214,7 +226,6 @@ for actual_planner in planners:
         yamldict_res['environment'] = yamldict['environment']
         yamldict_res['request'] = reqdict
         yamldict_res['result'] = resdict
-
         ok = True if traj else False
 
         with open(filename,'w') as fp:
