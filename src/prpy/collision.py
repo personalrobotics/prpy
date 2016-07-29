@@ -81,20 +81,21 @@ class BakedRobotCollisionChecker:
     def __init__(self, robot):
         self.robot = robot
         self.env = robot.GetEnv()
-        self.checker = self.env.GetCollisionChecker()
-        if self.checker is None:
-            raise PrPyException('No collision checker found on environment')
-        try:
-            kb_type = self.checker.SendCommand('BakeGetType')
-        except openravepy.openrave_exception:
-            raise PrPyException('Collision checker does not support baking')
-        # This "bakes" the following Env and Self checks.
-        # (after the bake, the composite check is stored in self.baked)
-        self.checker.SendCommand('BakeBegin')
-        self.env.CheckCollision(self.robot)
-        self.robot.CheckSelfCollision()
-        self.baked = openravepy.RaveCreateKinBody(self.env, kb_type)
-        self.checker.SendCommand('BakeEnd')
+        with self.env:
+            self.checker = self.env.GetCollisionChecker()
+            if self.checker is None:
+                raise PrPyException('No collision checker found on environment')
+            try:
+                kb_type = self.checker.SendCommand('BakeGetType')
+            except openravepy.openrave_exception:
+                raise PrPyException('Collision checker does not support baking')
+            # This "bakes" the following Env and Self checks.
+            # (after the bake, the composite check is stored in self.baked)
+            self.checker.SendCommand('BakeBegin')
+            self.env.CheckCollision(self.robot)
+            self.robot.CheckSelfCollision()
+            self.baked = openravepy.RaveCreateKinBody(self.env, kb_type)
+            self.checker.SendCommand('BakeEnd')
 
     def CheckCollision(self, report=None):
         # The baked check is performed by checking self collision on baked
