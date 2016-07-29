@@ -108,7 +108,7 @@ class LockedPlanningMethod(object):
         self.func = func
 
     def __call__(self, instance, robot, *args, **kw_args):
-        with robot.GetEnv():
+        with robot.GetEnv(), robot.CreateRobotStateSaver():
             # Perform the actual planning operation.
             traj = self.func(instance, robot, *args, **kw_args)
 
