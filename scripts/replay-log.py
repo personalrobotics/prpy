@@ -82,7 +82,7 @@ print('calling planning method ...')
 traj = method(*method_args, **method_kwargs)
 
 # Log the collision checks
-
+embed()
 check_info = stubchecker.SendCommand('GetLogInfo')
 check_info_dict = json.loads(check_info)
 
