@@ -34,6 +34,7 @@ from prpy.planning.base import (
     BasePlanner,
     PlanningError,
     ClonedPlanningMethod,
+    LockedPlanningMethod,
     Tags
 )
 from ..collision import SimpleRobotCollisionChecker
@@ -60,7 +61,7 @@ class SnapPlanner(BasePlanner):
     def __str__(self):
         return 'SnapPlanner'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's
@@ -73,7 +74,7 @@ class SnapPlanner(BasePlanner):
         """
         return self._Snap(robot, goal, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's
@@ -91,6 +92,7 @@ class SnapPlanner(BasePlanner):
         from prpy.planning.exceptions import CollisionPlanningError
         from prpy.planning.exceptions import SelfCollisionPlanningError
 
+        env = robot.GetEnv()
         ikp = openravepy.IkParameterizationType
         ikfo = openravepy.IkFilterOptions
 
@@ -115,7 +117,7 @@ class SnapPlanner(BasePlanner):
             for q in ik_solutions:
                 robot.SetActiveDOFValues(q)
                 report = openravepy.CollisionReport()
-                if self.env.CheckCollision(robot, report=report):
+                if env.CheckCollision(robot, report=report):
                     raise CollisionPlanningError.FromReport(report, deterministic=True)
                 elif robot.CheckSelfCollision(report=report):
                     raise SelfCollisionPlanningError.FromReport(report, deterministic=True)
@@ -134,7 +136,8 @@ class SnapPlanner(BasePlanner):
         # Create a two-point trajectory between the
         # current configuration and the goal.
         # (a straight line in joint space)
-        traj = openravepy.RaveCreateTrajectory(self.env, '')
+        env = robot.GetEnv()
+        traj = openravepy.RaveCreateTrajectory(env, '')
         cspec = robot.GetActiveConfigurationSpecification('linear')
         active_indices = robot.GetActiveDOFIndices()
 
@@ -177,7 +180,7 @@ class SnapPlanner(BasePlanner):
                                             norm_order=2,
                                             sampling_func=vdc)
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
 
             # Instantiate a robot checker
