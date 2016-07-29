@@ -81,7 +81,7 @@ class GreedyIKPlanner(BasePlanner):
 
         return self.PlanWorkspacePath(robot, traj, timelimit)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 **kw_args):
@@ -140,7 +140,7 @@ class GreedyIKPlanner(BasePlanner):
         return self.PlanWorkspacePath(robot, traj,
                                       timelimit, min_waypoint_index=1)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
                           min_waypoint_index=None, norm_order=2, **kw_args):
         """
