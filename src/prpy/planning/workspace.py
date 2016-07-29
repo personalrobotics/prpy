@@ -34,7 +34,7 @@ import numpy
 import openravepy
 import time
 from ..util import SetTrajectoryTags
-from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
+from base import BasePlanner, PlanningError, ClonedPlanningMethod, LockedPlanningMethod, Tags
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class GreedyIKPlanner(BasePlanner):
     def __str__(self):
         return 'GreedyIKPlanner'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               **kw_args):
         """
@@ -64,7 +64,7 @@ class GreedyIKPlanner(BasePlanner):
             # Create geodesic trajectory in SE(3)
             manip = robot.GetActiveManipulator()
             start_pose = manip.GetEndEffectorTransform()
-            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            traj = openravepy.RaveCreateTrajectory(env, '')
             spec = openravepy.IkParameterization.\
                 GetConfigurationSpecificationFromType(
                     openravepy.IkParameterizationType.Transform6D, 'linear')
@@ -97,6 +97,7 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return traj
         """
+        env = robot.GetEnv()
 
         if distance < 0:
             raise ValueError('Distance must be non-negative.')
@@ -114,7 +115,7 @@ class GreedyIKPlanner(BasePlanner):
         with robot:
             manip = robot.GetActiveManipulator()
             start_pose = manip.GetEndEffectorTransform()
-            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            traj = openravepy.RaveCreateTrajectory(env, '')
             spec = openravepy.IkParameterization.\
                 GetConfigurationSpecificationFromType(
                     openravepy.IkParameterizationType.Transform6D, 'linear')
@@ -170,13 +171,13 @@ class GreedyIKPlanner(BasePlanner):
 
         p = openravepy.KinBody.SaveParameters
 
-        with robot, CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+        with robot, CollisionOptionsStateSaver(env.GetCollisionChecker(),
                                                CollisionOptions.ActiveDOFs):
             manip = robot.GetActiveManipulator()
             robot.SetActiveDOFs(manip.GetArmIndices())
 
             # Create a new trajectory starting at current robot location.
-            qtraj = openravepy.RaveCreateTrajectory(self.env, '')
+            qtraj = openravepy.RaveCreateTrajectory(env, '')
             qtraj.Init(manip.GetArmConfigurationSpecification('linear'))
             qtraj.Insert(0, robot.GetActiveDOFValues())
 
@@ -262,7 +263,7 @@ class GreedyIKPlanner(BasePlanner):
                         for q in ik_solutions:
                             robot.SetActiveDOFValues(q)
                             cr = CollisionReport()
-                            if self.env.CheckCollision(robot, report=cr):
+                            if env.CheckCollision(robot, report=cr):
                                 collision_error = \
                                     CollisionPlanningError.FromReport(
                                         cr, deterministic=True)
