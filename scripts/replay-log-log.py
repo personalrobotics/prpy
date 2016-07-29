@@ -162,38 +162,39 @@ for actual_planner in planners:
     except (AttributeError, UnsupportedPlanningError) as e:
         print ('{} does not support planning method {}!'.format(planner, yamldict['request']['method']))
         continue
-
-    # deserialize environment
-    prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
-    
-    method_args = []
-    for method_arg in yamldict['request']['args']:
-        method_args.append(prpy.serialization.deserialize(env, method_arg))
-    method_kwargs = {}
-    for key,value in yamldict['request']['kw_args'].items():
-        method_kwargs[key] = prpy.serialization.deserialize(env, value)
-
-    # remove robot and use properly deserialized robot 
-    if robot in method_args:
-        method_args.remove(robot)
-    if 'robot' in method_kwargs:
-        method_kwargs.pop('robot')
-    if 'ranker' in method_kwargs:
-        method_kwargs.pop('ranker')
-
-    # load ik solver for robot in case it's needed
-    ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
-        iktype=openravepy.IkParameterizationType.Transform6D)
-    if not ikmodel.load():
-        ikmodel.autogenerate()
-
-    # call planning method itself ...
-    print('calling planning method {} ...'.format(actual_planner))
-    from prpy.util import Timer, SetTrajectoryTags
-    from prpy.planning.base import Tags
     
     num_trials = 3 # if 'plantotsr' in str(method_name).lower() else 3
     for j in range(num_trials):
+        
+        # deserialize environment
+        prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
+        
+        method_args = []
+        for method_arg in yamldict['request']['args']:
+            method_args.append(prpy.serialization.deserialize(env, method_arg))
+        method_kwargs = {}
+        for key,value in yamldict['request']['kw_args'].items():
+            method_kwargs[key] = prpy.serialization.deserialize(env, value)
+
+        # remove robot and use properly deserialized robot 
+        if robot in method_args:
+            method_args.remove(robot)
+        if 'robot' in method_kwargs:
+            method_kwargs.pop('robot')
+        if 'ranker' in method_kwargs:
+            method_kwargs.pop('ranker')
+
+        # load ik solver for robot in case it's needed
+        ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
+            iktype=openravepy.IkParameterizationType.Transform6D)
+        if not ikmodel.load():
+            ikmodel.autogenerate()
+
+        # call planning method itself ...
+        print('calling planning method {} ...'.format(actual_planner))
+        from prpy.util import Timer, SetTrajectoryTags
+        from prpy.planning.base import Tags
+
         error_msg = None
         traj = None
         print (actual_planner, 'trial ', j, ' seed ',  getattr(actual_planner, 'seed', None))
