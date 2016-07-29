@@ -31,9 +31,10 @@
 import logging
 import numpy
 import openravepy
+import warnings
 from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  ClonedPlanningMethod, Tags)
+                  ClonedPlanningMethod, LockedPlanningMethod, Tags)
 from openravepy import (
     CollisionOptions,
     CollisionOptionsStateSaver,
@@ -51,18 +52,10 @@ class OMPLPlanner(BasePlanner):
         self.setup = False
         self.algorithm = algorithm
 
-        planner_name = 'OMPL_{:s}'.format(algorithm)
-        self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
-
-        if self.planner is None:
-            raise UnsupportedPlanningError(
-                'Unable to create "{:s}" planner. Is or_ompl installed?'
-                .format(planner_name))
-
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OMPL. This will invoke the OMPL
@@ -73,7 +66,7 @@ class OMPLPlanner(BasePlanner):
         """
         return self._Plan(robot, goal=goal, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, **kw_args):
         """
         Plan using the given set of TSR chains with OMPL.
@@ -83,9 +76,23 @@ class OMPLPlanner(BasePlanner):
         """
         return self._Plan(robot, tsrchains=tsrchains, **kw_args)
 
-    def _Plan(self, robot, goal=None, tsrchains=None, timeout=30., shortcut_timeout=5.,
-              continue_planner=False, ompl_args=None,
-              formatted_extra_params=None, **kw_args):
+    def _Plan(self, robot, goal=None, tsrchains=None, timeout=5.,
+            shortcut_timeout=None, continue_planner=None, ompl_args=None,
+            formatted_extra_params=None, **kw_args):
+        if shortcut_timeout is not None:
+            warnings.warn('shortcut_timeout is not used.', DeprecationWarning)
+        if continue_planner is not None:
+            warnings.warn('continue_planner is no longer supported.', DeprecationWarning)
+
+        env = robot.GetEnv()
+        planner_name = 'OMPL_{:s}'.format(self.algorithm)
+        planner = openravepy.RaveCreatePlanner(env, planner_name)
+
+        if planner is None:
+            raise UnsupportedPlanningError(
+                'Unable to create "{:s}" planner. Is or_ompl installed?'
+                .format(planner_name))
+
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
         if kw_args and 'seed' in kw_args.keys():
@@ -113,17 +120,15 @@ class OMPLPlanner(BasePlanner):
             params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
 
-        traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+        traj = openravepy.RaveCreateTrajectory(env, 'GenericTrajectory')
 
         # Plan.
-        with self.env:
-            if (not continue_planner) or (not self.setup):
-                self.planner.InitPlan(robot, params)
-                self.setup = True
+        with env:
+            planner.InitPlan(robot, params)
 
-            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+            with CollisionOptionsStateSaver(env.GetCollisionChecker(),
                                             CollisionOptions.ActiveDOFs):
-                status = self.planner.PlanPath(traj, releasegil=True)
+                status = planner.PlanPath(traj, releasegil=True)
 
             if status not in [PlannerStatus.HasSolution,
                               PlannerStatus.InterruptedWithSolution]:
@@ -178,7 +183,7 @@ class RRTConnect(OMPLPlanner):
                          ompl_range)
         return ompl_args
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
         """
         Plan to a desired configuration with OMPL. This will invoke the OMPL
@@ -190,7 +195,7 @@ class RRTConnect(OMPLPlanner):
         ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
         return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
         """
         Plan using the given TSR chains with OMPL.
