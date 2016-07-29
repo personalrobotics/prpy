@@ -32,8 +32,8 @@ import time
 import itertools
 import numpy
 import openravepy
-from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
-                  UnsupportedPlanningError)
+from base import (BasePlanner, ClonedPlanningMethod, LockedPlanningMethod,
+                  PlanningError, UnsupportedPlanningError)
 from .base import Tags
 from ..util import SetTrajectoryTags
 from ..collision import SimpleRobotCollisionChecker
@@ -83,7 +83,7 @@ class TSRPlanner(BasePlanner):
         return self.PlanToTSR(robot, [tsr_chain], **kw_args)
     """
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=0.5,
                   num_attempts=3, chunk_size=1, num_candidates=50, ranker=None,
                   max_deviation=2 * numpy.pi, **kw_args):
@@ -112,6 +112,7 @@ class TSRPlanner(BasePlanner):
         delegate_planner = self.delegate_planner or robot.planner
 
         # Plan using the active manipulator.
+        env = robot.GetEnv()
         manipulator = robot.GetActiveManipulator()
 
         # Distance from current configuration is default ranking.
@@ -147,7 +148,7 @@ class TSRPlanner(BasePlanner):
 
         # Instantiate a robot checker
         with CollisionOptionsStateSaver(
-                self.env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
+                env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
             robot_checker = self.robot_collision_checker(robot)
 
         def is_configuration_valid(ik_solution):
@@ -182,7 +183,7 @@ class TSRPlanner(BasePlanner):
             # restore the original collision checking options before calling
             # the planner to give it a pristine environment.
             with CollisionOptionsStateSaver(
-                    self.env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
+                    env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
                 while is_time_available() and len(configurations_chunk) < chunk_size:
                     # Generate num_candidates candidates and rank them using the
                     # user-supplied IK ranker.
