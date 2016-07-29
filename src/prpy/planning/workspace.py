@@ -170,6 +170,7 @@ class GreedyIKPlanner(BasePlanner):
         )
 
         p = openravepy.KinBody.SaveParameters
+        env = robot.GetEnv()
 
         with robot, CollisionOptionsStateSaver(env.GetCollisionChecker(),
                                                CollisionOptions.ActiveDOFs):
