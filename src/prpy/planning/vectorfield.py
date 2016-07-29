@@ -34,7 +34,7 @@ import logging
 import numpy
 import openravepy
 from .. import util
-from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
+from base import BasePlanner, PlanningError, LockedPlanningMethod, ClonedPlanningMethod, Tags
 from ..collision import SimpleRobotCollisionChecker
 from enum import Enum
 from openravepy import CollisionOptions, CollisionOptionsStateSaver
@@ -82,7 +82,7 @@ class VectorFieldPlanner(BasePlanner):
     def __str__(self):
         return 'VectorFieldPlanner'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               pose_error_tol=0.01,
                               integration_interval=10.0,
@@ -139,7 +139,7 @@ class VectorFieldPlanner(BasePlanner):
         util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
         return traj
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 position_tolerance=0.01,
@@ -231,7 +231,7 @@ class VectorFieldPlanner(BasePlanner):
                                       integration_interval, timelimit,
                                       **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanWorkspacePath(self, robot, traj,
                           timelimit=5.0,
                           position_tolerance=0.01,
@@ -419,7 +419,7 @@ class VectorFieldPlanner(BasePlanner):
                                       integration_interval,
                                       timelimit, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
                           integration_time_interval=10.0, timelimit=5.0,
                           sampling_func=util.SampleTimeGenerator,
@@ -548,7 +548,7 @@ class VectorFieldPlanner(BasePlanner):
                 nonlocals['exception'] = e
                 return -1  # Stop.
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(),
                                         CollisionOptions.ActiveDOFs):
 
             # Instantiate a robot checker
