@@ -164,6 +164,8 @@ if method_name.lower() == 'plantotsr':
 # deserialize environment
 import herbpy
 env, robot = herbpy.initialize(sim=True)
+env.SetCollisionChecker(openravepy.RaveCreateCollisionChecker(env, 'fcl'))
+# env.GetCollisionChecker().SetDescription('fcl')
 
 for actual_planner in planners:
 
@@ -210,7 +212,9 @@ for actual_planner in planners:
     print('calling planning method {} ...'.format(actual_planner))
     from prpy.util import Timer, SetTrajectoryTags
     from prpy.planning.base import Tags
-    
+
+    env.SetViewer('interactivemarker')
+
     num_trials = 3 #if str(actual_planner).lower() in randomized else 1
     for j in range(num_trials):
         error_msg = None
@@ -222,6 +226,18 @@ for actual_planner in planners:
         start_time = time.time()
         try:
             traj = method(robot, *method_args, **method_kwargs)    
+
+            # retime/view resulting trajectory
+            openravepy.planningutils.RetimeActiveDOFTrajectory(traj, robot)
+            try:
+               while traj is not None:
+                  raw_input('Press [Enter] to run the trajectory, [Ctrl]+[C] to quit ...')
+                  with env:
+                     robot.GetController().SetPath(traj)
+            except KeyboardInterrupt:
+               print()
+  
+
         except PlanningError as e: 
             error_msg = str(e)
             print (error_msg)

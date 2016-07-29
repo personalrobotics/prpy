@@ -106,16 +106,22 @@ for pl in planner_list:
     elif pl.lower() == 'combined':
         actual_planner = Sequence(
             SnapPlanner(),
+            VectorFieldPlanner(),
             TrajoptPlanner()
         )
+        cbirrt_planner = CBiRRTPlanner()
+
         planner = FirstSupported(
             Sequence(actual_planner,
                      TSRPlanner(delegate_planner=actual_planner),
-                     CBiRRTPlanner()),
-            NamedPlanner(delegate_planner=Sequence(actual_planner,
-                CBiRRTPlanner())))
+                     cbirrt_planner),
+            NamedPlanner(delegate_planner=Sequence(
+                actual_planner,
+                cbirrt_planner)))
+
         setattr(planner,'name','combined')
         planners.append(planner)
+
     else:
       raise ValueError("Unrecognized planner")
 
@@ -126,16 +132,18 @@ start_logfile_at = time.time()
 yamldict = yaml.safe_load(open(logfile))
 method_name = yamldict['request']['method']
 
-if method_name.lower() == 'plantotsr':
-    print ("Skipping PlanToTSR...")
 
 # deserialize environment
 import herbpy
 env, robot = herbpy.initialize(sim=True)
 if args.collision_checker == 'fcl':
+    cc = openravepy.RaveCreateCollisionChecker(env, 'fcl')
+    assert cc is not None
     env.SetCollisionChecker(openravepy.RaveCreateCollisionChecker(env, 'fcl'))
     env.GetCollisionChecker().SetDescription('fcl')
 else:
+    cc = openravepy.RaveCreateCollisionChecker(env, 'ode')
+    assert cc is not None
     env.SetCollisionChecker(openravepy.RaveCreateCollisionChecker(env, 'ode'))
     env.GetCollisionChecker().SetDescription('ode')
 
@@ -144,9 +152,8 @@ for actual_planner in planners:
     if getattr(actual_planner, 'name', None) == 'combined':
         planner = actual_planner
     else:
-        planner = FirstSupported(
-          Sequence(actual_planner,
-                    TSRPlanner(delegate_planner=actual_planner)),
+        planner = FirstSupported(actual_planner,
+                    TSRPlanner(delegate_planner=actual_planner),
                     NamedPlanner(delegate_planner=actual_planner))
 
     # load planning request
@@ -158,7 +165,7 @@ for actual_planner in planners:
 
     # deserialize environment
     prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
-
+    
     method_args = []
     for method_arg in yamldict['request']['args']:
         method_args.append(prpy.serialization.deserialize(env, method_arg))
@@ -185,22 +192,23 @@ for actual_planner in planners:
     from prpy.util import Timer, SetTrajectoryTags
     from prpy.planning.base import Tags
     
-    num_trials = 3 #if str(actual_planner).lower() in randomized else 1
+    num_trials = 3 # if 'plantotsr' in str(method_name).lower() else 3
     for j in range(num_trials):
         error_msg = None
         traj = None
         print (actual_planner, 'trial ', j, ' seed ',  getattr(actual_planner, 'seed', None))
-
-        filename = get_filename(logfile, getattr(actual_planner, 'name', str(actual_planner)), method_name, 
-                                args.outdir, j, getattr(actual_planner, 'seed', None))
+        
         start_time = time.time()
         try:
-            traj = method(robot, *method_args, **method_kwargs)    
+            with env:
+                traj = method(robot, *method_args, **method_kwargs)  
+        except (UnsupportedPlanningError, AttributeError) as e: 
+            import sys
+            print (e)
+            sys.exit(0)
         except PlanningError as e: 
             error_msg = str(e)
             print (error_msg)
-        # except AttributeError as e:
-        #     pass
         finally:
             planning_time = time.time() - start_time
 
@@ -228,6 +236,8 @@ for actual_planner in planners:
         yamldict_res['result'] = resdict
         ok = True if traj else False
 
+        filename = get_filename(logfile, getattr(actual_planner, 'name', str(actual_planner)), method_name, 
+                                args.outdir, j, getattr(actual_planner, 'seed', None))
         with open(filename,'w') as fp:
             yaml.safe_dump(yamldict_res, fp)
             print ('\n{} written\n'.format(filename))
