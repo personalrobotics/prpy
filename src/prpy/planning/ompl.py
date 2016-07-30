@@ -95,6 +95,9 @@ class OMPLPlanner(BasePlanner):
 
         if tsrchains is not None:
             for chain in tsrchains:
+                if chain.constrain or chain.sample_start: 
+                    raise UnsupportedPlanningError('Only goal tsr is supported by OMPL.')
+                    
                 extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
                     k='tsr_chain', v=SerializeTSRChain(chain))
 
