@@ -1,3 +1,11 @@
+from methods.PlanToConfiguration import (
+    PlanToConfigurationCompleteTest,
+    PlanToConfigurationStraightLineTest,
+    PlanToConfigurationTest,
+    PlanToConfigurationTestCollisionTest,
+)
+from prpy.planning.chomp import CHOMPPlanner
+from planning_helpers import BasePlannerTest
 from unittest import TestCase
 
 
@@ -161,4 +169,12 @@ class DistanceFieldManagerTest(TestCase):
                         self.module.computedistancefield_args[0]['__sequence__'])
 
 
-# TODO: Also add tests for the CHOMP planner.
+class CHOMPPlannerTest(BasePlannerTest,
+                       PlanToConfigurationTest,
+                       PlanToConfigurationTestCollisionTest,
+                       PlanToConfigurationStraightLineTest,
+                       TestCase):
+    planner_factory = CHOMPPlanner
+
+    def setUp(self):
+        super(CHOMPPlannerTest, self).setUp()

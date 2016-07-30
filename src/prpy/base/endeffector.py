@@ -40,6 +40,8 @@ class EndEffector(openravepy.Robot.Link):
 
         self.manipulator = Cloned(parent.manipulator,
                                   into=self.GetParent().GetEnv())
+        if hasattr(parent, 'configurations'):
+            self.configurations = parent.configurations
 
     def GetIndices(self):
         """Gets the DOF indicies associated with this end-effector.
