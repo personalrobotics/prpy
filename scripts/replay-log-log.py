@@ -14,8 +14,8 @@ import yaml
 from or_trajopt import TrajoptPlanner
 import prpy.planning
 import prpy.serialization
-import prpy_lemur.lemur
-import prpy_lemur.roadmaps
+#import prpy_lemur.lemur
+#import prpy_lemur.roadmaps
 
 from prpy.planning import (
     FirstSupported,
@@ -63,29 +63,42 @@ parser.add_argument('--planner', required=True, help=('cbirrt OMPL_RRTConnect sn
 parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
 parser.add_argument('--collision-checker', choices=['ode','fcl'], default='fcl',
                     help='Set collision checker')
+parser.add_argument('--baked', action='store_true', help ='use fcl_baked')
 
 args = parser.parse_args()
 
 planner_list = args.planner.lower().split(' ')
 randomized = [x.lower() for x in ['cbirrt', 'OMPL RRTConnect', 'CachedLemur', 'Lemur']]
 
+
+from prpy.collision import (
+    BakedRobotCollisionChecker,
+    SimpleRobotCollisionChecker
+)
+from openravepy import RaveCreateCollisionChecker
+
+if args.baked:
+    robot_collision_checker = BakedRobotCollisionChecker
+else:
+    robot_collision_checker = SimpleRobotCollisionChecker
+
 planners = []
 for pl in planner_list: 
     print (pl)
     if pl == 'cbirrt':
-        planners.append(CBiRRTPlanner())
+        planners.append(CBiRRTPlanner(robot_collision_checker=robot_collision_checker))
     elif pl == 'ompl_rrtconnect':
         planners.append(prpy.planning.ompl.OMPLPlanner('RRTConnect'))
     elif pl == "snap":
-        planners.append(SnapPlanner())
+        planners.append(SnapPlanner(robot_collision_checker=robot_collision_checker))
     elif pl == 'chomp':
         planners.append(CHOMPPlanner())
     elif pl == 'vectorfield':
-        planners.append(VectorFieldPlanner())
+        planners.append(VectorFieldPlanner(robot_collision_checker=robot_collision_checker))
     elif pl == 'greedy-ik':
         planners.append(GreedyIKPlanner())
     elif pl == 'trajopt':
-        planners.append(TrajoptPlanner())
+        planners.append(TrajoptPlanner(robot_collision_checker=robot_collision_checker))
     elif pl == 'cachedlemur':
         for i in range(10):
             planner = prpy_lemur.lemur.LEMURPlanner(
@@ -105,15 +118,16 @@ for pl in planner_list:
             planners.append(planner)
     elif pl.lower() == 'combined':
         actual_planner = Sequence(
-            SnapPlanner(),
-            VectorFieldPlanner(),
-            TrajoptPlanner()
+            SnapPlanner(robot_collision_checker=robot_collision_checker),
+            VectorFieldPlanner(robot_collision_checker=robot_collision_checker),
+            TrajoptPlanner(robot_collision_checker=robot_collision_checker)
         )
-        cbirrt_planner = CBiRRTPlanner()
+        cbirrt_planner = CBiRRTPlanner(robot_collision_checker=robot_collision_checker)
 
         planner = FirstSupported(
             Sequence(actual_planner,
-                     TSRPlanner(delegate_planner=actual_planner),
+                     TSRPlanner(robot_collision_checker=robot_collision_checker,
+                                delegate_planner=actual_planner),
                      cbirrt_planner),
             NamedPlanner(delegate_planner=Sequence(
                 actual_planner,
@@ -124,6 +138,7 @@ for pl in planner_list:
 
     else:
       raise ValueError("Unrecognized planner")
+
 
 logfile = args.logfile
 print ("Reading ", logfile)
@@ -153,7 +168,9 @@ for actual_planner in planners:
         planner = actual_planner
     else:
         planner = FirstSupported(actual_planner,
-                    TSRPlanner(delegate_planner=actual_planner),
+                    TSRPlanner( 
+                        robot_collision_checker=robot_collision_checker,
+                        delegate_planner=actual_planner),
                     NamedPlanner(delegate_planner=actual_planner))
 
     # load planning request
