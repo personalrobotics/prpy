@@ -214,8 +214,8 @@ for actual_planner in planners:
         planning_time = None 
         try:
             with Clone(env, lock=True) as planning_env:
-                start_time = time.time()
                 robot = planning_env.GetRobots()[0]
+                start_time = time.time()
                 traj = method(robot, *method_args, **method_kwargs)  
                 planning_time = time.time() - start_time
         except (UnsupportedPlanningError, AttributeError) as e: 
