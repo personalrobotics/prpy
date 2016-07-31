@@ -38,19 +38,31 @@ from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
 from openravepy import (
     CollisionOptions,
     CollisionOptionsStateSaver,
-    PlannerStatus
+    PlannerStatus,
+    ErrorCode,
+    openrave_exception
 )
+from ..collision import SimpleRobotCollisionChecker, BakedRobotCollisionChecker
 from .cbirrt import SerializeTSRChain
 
 logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
-    def __init__(self, algorithm='RRTConnect'):
+    def __init__(self, algorithm='RRTConnect',
+                 robot_collision_checker=SimpleRobotCollisionChecker):
         super(OMPLPlanner, self).__init__()
 
         self.setup = False
         self.algorithm = algorithm
+
+        if robot_collision_checker == SimpleRobotCollisionChecker:
+            self._is_baked = False
+        elif robot_collision_checker == BakedRobotCollisionChecker:
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'or_ompl only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
@@ -76,35 +88,50 @@ class OMPLPlanner(BasePlanner):
         """
         return self._Plan(robot, tsrchains=tsrchains, **kw_args)
 
-    def _Plan(self, robot, goal=None, tsrchains=None, timeout=5.,
-            shortcut_timeout=None, continue_planner=None, ompl_args=None,
-            formatted_extra_params=None, **kw_args):
+    def _Plan(self, robot, goal=None, tsrchains=None, timelimit=5.,
+            timeout=None, shortcut_timeout=None, continue_planner=None,
+            ompl_args=None, formatted_extra_params=None, **kw_args):
         if shortcut_timeout is not None:
             warnings.warn('shortcut_timeout is not used.', DeprecationWarning)
         if continue_planner is not None:
             warnings.warn('continue_planner is no longer supported.', DeprecationWarning)
+        if timeout is not None:
+            warnings.warn('timeout has been replaced by timelimit.',
+                DeprecationWarning)
+            timelimit = timeout
+
+        if not ompl_args:
+            ompl_args = {}
 
         env = robot.GetEnv()
         planner_name = 'OMPL_{:s}'.format(self.algorithm)
+
+        # Create the planner. We cannot do this in the constructor because this
+        # is called from a @LockedPlanningMethod and we do not know which
+        # Environment the Robot will be in.
         planner = openravepy.RaveCreatePlanner(env, planner_name)
-
         if planner is None:
-            raise UnsupportedPlanningError(
+            # Intentionally do not throw a PlanningError, or any of its
+            # subclasses like UnsupportedPlanningError, since this could cause
+            # a missing plugin to be masked by a meta-planner.
+            raise openrave_exception(
                 'Unable to create "{:s}" planner. Is or_ompl installed?'
-                .format(planner_name))
+                .format(planner_name), ErrorCode.InvalidPlugin)
 
-        extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
-
-        if kw_args and 'seed' in kw_args.keys():
-            if not ompl_args:
-                ompl_args = {}
-
+        if 'seed' in kw_args:
             ompl_args['seed'] = kw_args['seed']
 
-        if ompl_args is not None:
-            for key, value in ompl_args.iteritems():
-                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
-                    k=str(key), v=str(value))
+        # Inherit the default baking behavior from the constructor, if it would
+        # not be overridden by an argument passed through ompl_args.
+        if self._is_baked:
+            ompl_args['do_baked'] = '1'
+
+        ompl_args['time_limit'] = timelimit
+
+        extraParams = ''
+        for key, value in ompl_args.iteritems():
+            extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
+                k=str(key), v=str(value))
 
         if tsrchains is not None:
             for chain in tsrchains:
