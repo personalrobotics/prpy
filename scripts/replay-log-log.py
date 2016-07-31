@@ -88,34 +88,15 @@ for pl in planner_list:
     if pl == 'cbirrt':
         planners.append(CBiRRTPlanner(robot_collision_checker=robot_collision_checker))
     elif pl == 'ompl_rrtconnect':
-        planners.append(prpy.planning.ompl.OMPLPlanner('RRTConnect'))
+        planners.append(prpy.planning.ompl.OMPLPlanner('RRTConnect', robot_collision_checker=robot_collision_checker))
     elif pl == "snap":
         planners.append(SnapPlanner(robot_collision_checker=robot_collision_checker))
-    elif pl == 'chomp':
-        planners.append(CHOMPPlanner())
     elif pl == 'vectorfield':
         planners.append(VectorFieldPlanner(robot_collision_checker=robot_collision_checker))
     elif pl == 'greedy-ik':
-        planners.append(GreedyIKPlanner())
+        planners.append(GreedyIKPlanner(robot_collision_checker=robot_collision_checker))
     elif pl == 'trajopt':
         planners.append(TrajoptPlanner(robot_collision_checker=robot_collision_checker))
-    elif pl == 'cachedlemur':
-        for i in range(10):
-            planner = prpy_lemur.lemur.LEMURPlanner(
-                roadmap=prpy_lemur.roadmaps.CachedHaltonOffDens(
-                    is_cache_required=True, num_per_batch=10000,
-                    gamma_factor=1.0, scaling='loglog_n', seed=i))
-            setattr(planner, 'seed', i)
-            setattr(planner, 'name', 'CachedLemur')
-            planners.append(planner)
-    elif pl == 'lemur':
-        for i in range(10):
-            planner = prpy_lemur.lemur.LEMURPlanner(
-                roadmap=prpy_lemur.roadmaps.HaltonOffDens(
-                    num_per_batch=10000, gamma_factor=1.0, scaling='loglog_n', seed=i))
-            setattr(planner, 'seed', i)
-            setattr(planner, 'name', 'Lemur')
-            planners.append(planner)
     elif pl.lower() == 'combined':
         actual_planner = Sequence(
             SnapPlanner(robot_collision_checker=robot_collision_checker),
@@ -234,6 +215,7 @@ for actual_planner in planners:
         try:
             with Clone(env, lock=True) as planning_env:
                 start_time = time.time()
+                robot = planning_env.GetRobots()[0]
                 traj = method(robot, *method_args, **method_kwargs)  
                 planning_time = time.time() - start_time
         except (UnsupportedPlanningError, AttributeError) as e: 
