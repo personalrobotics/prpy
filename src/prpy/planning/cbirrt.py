@@ -31,6 +31,7 @@
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags
+from ..collision import SimpleRobotCollisionChecker, BakedRobotCollisionChecker
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, LockedPlanningMethod, Tags)
 import prpy.kin
@@ -38,8 +39,20 @@ import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, robot_collision_checker=SimpleRobotCollisionChecker):
         super(CBiRRTPlanner, self).__init__()
+
+        self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
+        if self.problem is None:
+            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
+
+        if robot_collision_checker == SimpleRobotCollisionChecker:
+            self._is_baked = False
+        elif robot_collision_checker == BakedRobotCollisionChecker:
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'CBiRRT only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'CBiRRT'
@@ -211,6 +224,10 @@ class CBiRRTPlanner(BasePlanner):
         # L-infinity norm; this flag turns on the L-2 norm instead.
         args += ['bdofresl2norm', '1']
         args += ['steplength', '0.05999']
+
+        # Optionally enable baked collision checking.
+        if self._is_baked:
+            args += ['bbakedcheckers', '1']
 
         if extra_args is not None:
             args += extra_args
