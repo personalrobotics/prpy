@@ -31,6 +31,7 @@
 import logging
 import numpy
 import openravepy
+import warnings
 from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
@@ -93,14 +94,23 @@ class OMPLPlanner(BasePlanner):
         """
         return self._Plan(robot, tsrchains=tsrchains, **kw_args)
 
-    def _Plan(self, robot, goal=None, tsrchains=None, timeout=30., shortcut_timeout=5.,
-              continue_planner=False, ompl_args=None,
-              formatted_extra_params=None, **kw_args):
-        extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
+    def _Plan(self, robot, goal=None, tsrchains=None, timelimit=5.,
+              continue_planner=False, timeout=None, shortcut_timeout=None,
+              ompl_args=None, formatted_extra_params=None, **kw_args):
+        if shortcut_timeout is not None:
+            warnings.warn('shortcut_timeout is no longer used.',
+                DeprecationWarning)
+
+        if timeout is not None:
+            warnings.warn('timeout has been replaced by timelimit.',
+                DeprecationWarning)
+            timelimit = timeout
+
+        extraParams = '<time_limit>{:f}</time_limit>'.format(timelimit)
 
         # Inherit the default baking behavior from the constructor, if it would
         # not be overridden by an argument passed through ompl_args.
-        if self._is_baked and ompl_args is None or 'do_baked' not in ompl_args:
+        if self._is_baked and (ompl_args is None or 'do_baked' not in ompl_args):
             extraParams += '<do_baked>1</do_baked>'
 
         if ompl_args is not None:
