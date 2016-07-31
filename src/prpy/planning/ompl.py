@@ -39,13 +39,15 @@ from openravepy import (
     CollisionOptionsStateSaver,
     PlannerStatus
 )
+from ..collision import SimpleRobotCollisionChecker, BakedRobotCollisionChecker
 from .cbirrt import SerializeTSRChain
 
 logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
-    def __init__(self, algorithm='RRTConnect'):
+    def __init__(self, algorithm='RRTConnect',
+                 robot_collision_checker=SimpleRobotCollisionChecker):
         super(OMPLPlanner, self).__init__()
 
         self.setup = False
@@ -58,6 +60,14 @@ class OMPLPlanner(BasePlanner):
             raise UnsupportedPlanningError(
                 'Unable to create "{:s}" planner. Is or_ompl installed?'
                 .format(planner_name))
+
+        if robot_collision_checker == SimpleRobotCollisionChecker:
+            self._is_baked = False
+        elif robot_collision_checker == BakedRobotCollisionChecker:
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'or_ompl only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
@@ -87,6 +97,11 @@ class OMPLPlanner(BasePlanner):
               continue_planner=False, ompl_args=None,
               formatted_extra_params=None, **kw_args):
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
+
+        # Inherit the default baking behavior from the constructor, if it would
+        # not be overridden by an argument passed through ompl_args.
+        if self._is_baked and ompl_args is None or 'do_baked' not in ompl_args:
+            extraParams += '<do_baked>1</do_baked>'
 
         if ompl_args is not None:
             for key, value in ompl_args.iteritems():
