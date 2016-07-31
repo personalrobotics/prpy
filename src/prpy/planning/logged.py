@@ -133,6 +133,7 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
             resdict['traj_first'] = list(map(float,traj.GetWaypoint(0)))
             resdict['traj_last'] = list(map(float,traj.GetWaypoint(traj.GetNumWaypoints()-1)))
             resdict['traj'] = traj.serialize(0)
+            resdict['collisionchecker'] = env.GetCollisionChecker().GetDescription()
             return traj
             
         except prpy.planning.PlanningError as ex:

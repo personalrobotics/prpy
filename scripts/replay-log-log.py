@@ -40,14 +40,14 @@ from os.path import join, isfile
 from os import listdir
 import re
 
-def get_filename(logfile, planner, method, outputdir, trial, seed=None):
+def get_filename(logfile, planner, method, outputdir, seed=None):
 
     logfile = filter(lambda x: 'log-' in x, re.split(r'[/]|\.yaml',logfile))[0]
     savedir = os.path.join(outputdir, method, logfile, planner)
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
-    filename = '_'.join(str(x) for x in ['replay', logfile, method, planner, 'trial', trial])
+    filename = '_'.join(str(x) for x in ['replay', logfile, method, planner])
     if seed is not None:
         filename += '_seed_'+str(seed)
     filename += '.yaml'
@@ -164,32 +164,46 @@ for actual_planner in planners:
         continue
     
     num_trials = 3 # if 'plantotsr' in str(method_name).lower() else 3
+
+    # load ik solver for robot in case it's needed
+    ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
+        iktype=openravepy.IkParameterizationType.Transform6D)
+    if not ikmodel.load():
+        ikmodel.autogenerate()
+
+    method_args = []
+    for method_arg in yamldict['request']['args']:
+        method_args.append(prpy.serialization.deserialize(env, method_arg))
+    method_kwargs = {}
+    for key,value in yamldict['request']['kw_args'].items():
+        method_kwargs[key] = prpy.serialization.deserialize(env, value)
+
+    # remove robot and use properly deserialized robot 
+    if robot in method_args:
+        method_args.remove(robot)
+    if 'robot' in method_kwargs:
+        method_kwargs.pop('robot')
+    if 'ranker' in method_kwargs:
+        method_kwargs.pop('ranker')
+
+
+    # deserialize environment
+    prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
+    
+    from prpy.clone import Clone
+
+
+    reqdict = {}
+    resdict = {'ok':[], 'planning_time':[], 'planner_used':[], 'error':[]}
+    reqdict['collisionchecker'] = env.GetCollisionChecker().GetDescription()
+    reqdict['args'] = yamldict['request']['args']
+    reqdict['kw_args'] = yamldict['request']['kw_args']
+    reqdict['method'] = yamldict['request']['method'] 
+    reqdict['seed'] = getattr(actual_planner, 'seed', None)
+    reqdict['planner_name'] = getattr(actual_planner, 'name', str(planner))
+
     for j in range(num_trials):
         
-        # deserialize environment
-        prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
-        
-        method_args = []
-        for method_arg in yamldict['request']['args']:
-            method_args.append(prpy.serialization.deserialize(env, method_arg))
-        method_kwargs = {}
-        for key,value in yamldict['request']['kw_args'].items():
-            method_kwargs[key] = prpy.serialization.deserialize(env, value)
-
-        # remove robot and use properly deserialized robot 
-        if robot in method_args:
-            method_args.remove(robot)
-        if 'robot' in method_kwargs:
-            method_kwargs.pop('robot')
-        if 'ranker' in method_kwargs:
-            method_kwargs.pop('ranker')
-
-        # load ik solver for robot in case it's needed
-        ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
-            iktype=openravepy.IkParameterizationType.Transform6D)
-        if not ikmodel.load():
-            ikmodel.autogenerate()
-
         # call planning method itself ...
         print('calling planning method {} ...'.format(actual_planner))
         from prpy.util import Timer, SetTrajectoryTags
@@ -199,60 +213,53 @@ for actual_planner in planners:
         traj = None
         print (actual_planner, 'trial ', j, ' seed ',  getattr(actual_planner, 'seed', None))
         
-        start_time = time.time()
+        planning_time = None 
         try:
-            with env:
+            with Clone(env, lock=True) as planning_env:
+                start_time = time.time()
                 traj = method(robot, *method_args, **method_kwargs)  
+                planning_time = time.time() - start_time
         except (UnsupportedPlanningError, AttributeError) as e: 
-            import sys
             print (e)
+            import sys
             sys.exit(0)
         except PlanningError as e: 
             error_msg = str(e)
             print (error_msg)
         finally:
-            planning_time = time.time() - start_time
+            if not planning_time:
+                planning_time = time.time() - start_time
 
-        reqdict = {}
-        resdict = {}
-        reqdict['collisionchecker'] = env.GetCollisionChecker().GetDescription()
-        reqdict['args'] = yamldict['request']['args']
-        reqdict['kw_args'] = yamldict['request']['kw_args']
-        reqdict['method'] = yamldict['request']['method'] 
-        reqdict['seed'] = getattr(actual_planner, 'seed', None)
-        reqdict['planner_name'] = getattr(actual_planner, 'name', str(planner))
-        resdict['ok'] = True if traj else False
-        resdict['planning_time'] = planning_time
+        print ("Planning time: ", planning_time)
+
+        resdict['ok'].append(True if traj else False)
+        resdict['planning_time'].append(planning_time)
         if traj is not None: 
             from prpy.util import GetTrajectoryTags
             from prpy.planning.base import Tags
             tags = GetTrajectoryTags(traj)
-            resdict['planner_used'] = tags.get(Tags.PLANNER, 'None')
+            resdict['planner_used'].append(tags.get(Tags.PLANNER, 'None'))
         if error_msg is not None:
-            resdict['error'] = str(error_msg)
-            
-        yamldict_res = {}
-        yamldict_res['environment'] = yamldict['environment']
-        yamldict_res['request'] = reqdict
-        yamldict_res['result'] = resdict
-        ok = True if traj else False
-
-        filename = get_filename(logfile, getattr(actual_planner, 'name', str(actual_planner)), method_name, 
-                                args.outdir, j, getattr(actual_planner, 'seed', None))
-        with open(filename,'w') as fp:
-            yaml.safe_dump(yamldict_res, fp)
-            print ('\n{} written\n'.format(filename))
-
-        print ("Planning time: ", planning_time)
+            resdict['error'].append(str(error_msg))
         
-        name = getattr(actual_planner, 'name', str(actual_planner))
-        with open('replay-completed-'+name+'.log', 'a') as fp:
+    yamldict_res = {}
+    yamldict_res['environment'] = yamldict['environment']
+    yamldict_res['request'] = reqdict
+    yamldict_res['result'] = resdict
+    ok = True if traj else False
+
+    filename = get_filename(logfile, getattr(actual_planner, 'name', str(actual_planner)), method_name, 
+                            args.outdir, getattr(actual_planner, 'seed', None))
+    with open(filename,'w') as fp:
+        yaml.safe_dump(yamldict_res, fp)
+        print ('\n{} written\n'.format(filename))
+    
+    name = getattr(actual_planner, 'name', str(actual_planner))
+
+    if (j != 2):
+        with open("retry_this.log" , 'w') as f:
+            f.write(args.logfile + " " + getattr(actual_planner, 'name', str(actual_planner)))
             
-            trial_info = ' '.join(str(x) for x in [logfile, name, method_name, 'trial', j, ok])
-            if getattr(actual_planner, 'seed', None) is not None:
-                trial_info += ' seed ' + str(getattr(actual_planner, 'seed', None))
-            trial_info += ' ' + str(planning_time)
-            fp.write(trial_info+"\n")
 
 logfile_duration = time.time() - start_logfile_at
 
