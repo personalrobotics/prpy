@@ -40,7 +40,7 @@ from prpy.planning.exceptions import (
 )
 
 
-class SimpleRobotCollisionChecker:
+class SimpleRobotCollisionCheckerContextManager(object):
     """RobotCollisionChecker which uses the standard OpenRAVE interface.
 
     This RobotCollisionChecker is instantiated with a robot,
@@ -51,7 +51,7 @@ class SimpleRobotCollisionChecker:
     is raised.
     """
 
-    def __init__(self, robot, collision_options=CollisionOptions.ActiveDOFs):
+    def __init__(self, robot, collision_options):
         self.robot = robot
         self.env = robot.GetEnv()
 
@@ -88,7 +88,7 @@ class SimpleRobotCollisionChecker:
             raise SelfCollisionPlanningError.FromReport(report)
 
 
-class BakedRobotCollisionChecker:
+class BakedRobotCollisionCheckerContextManager(object):
     """RobotCollisionChecker which uses a baked collision interface.
 
     When this RobotCollisionChecker is instantiated with a robot,
@@ -174,3 +174,24 @@ class BakedRobotCollisionChecker:
         report = CollisionReport()
         if self.CheckCollision(report=report):
             raise CollisionPlanningError.FromReport(report)
+
+
+class SimpleRobotCollisionChecker(object):
+    def __init__(self, collision_options=CollisionOptions.ActiveDOFs):
+        self.collision_options = collision_options
+
+    def __call__(self, robot):
+        return SimpleRobotCollisionCheckerContextManager(
+            robot, self.collision_options)
+
+
+class BakedRobotCollisionChecker(object):
+    def __init__(self, collision_options=CollisionOptions.ActiveDOFs):
+        self.collision_options = collision_options
+
+    def __call__(self, robot):
+        return BakedRobotCollisionCheckerContextManager(
+            robot, self.collision_options)
+
+
+DefaultRobotCollisionChecker = SimpleRobotCollisionChecker()

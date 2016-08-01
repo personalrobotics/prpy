@@ -42,7 +42,11 @@ from openravepy import (
     ErrorCode,
     openrave_exception
 )
-from ..collision import SimpleRobotCollisionChecker, BakedRobotCollisionChecker
+from ..collision import (
+    BakedRobotCollisionChecker,
+    DefaultRobotCollisionChecker,
+    SimpleRobotCollisionChecker,
+)
 from .cbirrt import SerializeTSRChain
 
 logger = logging.getLogger(__name__)
@@ -50,16 +54,16 @@ logger = logging.getLogger(__name__)
 
 class OMPLPlanner(BasePlanner):
     def __init__(self, algorithm='RRTConnect',
-                 robot_collision_checker=SimpleRobotCollisionChecker):
+                 robot_collision_checker=DefaultRobotCollisionChecker):
         super(OMPLPlanner, self).__init__()
 
         self.setup = False
         self.algorithm = algorithm
         self.robot_collision_checker = robot_collision_checker
 
-        if robot_collision_checker == SimpleRobotCollisionChecker:
+        if isinstance(robot_collision_checker, SimpleRobotCollisionChecker):
             self._is_baked = False
-        elif robot_collision_checker == BakedRobotCollisionChecker:
+        elif isinstance(robot_collision_checker, BakedRobotCollisionChecker):
             self._is_baked = True
         else:
             raise NotImplementedError(

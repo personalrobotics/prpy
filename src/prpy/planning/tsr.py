@@ -36,7 +36,7 @@ from base import (BasePlanner, ClonedPlanningMethod, LockedPlanningMethod,
                   PlanningError, UnsupportedPlanningError)
 from .base import Tags
 from ..util import SetTrajectoryTags
-from ..collision import SimpleRobotCollisionChecker
+from ..collision import DefaultRobotCollisionChecker
 from openravepy import (
     CollisionOptions,
     CollisionOptionsStateSaver,
@@ -60,7 +60,7 @@ def grouper(n, iterable):
 
 
 class TSRPlanner(BasePlanner):
-    def __init__(self, delegate_planner=None, robot_collision_checker=SimpleRobotCollisionChecker):
+    def __init__(self, delegate_planner=None, robot_collision_checker=DefaultRobotCollisionChecker):
         super(TSRPlanner, self).__init__()
         self.delegate_planner = delegate_planner
         self.robot_collision_checker = robot_collision_checker
