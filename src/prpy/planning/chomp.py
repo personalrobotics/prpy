@@ -34,7 +34,7 @@ import logging
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags, GetLinearCollisionCheckPts
-from ..collision import SimpleRobotCollisionChecker
+from ..collision import DefaultRobotCollisionChecker
 from .exceptions import (
     CollisionPlanningError,
     SelfCollisionPlanningError
@@ -167,7 +167,8 @@ class DistanceFieldManager(object):
 
 
 class CHOMPPlanner(BasePlanner):
-    def __init__(self, require_cache=False, robot_collision_checker=SimpleRobotCollisionChecker):
+    def __init__(self, require_cache=False,
+            robot_collision_checker=DefaultRobotCollisionChecker):
         super(CHOMPPlanner, self).__init__()
         self.require_cache = require_cache
         self.robot_collision_checker = robot_collision_checker

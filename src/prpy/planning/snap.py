@@ -36,7 +36,7 @@ from prpy.planning.base import (
     ClonedPlanningMethod,
     Tags
 )
-from ..collision import SimpleRobotCollisionChecker
+from ..collision import DefaultRobotCollisionChecker
 from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 
@@ -53,7 +53,7 @@ class SnapPlanner(BasePlanner):
     most commonly used as the first item in a Sequence meta-planner to
     avoid calling a motion planner when the trivial solution is valid.
     """
-    def __init__(self, robot_collision_checker=SimpleRobotCollisionChecker):
+    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker):
         super(SnapPlanner, self).__init__()
         self.robot_collision_checker = robot_collision_checker
 

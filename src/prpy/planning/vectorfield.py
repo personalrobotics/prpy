@@ -33,9 +33,9 @@
 import logging
 import numpy
 import openravepy
+from .base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 from .. import util
-from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
-from ..collision import SimpleRobotCollisionChecker
+from ..collision import DefaultRobotCollisionChecker 
 from enum import Enum
 from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
@@ -75,7 +75,7 @@ class Status(Enum):
 
 
 class VectorFieldPlanner(BasePlanner):
-    def __init__(self, robot_collision_checker=SimpleRobotCollisionChecker):
+    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker):
         super(VectorFieldPlanner, self).__init__()
         self.robot_collision_checker = robot_collision_checker
 

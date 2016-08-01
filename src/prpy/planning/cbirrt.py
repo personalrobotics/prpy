@@ -31,6 +31,11 @@
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags
+from ..collision import (
+    BakedRobotCollisionChecker,
+    DefaultRobotCollisionChecker,
+    SimpleRobotCollisionChecker,
+)
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 import prpy.kin
@@ -38,7 +43,7 @@ import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker):
         super(CBiRRTPlanner, self).__init__()
         self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
 
@@ -46,9 +51,9 @@ class CBiRRTPlanner(BasePlanner):
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
         self.robot_collision_checker = robot_collision_checker
-        if robot_collision_checker == SimpleRobotCollisionChecker:
+        if isinstance(robot_collision_checker, SimpleRobotCollisionChecker):
             self._is_baked = False
-        elif robot_collision_checker == BakedRobotCollisionChecker:
+        elif isinstance(robot_collision_checker, BakedRobotCollisionChecker):
             self._is_baked = True
         else:
             raise NotImplementedError(

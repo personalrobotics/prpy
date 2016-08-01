@@ -39,13 +39,19 @@ from openravepy import (
     CollisionOptionsStateSaver,
     PlannerStatus
 )
+from ..collision import (
+    BakedRobotCollisionChecker,
+    DefaultRobotCollisionChecker,
+    SimpleRobotCollisionChecker,
+)
 from .cbirrt import SerializeTSRChain
 
 logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
-    def __init__(self, algorithm='RRTConnect'):
+    def __init__(self, algorithm='RRTConnect',
+                 robot_collision_checker=DefaultRobotCollisionChecker):
         super(OMPLPlanner, self).__init__()
 
         self.setup = False
@@ -59,6 +65,14 @@ class OMPLPlanner(BasePlanner):
             raise UnsupportedPlanningError(
                 'Unable to create "{:s}" planner. Is or_ompl installed?'
                 .format(planner_name))
+
+        if isinstance(robot_collision_checker, SimpleRobotCollisionChecker):
+            self._is_baked = False
+        elif isinstance(robot_collision_checker, BakedRobotCollisionChecker):
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'or_ompl only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
