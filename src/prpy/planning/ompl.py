@@ -50,6 +50,7 @@ class OMPLPlanner(BasePlanner):
 
         self.setup = False
         self.algorithm = algorithm
+        self.robot_collision_checker = robot_collision_checker
 
         planner_name = 'OMPL_{:s}'.format(algorithm)
         self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
@@ -118,9 +119,12 @@ class OMPLPlanner(BasePlanner):
                 self.planner.InitPlan(robot, params)
                 self.setup = True
 
-            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                            CollisionOptions.ActiveDOFs):
-                status = self.planner.PlanPath(traj, releasegil=True)
+            # Bypass the robot_collision_checker context manager since or_ompl
+            # does its own baking in C++.
+            robot_checker = self.robot_collision_checker(robot)
+            options = robot_checker.collision_options
+            with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
+                status = planner.PlanPath(traj, releasegil=True)
 
             if status not in [PlannerStatus.HasSolution,
                               PlannerStatus.InterruptedWithSolution]:
