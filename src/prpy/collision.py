@@ -62,8 +62,12 @@ class SimpleRobotCollisionChecker:
         self.collision_saver = CollisionOptionsStateSaver(
             self.checker, collision_options)
 
+    @property
+    def collision_options(self):
+        return self.collision_saver.newoptions
+
     def __enter__(self):
-        self.collision_saver.__enter__(self)
+        self.collision_saver.__enter__()
         return self
 
     def __exit__(self, type, value, traceback):
@@ -112,6 +116,18 @@ class BakedRobotCollisionChecker:
             self.checker, collision_options)
 
     def __enter__(self):
+        self.collision_saver.__enter__()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.collision_saver.__exit__(type, value, traceback)
+
+    def __enter__(self):
+        if self.baked_kinbody is not None:
+            raise PrPyException(
+                'Another baked KinBody is available. Did you call __enter__'
+                ' twice or forget to call __exit__?')
+
         try:
             kb_type = self.checker.SendCommand('BakeGetType')
         except openrave_exception:
@@ -136,12 +152,21 @@ class BakedRobotCollisionChecker:
         return self
 
     def __exit__(self, type, value, traceback):
+        if self.baked_kinbody is None:
+            raise PrPyException(
+                'No baked KinBody is available. Did you call __exit__'
+                ' without calling __enter__ first?')
+
         del self.baked_kinbody
         self.baked_kinbody = None
 
         self.collision_saver.__exit__(type, value, traceback)
 
     def CheckCollision(self, report=None):
+        if self.baked_kinbody is None:
+            raise PrPyException(
+                'No baked KinBody is available. Did you call __enter__?')
+
         # The baked check is performed by checking self collision on baked
         return self.checker.CheckSelfCollision(self.baked_kinbody, report)
 
