@@ -276,17 +276,10 @@ class CHOMPPlanner(BasePlanner):
         checks = GetLinearCollisionCheckPts(robot, traj, norm_order=2,
             sampling_func=sampling_func)
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
-
-            # Instantiate a robot checker
-            robot_checker = self.robot_collision_checker(robot)
-
+        with self.robot_collision_checker(robot) as robot_checker:
             for t, q in checks:
                 robot.SetActiveDOFValues(q)
-
-                # Check collision (throws an exception on collision)
-                robot_checker.VerifyCollisionFree()
+                robot_checker.VerifyCollisionFree() # Throws on collision.
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
         # planner. Additionally tag the goal as non-deterministic if CBiRRT

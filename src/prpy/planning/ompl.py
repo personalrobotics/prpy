@@ -55,6 +55,7 @@ class OMPLPlanner(BasePlanner):
 
         self.setup = False
         self.algorithm = algorithm
+        self.robot_collision_checker = robot_collision_checker
 
         if robot_collision_checker == SimpleRobotCollisionChecker:
             self._is_baked = False
@@ -157,8 +158,11 @@ class OMPLPlanner(BasePlanner):
         with env:
             planner.InitPlan(robot, params)
 
-            with CollisionOptionsStateSaver(env.GetCollisionChecker(),
-                                            CollisionOptions.ActiveDOFs):
+            # Bypass the robot_collision_checker context manager since or_ompl
+            # does its own baking in C++.
+            robot_checker = self.robot_collision_checker(robot)
+            options = robot_checker.collision_options
+            with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
                 status = planner.PlanPath(traj, releasegil=True)
 
             if status not in [PlannerStatus.HasSolution,

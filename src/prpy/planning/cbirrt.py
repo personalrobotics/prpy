@@ -46,6 +46,7 @@ class CBiRRTPlanner(BasePlanner):
         if self.problem is None:
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
+        self.robot_collision_checker = robot_collision_checker
         if robot_collision_checker == SimpleRobotCollisionChecker:
             self._is_baked = False
         elif robot_collision_checker == BakedRobotCollisionChecker:
@@ -301,8 +302,11 @@ class CBiRRTPlanner(BasePlanner):
         args += ['filename', traj_path]
         args_str = ' '.join(args)
 
-        with CollisionOptionsStateSaver(env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
+        # Bypass the robot_collision_checker context manager since CBiRRT does
+        # its own baking in C++.
+        robot_checker = self.robot_collision_checker(robot)
+        options = robot_checker.collision_options
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
             response = problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):

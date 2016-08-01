@@ -548,12 +548,7 @@ class VectorFieldPlanner(BasePlanner):
                 nonlocals['exception'] = e
                 return -1  # Stop.
 
-        with CollisionOptionsStateSaver(env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
-
-            # Instantiate a robot checker
-            robot_checker = self.robot_collision_checker(robot)
-
+        with self.robot_collision_checker(robot) as robot_checker:
             # Integrate the vector field to get a configuration space path.
             #
             # TODO: Tune the integrator parameters.

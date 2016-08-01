@@ -180,12 +180,7 @@ class SnapPlanner(BasePlanner):
                                             norm_order=2,
                                             sampling_func=vdc)
 
-        with CollisionOptionsStateSaver(env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
-
-            # Instantiate a robot checker
-            robot_checker = self.robot_collision_checker(robot)
-
+        with self.robot_collision_checker(robot) as robot_checker:
             # Run constraint checks at DOF resolution:
             for t, q in checks:
                 # Set the joint positions
