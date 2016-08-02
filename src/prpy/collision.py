@@ -115,12 +115,9 @@ class BakedRobotCollisionCheckerContextManager(object):
         self.collision_saver = CollisionOptionsStateSaver(
             self.checker, collision_options)
 
-    def __enter__(self):
-        self.collision_saver.__enter__()
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.collision_saver.__exit__(type, value, traceback)
+    @property
+    def collision_options(self):
+        return self.collision_saver.newoptions
 
     def __enter__(self):
         if self.baked_kinbody is not None:
@@ -134,7 +131,7 @@ class BakedRobotCollisionCheckerContextManager(object):
             raise PrPyException('Collision checker does not support baking')
 
         # TODO: How should we handle exceptions that are thrown below?
-        self.collision_saver.__enter__(self)
+        self.collision_saver.__enter__()
 
         # This "bakes" the following Env and Self checks.
         # (after the bake, the composite check is stored in self.baked_kinbody)
