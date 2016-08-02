@@ -41,7 +41,6 @@ from .exceptions import (
 )
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
-from openravepy import CollisionOptions, CollisionOptionsStateSaver
 from prpy.util import VanDerCorputSampleGenerator, SampleTimeGenerator
 import prpy.tsr
 

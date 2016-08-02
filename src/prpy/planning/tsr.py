@@ -38,8 +38,6 @@ from .base import Tags
 from ..util import SetTrajectoryTags
 from ..collision import DefaultRobotCollisionChecker
 from openravepy import (
-    CollisionOptions,
-    CollisionOptionsStateSaver,
     IkFilterOptions,
     IkParameterization,
     IkParameterizationType
