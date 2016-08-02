@@ -38,7 +38,6 @@ from prpy.planning.base import (
     Tags
 )
 from ..collision import DefaultRobotCollisionChecker
-from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 
 class SnapPlanner(BasePlanner):

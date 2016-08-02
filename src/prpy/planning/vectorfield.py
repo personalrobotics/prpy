@@ -37,7 +37,6 @@ from .. import util
 from base import BasePlanner, PlanningError, LockedPlanningMethod, ClonedPlanningMethod, Tags
 from ..collision import DefaultRobotCollisionChecker 
 from enum import Enum
-from openravepy import CollisionOptions, CollisionOptionsStateSaver
 
 logger = logging.getLogger(__name__)
 

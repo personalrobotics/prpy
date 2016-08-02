@@ -36,7 +36,6 @@ from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, LockedPlanningMethod, Tags)
 from openravepy import (
-    CollisionOptions,
     CollisionOptionsStateSaver,
     PlannerStatus,
     ErrorCode,

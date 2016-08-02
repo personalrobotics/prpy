@@ -207,7 +207,7 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=1.0, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
-        from openravepy import CollisionOptions, CollisionOptionsStateSaver
+        from openravepy import CollisionOptionsStateSaver
 
         env = robot.GetEnv()
         problem = openravepy.RaveCreateProblem(env, 'CBiRRT')
