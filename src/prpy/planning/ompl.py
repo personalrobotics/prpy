@@ -100,6 +100,7 @@ class OMPLPlanner(BasePlanner):
     def _Plan(self, robot, goal=None, tsrchains=None, timeout=30., shortcut_timeout=5.,
               continue_planner=False, ompl_args=None,
               formatted_extra_params=None, **kw_args):
+        env = robot.GetEnv()
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
         if ompl_args is not None:
@@ -124,10 +125,10 @@ class OMPLPlanner(BasePlanner):
             params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
 
-        traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+        traj = openravepy.RaveCreateTrajectory(env, 'GenericTrajectory')
 
         # Plan.
-        with self.env:
+        with env:
             if (not continue_planner) or (not self.setup):
                 self.planner.InitPlan(robot, params)
                 self.setup = True
@@ -137,7 +138,7 @@ class OMPLPlanner(BasePlanner):
             robot_checker = self.robot_collision_checker(robot)
             options = robot_checker.collision_options
             with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
-                status = planner.PlanPath(traj, releasegil=True)
+                status = self.planner.PlanPath(traj, releasegil=True)
 
             if status not in [PlannerStatus.HasSolution,
                               PlannerStatus.InterruptedWithSolution]:

@@ -204,6 +204,7 @@ class CBiRRTPlanner(BasePlanner):
              extra_args=None, **kw_args):
         from openravepy import CollisionOptionsStateSaver
 
+        env = robot.GetEnv()
         is_endpoint_deterministic = True
         is_constrained = False
 
@@ -211,7 +212,7 @@ class CBiRRTPlanner(BasePlanner):
         # when an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
         # self.ClearIkSolver(robot.GetActiveManipulator())
 
-        self.env.LoadProblem(self.problem, robot.GetName())
+        env.LoadProblem(self.problem, robot.GetName())
 
         args = ['RunCBiRRT']
 
@@ -297,7 +298,7 @@ class CBiRRTPlanner(BasePlanner):
         robot_checker = self.robot_collision_checker(robot)
         options = robot_checker.collision_options
         with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
-            response = problem.SendCommand(args_str, True)
+            response = self.problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response,
@@ -307,7 +308,7 @@ class CBiRRTPlanner(BasePlanner):
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
             traj = openravepy.RaveCreateTrajectory(
-                self.env, 'GenericTrajectory')
+                env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
