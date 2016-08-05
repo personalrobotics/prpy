@@ -31,6 +31,11 @@
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags
+from ..collision import (
+    BakedRobotCollisionChecker,
+    DefaultRobotCollisionChecker,
+    SimpleRobotCollisionChecker,
+)
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 import prpy.kin
@@ -38,12 +43,21 @@ import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker):
         super(CBiRRTPlanner, self).__init__()
         self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
 
         if self.problem is None:
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
+
+        self.robot_collision_checker = robot_collision_checker
+        if isinstance(robot_collision_checker, SimpleRobotCollisionChecker):
+            self._is_baked = False
+        elif isinstance(robot_collision_checker, BakedRobotCollisionChecker):
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'CBiRRT only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'CBiRRT'
@@ -188,8 +202,9 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
-        from openravepy import CollisionOptions, CollisionOptionsStateSaver
+        from openravepy import CollisionOptionsStateSaver
 
+        env = robot.GetEnv()
         is_endpoint_deterministic = True
         is_constrained = False
 
@@ -197,7 +212,7 @@ class CBiRRTPlanner(BasePlanner):
         # when an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
         # self.ClearIkSolver(robot.GetActiveManipulator())
 
-        self.env.LoadProblem(self.problem, robot.GetName())
+        env.LoadProblem(self.problem, robot.GetName())
 
         args = ['RunCBiRRT']
 
@@ -278,8 +293,11 @@ class CBiRRTPlanner(BasePlanner):
         args += ['filename', traj_path]
         args_str = ' '.join(args)
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
+        # Bypass the robot_collision_checker context manager since CBiRRT does
+        # its own baking in C++.
+        robot_checker = self.robot_collision_checker(robot)
+        options = robot_checker.collision_options
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
             response = self.problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):
@@ -290,7 +308,7 @@ class CBiRRTPlanner(BasePlanner):
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
             traj = openravepy.RaveCreateTrajectory(
-                self.env, 'GenericTrajectory')
+                env, 'GenericTrajectory')
             traj.deserialize(traj_xml)
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized

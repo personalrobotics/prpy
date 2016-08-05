@@ -26,14 +26,21 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-
-import openravepy
+from openravepy import (
+    CollisionOptions,
+    CollisionOptionsStateSaver,
+    CollisionReport,
+    RaveCreateKinBody,
+    openrave_exception,
+  )
 from prpy.exceptions import PrPyException
-from prpy.planning.exceptions import CollisionPlanningError
-from prpy.planning.exceptions import SelfCollisionPlanningError
+from prpy.planning.exceptions import (
+    CollisionPlanningError,
+    SelfCollisionPlanningError,
+)
 
 
-class SimpleRobotCollisionChecker:
+class SimpleRobotCollisionCheckerContextManager(object):
     """RobotCollisionChecker which uses the standard OpenRAVE interface.
 
     This RobotCollisionChecker is instantiated with a robot,
@@ -44,9 +51,27 @@ class SimpleRobotCollisionChecker:
     is raised.
     """
 
-    def __init__(self, robot):
+    def __init__(self, robot, collision_options):
         self.robot = robot
         self.env = robot.GetEnv()
+
+        self.checker = self.env.GetCollisionChecker()
+        if self.checker is None:
+            raise PrPyException('No collision checker found on environment')
+
+        self.collision_saver = CollisionOptionsStateSaver(
+            self.checker, collision_options)
+
+    @property
+    def collision_options(self):
+        return self.collision_saver.newoptions
+
+    def __enter__(self):
+        self.collision_saver.__enter__()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.collision_saver.__exit__(type, value, traceback)
 
     def CheckCollision(self, report=None):
         if self.env.CheckCollision(self.robot, report=report):
@@ -56,14 +81,14 @@ class SimpleRobotCollisionChecker:
         return False
 
     def VerifyCollisionFree(self):
-        report = openravepy.CollisionReport()
+        report = CollisionReport()
         if self.env.CheckCollision(self.robot, report=report):
             raise CollisionPlanningError.FromReport(report)
         elif self.robot.CheckSelfCollision(report=report):
             raise SelfCollisionPlanningError.FromReport(report)
 
 
-class BakedRobotCollisionChecker:
+class BakedRobotCollisionCheckerContextManager(object):
     """RobotCollisionChecker which uses a baked collision interface.
 
     When this RobotCollisionChecker is instantiated with a robot,
@@ -78,29 +103,92 @@ class BakedRobotCollisionChecker:
     CollisionPlanningError on collision.
     """
 
-    def __init__(self, robot):
+    def __init__(self, robot, collision_options=CollisionOptions.ActiveDOFs):
         self.robot = robot
         self.env = robot.GetEnv()
+
         self.checker = self.env.GetCollisionChecker()
         if self.checker is None:
             raise PrPyException('No collision checker found on environment')
+
+        self.baked_kinbody = None
+        self.collision_saver = CollisionOptionsStateSaver(
+            self.checker, collision_options)
+
+    @property
+    def collision_options(self):
+        return self.collision_saver.newoptions
+
+    def __enter__(self):
+        if self.baked_kinbody is not None:
+            raise PrPyException(
+                'Another baked KinBody is available. Did you call __enter__'
+                ' twice or forget to call __exit__?')
+
         try:
             kb_type = self.checker.SendCommand('BakeGetType')
-        except openravepy.openrave_exception:
+        except openrave_exception:
             raise PrPyException('Collision checker does not support baking')
+
+        # TODO: How should we handle exceptions that are thrown below?
+        self.collision_saver.__enter__()
+
         # This "bakes" the following Env and Self checks.
-        # (after the bake, the composite check is stored in self.baked)
+        # (after the bake, the composite check is stored in self.baked_kinbody)
         self.checker.SendCommand('BakeBegin')
+
         self.env.CheckCollision(self.robot)
         self.robot.CheckSelfCollision()
-        self.baked = openravepy.RaveCreateKinBody(self.env, kb_type)
+
+        self.baked_kinbody = RaveCreateKinBody(self.env, kb_type)
+        if self.baked_kinbody is None:
+            raise PrPyException('Failed to create baked KinBody.')
+
         self.checker.SendCommand('BakeEnd')
 
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if self.baked_kinbody is None:
+            raise PrPyException(
+                'No baked KinBody is available. Did you call __exit__'
+                ' without calling __enter__ first?')
+
+        del self.baked_kinbody
+        self.baked_kinbody = None
+
+        self.collision_saver.__exit__(type, value, traceback)
+
     def CheckCollision(self, report=None):
+        if self.baked_kinbody is None:
+            raise PrPyException(
+                'No baked KinBody is available. Did you call __enter__?')
+
         # The baked check is performed by checking self collision on baked
-        return self.checker.CheckSelfCollision(self.baked, report)
+        return self.checker.CheckSelfCollision(self.baked_kinbody, report)
 
     def VerifyCollisionFree(self):
-        report = openravepy.CollisionReport()
+        report = CollisionReport()
         if self.CheckCollision(report=report):
             raise CollisionPlanningError.FromReport(report)
+
+
+class SimpleRobotCollisionChecker(object):
+    def __init__(self, collision_options=CollisionOptions.ActiveDOFs):
+        self.collision_options = collision_options
+
+    def __call__(self, robot):
+        return SimpleRobotCollisionCheckerContextManager(
+            robot, self.collision_options)
+
+
+class BakedRobotCollisionChecker(object):
+    def __init__(self, collision_options=CollisionOptions.ActiveDOFs):
+        self.collision_options = collision_options
+
+    def __call__(self, robot):
+        return BakedRobotCollisionCheckerContextManager(
+            robot, self.collision_options)
+
+
+DefaultRobotCollisionChecker = SimpleRobotCollisionChecker()

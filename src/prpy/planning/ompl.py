@@ -35,9 +35,13 @@ from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 from openravepy import (
-    CollisionOptions,
     CollisionOptionsStateSaver,
     PlannerStatus
+)
+from ..collision import (
+    BakedRobotCollisionChecker,
+    DefaultRobotCollisionChecker,
+    SimpleRobotCollisionChecker,
 )
 from .cbirrt import SerializeTSRChain
 
@@ -45,11 +49,13 @@ logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
-    def __init__(self, algorithm='RRTConnect'):
+    def __init__(self, algorithm='RRTConnect',
+                 robot_collision_checker=DefaultRobotCollisionChecker):
         super(OMPLPlanner, self).__init__()
 
         self.setup = False
         self.algorithm = algorithm
+        self.robot_collision_checker = robot_collision_checker
 
         planner_name = 'OMPL_{:s}'.format(algorithm)
         self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
@@ -58,6 +64,14 @@ class OMPLPlanner(BasePlanner):
             raise UnsupportedPlanningError(
                 'Unable to create "{:s}" planner. Is or_ompl installed?'
                 .format(planner_name))
+
+        if isinstance(robot_collision_checker, SimpleRobotCollisionChecker):
+            self._is_baked = False
+        elif isinstance(robot_collision_checker, BakedRobotCollisionChecker):
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'or_ompl only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
@@ -86,6 +100,7 @@ class OMPLPlanner(BasePlanner):
     def _Plan(self, robot, goal=None, tsrchains=None, timeout=30., shortcut_timeout=5.,
               continue_planner=False, ompl_args=None,
               formatted_extra_params=None, **kw_args):
+        env = robot.GetEnv()
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
         if ompl_args is not None:
@@ -110,16 +125,19 @@ class OMPLPlanner(BasePlanner):
             params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
 
-        traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+        traj = openravepy.RaveCreateTrajectory(env, 'GenericTrajectory')
 
         # Plan.
-        with self.env:
+        with env:
             if (not continue_planner) or (not self.setup):
                 self.planner.InitPlan(robot, params)
                 self.setup = True
 
-            with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                            CollisionOptions.ActiveDOFs):
+            # Bypass the robot_collision_checker context manager since or_ompl
+            # does its own baking in C++.
+            robot_checker = self.robot_collision_checker(robot)
+            options = robot_checker.collision_options
+            with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
                 status = self.planner.PlanPath(traj, releasegil=True)
 
             if status not in [PlannerStatus.HasSolution,

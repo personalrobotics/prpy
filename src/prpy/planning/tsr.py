@@ -36,10 +36,8 @@ from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 from .base import Tags
 from ..util import SetTrajectoryTags
-from ..collision import SimpleRobotCollisionChecker
+from ..collision import DefaultRobotCollisionChecker
 from openravepy import (
-    CollisionOptions,
-    CollisionOptionsStateSaver,
     IkFilterOptions,
     IkParameterization,
     IkParameterizationType
@@ -60,7 +58,7 @@ def grouper(n, iterable):
 
 
 class TSRPlanner(BasePlanner):
-    def __init__(self, delegate_planner=None, robot_collision_checker=SimpleRobotCollisionChecker):
+    def __init__(self, delegate_planner=None, robot_collision_checker=DefaultRobotCollisionChecker):
         super(TSRPlanner, self).__init__()
         self.delegate_planner = delegate_planner
         self.robot_collision_checker = robot_collision_checker
@@ -145,11 +143,6 @@ class TSRPlanner(BasePlanner):
 
             return ik_solutions
 
-        # Instantiate a robot checker
-        with CollisionOptionsStateSaver(
-                self.env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
-            robot_checker = self.robot_collision_checker(robot)
-
         def is_configuration_valid(ik_solution):
             p = openravepy.KinBody.SaveParameters
             with robot.CreateRobotStateSaver(p.LinkTransformation):
@@ -181,8 +174,7 @@ class TSRPlanner(BasePlanner):
             # Set ActiveDOFs for IK collision checking. We intentionally
             # restore the original collision checking options before calling
             # the planner to give it a pristine environment.
-            with CollisionOptionsStateSaver(
-                    self.env.GetCollisionChecker(), CollisionOptions.ActiveDOFs):
+            with self.robot_collision_checker(robot) as robot_checker:
                 while is_time_available() and len(configurations_chunk) < chunk_size:
                     # Generate num_candidates candidates and rank them using the
                     # user-supplied IK ranker.
