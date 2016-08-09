@@ -43,7 +43,7 @@ import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
-    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker):
+    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker, timelimit=1.0):
         super(CBiRRTPlanner, self).__init__()
 
         self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
@@ -58,6 +58,8 @@ class CBiRRTPlanner(BasePlanner):
         else:
             raise NotImplementedError(
                 'CBiRRT only supports Simple and BakedRobotCollisionChecker.')
+
+        self.timelimit = timelimit
 
     def __str__(self):
         return 'CBiRRT'
@@ -207,6 +209,8 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=1.0, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
+
+        timelimit = self.timelimit 
         from openravepy import CollisionOptionsStateSaver
 
         env = robot.GetEnv()

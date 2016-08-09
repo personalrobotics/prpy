@@ -159,7 +159,7 @@ class HauserParabolicSmoother(OpenRAVERetimer):
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
         new_options = deepcopy(options) if options else dict()
         if 'timelimit' in kw_args:
-          new_options['time_limit'] = kw_args['timelimit']
+            new_options['time_limit'] = kw_args['timelimit']
         return super(HauserParabolicSmoother, self).RetimeTrajectory(
             robot, path, options=new_options, **kw_args)
 
