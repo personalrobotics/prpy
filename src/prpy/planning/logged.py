@@ -62,11 +62,12 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
      - log-20160101-010203.567890.yaml
     """
 
-    def __init__(self, planner, uri_only=True):
+    def __init__(self, planner, uri_only=True, outputdir=''):
         super(LoggedPlanner, self).__init__()
         self.planner = planner
         self.uri_only = uri_only
-    
+        self.outputdir = outputdir
+
     def __str__(self):
         return 'Logged({0:s})'.format(self.planner)
     
@@ -84,10 +85,12 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         # get log file name
         stamp = time.time()
         struct = time.localtime(stamp)
+        from os.path import isfile, join
         fn = 'log-{}.{:06d}.yaml'.format(
             time.strftime('%Y%m%d-%H%M%S', struct),
             int(1.0e6*(stamp-math.floor(stamp))))
-        
+        fn = join(self.outputdir, fn)
+
         # retrieve enviroment
         if 'robot' in kw_args:
             env = kw_args['robot'].GetEnv()
@@ -103,6 +106,8 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         reqdict = {}
         reqdict['method'] = method # string
         reqdict['args'] = []
+        reqdict['planner'] = str(self.planner)
+
         for arg in args:
             reqdict['args'].append(serialize_or_errorstr(arg))
         reqdict['kw_args'] = {}
@@ -117,10 +122,18 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
         try:
             plan_fn = getattr(self.planner, method)
             traj = plan_fn(*args, **kw_args)
+
+            from prpy.util import GetTrajectoryTags, SetTrajectoryTags
+            from prpy.planning.base import Tags
+            tags = GetTrajectoryTags(traj)
+            SetTrajectoryTags(traj, {Tags.LOGFILE: fn}, append=True)
+
             resdict['ok'] = True
+            resdict['planner_used'] = tags[Tags.PLANNER]
             resdict['traj_first'] = list(map(float,traj.GetWaypoint(0)))
             resdict['traj_last'] = list(map(float,traj.GetWaypoint(traj.GetNumWaypoints()-1)))
             resdict['traj'] = traj.serialize(0)
+            resdict['collisionchecker'] = env.GetCollisionChecker().GetDescription()
             return traj
             
         except prpy.planning.PlanningError as ex:
@@ -142,5 +155,4 @@ class LoggedPlanner(prpy.planning.base.MetaPlanner):
             fp = open(fn,'w')
             yaml.safe_dump(yamldict, fp)
             fp.close()
-        
         
