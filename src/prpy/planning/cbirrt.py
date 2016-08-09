@@ -32,9 +32,9 @@ import numpy
 import openravepy
 from ..util import SetTrajectoryTags
 from ..collision import (
-    BakedRobotCollisionChecker,
-    DefaultRobotCollisionChecker,
-    SimpleRobotCollisionChecker,
+    DefaultRobotCollisionCheckerFactory,
+    BakedRobotCollisionCheckerFactory,
+    SimpleRobotCollisionCheckerFactory,
 )
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
@@ -43,17 +43,21 @@ import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
-    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker):
+    def __init__(self, robot_checker_factory=None):
         super(CBiRRTPlanner, self).__init__()
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
         self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
 
         if self.problem is None:
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
-        self.robot_collision_checker = robot_collision_checker
-        if isinstance(robot_collision_checker, SimpleRobotCollisionChecker):
+        self.robot_checker_factory = robot_checker_factory
+        if isinstance(robot_checker_factory, SimpleRobotCollisionCheckerFactory):
             self._is_baked = False
-        elif isinstance(robot_collision_checker, BakedRobotCollisionChecker):
+        elif isinstance(robot_checker_factory, BakedRobotCollisionCheckerFactory):
             self._is_baked = True
         else:
             raise NotImplementedError(
@@ -293,10 +297,9 @@ class CBiRRTPlanner(BasePlanner):
         args += ['filename', traj_path]
         args_str = ' '.join(args)
 
-        # Bypass the robot_collision_checker context manager since CBiRRT does
-        # its own baking in C++.
-        robot_checker = self.robot_collision_checker(robot)
-        options = robot_checker.collision_options
+        # Bypass the context manager since CBiRRT does its own baking in C++.
+        collision_checker = self.robot_checker_factory(robot)
+        options = collision_checker.collision_options
         with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
             response = self.problem.SendCommand(args_str, True)
 
@@ -307,8 +310,7 @@ class CBiRRTPlanner(BasePlanner):
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
-            traj = openravepy.RaveCreateTrajectory(
-                env, 'GenericTrajectory')
+            traj = openravepy.RaveCreateTrajectory(env, '')
             traj.deserialize(traj_xml)
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
