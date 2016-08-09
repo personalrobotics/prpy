@@ -35,7 +35,7 @@ import numpy
 import openravepy
 from .base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 from .. import util
-from ..collision import DefaultRobotCollisionChecker 
+from ..collision import DefaultRobotCollisionCheckerFactory
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -74,9 +74,13 @@ class Status(Enum):
 
 
 class VectorFieldPlanner(BasePlanner):
-    def __init__(self, robot_collision_checker=DefaultRobotCollisionChecker):
+    def __init__(self, robot_checker_factory=None):
         super(VectorFieldPlanner, self).__init__()
-        self.robot_collision_checker = robot_collision_checker
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
+        self.robot_checker_factory = robot_checker_factory
 
     def __str__(self):
         return 'VectorFieldPlanner'
@@ -547,7 +551,7 @@ class VectorFieldPlanner(BasePlanner):
                 nonlocals['exception'] = e
                 return -1  # Stop.
 
-        with self.robot_collision_checker(robot) as robot_checker:
+        with self.robot_checker_factory(robot) as robot_checker:
             # Integrate the vector field to get a configuration space path.
             #
             # TODO: Tune the integrator parameters.

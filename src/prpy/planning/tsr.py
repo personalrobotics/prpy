@@ -36,7 +36,7 @@ from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 from .base import Tags
 from ..util import SetTrajectoryTags
-from ..collision import DefaultRobotCollisionChecker
+from ..collision import DefaultRobotCollisionCheckerFactory
 from openravepy import (
     IkFilterOptions,
     IkParameterization,
@@ -58,10 +58,14 @@ def grouper(n, iterable):
 
 
 class TSRPlanner(BasePlanner):
-    def __init__(self, delegate_planner=None, robot_collision_checker=DefaultRobotCollisionChecker):
+    def __init__(self, delegate_planner=None, robot_checker_factory=None):
         super(TSRPlanner, self).__init__()
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
         self.delegate_planner = delegate_planner
-        self.robot_collision_checker = robot_collision_checker
+        self.robot_checker_factory = robot_checker_factory
 
     def __str__(self):
         if self.delegate_planner is not None:
@@ -174,7 +178,7 @@ class TSRPlanner(BasePlanner):
             # Set ActiveDOFs for IK collision checking. We intentionally
             # restore the original collision checking options before calling
             # the planner to give it a pristine environment.
-            with self.robot_collision_checker(robot) as robot_checker:
+            with self.robot_checker_factory(robot) as robot_checker:
                 while is_time_available() and len(configurations_chunk) < chunk_size:
                     # Generate num_candidates candidates and rank them using the
                     # user-supplied IK ranker.

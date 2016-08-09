@@ -36,12 +36,12 @@ from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 from openravepy import (
     CollisionOptionsStateSaver,
-    PlannerStatus
+    PlannerStatus,
 )
 from ..collision import (
-    BakedRobotCollisionChecker,
-    DefaultRobotCollisionChecker,
-    SimpleRobotCollisionChecker,
+    BakedRobotCollisionCheckerFactory,
+    DefaultRobotCollisionCheckerFactory,
+    SimpleRobotCollisionCheckerFactory,
 )
 from .cbirrt import SerializeTSRChain
 
@@ -49,13 +49,25 @@ logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
-    def __init__(self, algorithm='RRTConnect',
-                 robot_collision_checker=DefaultRobotCollisionChecker):
+    def __init__(self, algorithm='RRTConnect', robot_checker_factory=None):
         super(OMPLPlanner, self).__init__()
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
 
         self.setup = False
         self.algorithm = algorithm
-        self.robot_collision_checker = robot_collision_checker
+
+        self.robot_checker_factory = robot_checker_factory
+
+        if isinstance(robot_checker_factory, SimpleRobotCollisionCheckerFactory):
+            self._is_baked = False
+        elif isinstance(robot_checker_factory, BakedRobotCollisionCheckerFactory):
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'or_ompl only supports Simple and'
+                ' BakedRobotCollisionCheckerFactory.')
 
         planner_name = 'OMPL_{:s}'.format(algorithm)
         self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
@@ -64,14 +76,6 @@ class OMPLPlanner(BasePlanner):
             raise UnsupportedPlanningError(
                 'Unable to create "{:s}" planner. Is or_ompl installed?'
                 .format(planner_name))
-
-        if isinstance(robot_collision_checker, SimpleRobotCollisionChecker):
-            self._is_baked = False
-        elif isinstance(robot_collision_checker, BakedRobotCollisionChecker):
-            self._is_baked = True
-        else:
-            raise NotImplementedError(
-                'or_ompl only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'OMPL {0:s}'.format(self.algorithm)
@@ -133,9 +137,8 @@ class OMPLPlanner(BasePlanner):
                 self.planner.InitPlan(robot, params)
                 self.setup = True
 
-            # Bypass the robot_collision_checker context manager since or_ompl
-            # does its own baking in C++.
-            robot_checker = self.robot_collision_checker(robot)
+            # Bypass the context manager since or_ompl does its own baking.
+            robot_checker = self.robot_checker_factory(robot)
             options = robot_checker.collision_options
             with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
                 status = self.planner.PlanPath(traj, releasegil=True)
