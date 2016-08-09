@@ -75,12 +75,14 @@ from prpy.collision import (
     BakedRobotCollisionChecker,
     SimpleRobotCollisionChecker
 )
+
+
 from openravepy import RaveCreateCollisionChecker
 
 if args.baked:
-    robot_collision_checker = BakedRobotCollisionChecker
+    robot_collision_checker = BakedRobotCollisionChecker()
 else:
-    robot_collision_checker = SimpleRobotCollisionChecker
+    robot_collision_checker = SimpleRobotCollisionChecker()
 
 planners = []
 for pl in planner_list: 
@@ -98,21 +100,25 @@ for pl in planner_list:
     elif pl == 'trajopt':
         planners.append(TrajoptPlanner(robot_collision_checker=robot_collision_checker))
     elif pl.lower() == 'combined':
-        actual_planner = Sequence(
-            SnapPlanner(robot_collision_checker=robot_collision_checker),
-            VectorFieldPlanner(robot_collision_checker=robot_collision_checker),
-            TrajoptPlanner(robot_collision_checker=robot_collision_checker)
-        )
-        cbirrt_planner = CBiRRTPlanner(robot_collision_checker=robot_collision_checker)
 
+        import prpy.planning    
+        snap = SnapPlanner(robot_collision_checker=robot_collision_checker)
+        vf = VectorFieldPlanner(robot_collision_checker=robot_collision_checker)
+        trajopt = TrajoptPlanner(robot_collision_checker=robot_collision_checker)
+        cbirrt = CBiRRTPlanner(robot_collision_checker=robot_collision_checker, timelimit=1.0)
+        rrt = prpy.planning.ompl.OMPLPlanner(
+                'RRTConnect', robot_collision_checker=robot_collision_checker)
+        
+        # Overrides planner with optimized selection and ordering
+        actual_planner = Sequence(snap, vf, trajopt,
+                                  TSRPlanner(robot_collision_checker=robot_collision_checker,
+                                             delegate_planner=Sequence(snap, trajopt)),
+                                  FirstSupported(rrt, cbirrt))
+        
         planner = FirstSupported(
-            Sequence(actual_planner,
-                     TSRPlanner(robot_collision_checker=robot_collision_checker,
-                                delegate_planner=actual_planner),
-                     cbirrt_planner),
-            NamedPlanner(delegate_planner=Sequence(
                 actual_planner,
-                cbirrt_planner)))
+                NamedPlanner(delegate_planner = actual_planner)
+                )
 
         setattr(planner,'name','combined')
         planners.append(planner)
