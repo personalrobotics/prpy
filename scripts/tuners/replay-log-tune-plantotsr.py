@@ -14,8 +14,8 @@ import yaml
 from or_trajopt import TrajoptPlanner
 import prpy.planning
 import prpy.serialization
-import prpy_lemur.lemur
-import prpy_lemur.roadmaps
+#import prpy_lemur.lemur
+#import prpy_lemur.roadmaps
 
 from prpy.planning import (
     FirstSupported,
@@ -40,14 +40,15 @@ from os.path import join, isfile
 from os import listdir
 import re
 
-def get_filename(logfile, planner, method, outputdir):
+def get_filename(logfile, planner, method):
 
     logfile = filter(lambda x: 'log-' in x, re.split(r'[/]|\.yaml',logfile))[0]
-    savedir = os.path.join(outputdir, method, logfile, planner)
+    savedir = os.path.join(planner)
     if not os.path.exists(savedir):
         os.makedirs(savedir)
 
     filename = '_'.join(str(x) for x in ['replay', logfile, method, planner])
+    filename += '.yaml'
 
     completePath = os.path.join(savedir, filename)
     return completePath
@@ -55,27 +56,50 @@ def get_filename(logfile, planner, method, outputdir):
 
 parser = argparse.ArgumentParser(description='replay planning request log file')
 parser.add_argument('--logfile', required=True)
-parser.add_argument('--outdir', default='', type=str, help='Save log to outdir')
+parser.add_argument('--planner', required=True, type=str, choices=['snap', 'trajopt'])
+
 args = parser.parse_args()
 
 
-snap = SnapPlanner()
-trajopt = TrajoptPlanner()
-planner = TSRPlanner(delegate_planner=Sequence(snap, trajopt))
 
-timelimits = [0.1,0.3,0.5,0.7,1.0,1.3,1.5,1.7,1.9]
-num_attempts = [1,3,6,9,11,15]
+from prpy.collision import (
+    BakedRobotCollisionChecker,
+)
+from openravepy import RaveCreateCollisionChecker
+
+robot_collision_checker = BakedRobotCollisionChecker
+
+if args.planner == "snap":
+    actual_planner = SnapPlanner(robot_collision_checker=robot_collision_checker)
+elif args.planner == 'trajopt':
+    actual_planner = TrajoptPlanner(robot_collision_checker=robot_collision_checker)
+else:
+    raise ValueError("Unrecognized planner")
 
 
-# read log file
-logfile = args.logfile 
+logfile = args.logfile
 print ("Reading ", logfile)
+start_logfile_at = time.time()
 
 yamldict = yaml.safe_load(open(logfile))
 method_name = yamldict['request']['method']
-if method_name.lower() != 'PlanToTSR'.lower():
+if method_name != 'PlanToTSR':
     import sys
+    print ("Not PlanToTSR")
     sys.exit(0)
+
+
+# deserialize environment
+import herbpy
+env, robot = herbpy.initialize(sim=True)
+cc = openravepy.RaveCreateCollisionChecker(env, 'fcl')
+assert cc is not None
+env.SetCollisionChecker(openravepy.RaveCreateCollisionChecker(env, 'fcl'))
+env.GetCollisionChecker().SetDescription('fcl')
+
+planner = TSRPlanner( 
+                robot_collision_checker=robot_collision_checker,
+                delegate_planner=actual_planner)
 
 # load planning request
 try:
@@ -85,10 +109,13 @@ except (AttributeError, UnsupportedPlanningError) as e:
     import sys
     sys.exit(0)
 
-# deserialize environment
-import herbpy
-env, robot = herbpy.initialize(sim=True)
-prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
+num_trials = 3 # if 'plantotsr' in str(method_name).lower() else 3
+
+# load ik solver for robot in case it's needed
+ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
+    iktype=openravepy.IkParameterizationType.Transform6D)
+if not ikmodel.load():
+    ikmodel.autogenerate()
 
 method_args = []
 for method_arg in yamldict['request']['args']:
@@ -105,52 +132,63 @@ if 'robot' in method_kwargs:
 if 'ranker' in method_kwargs:
     method_kwargs.pop('ranker')
 
-# load ik solver for robot in case it's needed
-ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot,
-    iktype=openravepy.IkParameterizationType.Transform6D)
-if not ikmodel.load():
-    ikmodel.autogenerate()
+
+# deserialize environment
+prpy.serialization.deserialize_environment(yamldict['environment'], env=env, reuse_bodies=[robot])
+
+from prpy.clone import Clone
+
+
+reqdict = {}
+resdict = {'ok':[], 'planning_time':[], 'planner_used':[], 'error':[]}
+reqdict['collisionchecker'] = env.GetCollisionChecker().GetDescription()
+reqdict['args'] = yamldict['request']['args']
+reqdict['kw_args'] = yamldict['request']['kw_args']
+reqdict['method'] = yamldict['request']['method'] 
+reqdict['planner_name'] = getattr(actual_planner, 'name', str(planner))
+
 
 planning_times = dict()
 success = dict()
 
-for iattempt in num_attempts:
-    for t in timelimits:
-        method_kwargs['tsr_timeout'] = t
-        method_kwargs['num_attempts'] = iattempt
+for icandidates in [1, 12, 25]:
+    
+    method_kwargs['num_candidates'] = icandidates
 
-        # call planning method itself ...
-        print('calling planner {} for {} ...'.format(planner, method_name))
-        from prpy.util import Timer, SetTrajectoryTags
-        from prpy.planning.base import Tags
+    # call planning method itself ...
+    print('calling planner {} for {} ...'.format(planner, method_name))
+    print ('icandidate: {}'.format(icandidates))
+    from prpy.util import Timer, SetTrajectoryTags
+    from prpy.planning.base import Tags
 
-        planning_times[(iattempt, t)] = []
-        success[(iattempt,t)] = []
-        for k in xrange(5):
-            error_msg = None
-            traj = None
-            start_time = time.time()
-            try:
+    planning_times[icandidates] = []
+    success[icandidates] = []
+    for k in xrange(3):
+        error_msg = None
+        traj = None
+        try:
+            with Clone(env, lock=True) as planning_env:
+                robot = planning_env.GetRobots()[0]
+                start_time = time.time()
                 traj = method(robot, *method_args, **method_kwargs)    
-            except PlanningError as e: 
-                error_msg = str(e)
-                print (error_msg)
-            finally:
-                planning_time = time.time() - start_time
+                planning_time = time.time() - start_time 
+        except (UnsupportedPlanningError, AttributeError) as e: 
+            print (e)
+            import sys
+            sys.exit(0)
+        except PlanningError as e: 
+            error_msg = str(e)
+            print (error_msg)
+            planning_time = time.time() - start_time 
 
-            planning_times[(iattempt, t)].append(planning_time)
-            ok = True if traj else False
-            success[(iattempt,t)].append(ok)
+        planning_times[icandidates].append(planning_time)
+        ok = True if traj else False
+        success[icandidates].append(ok)
 
-        with open('tsr-tuning-completed.log','a') as fp:
-            loginfo = ' '.join([str(x) for x in [logfile, 'SnapTrajopt', 'TSR', iattempt, t, 
-                                                 sum(planning_times[(iattempt,t)]), success[(iattempt,t)]]])
-            fp.write(loginfo+"\n")
+    with open('tsr-tuning-completed.log','a') as fp:
+        loginfo = ' '.join([str(x) for x in [logfile,icandidates, planning_times[icandidates], success[icandidates]]])
+        fp.write(loginfo+"\n")
 
-reqdict = {}
-resdict = {}
-reqdict['method'] = yamldict['request']['method'] 
-reqdict['planner_name'] = str(planner)
 resdict['ok'] = success
 resdict['planning_times'] = planning_times
     
@@ -159,22 +197,9 @@ yamldict_res['environment'] = yamldict['environment']
 yamldict_res['request'] = reqdict
 yamldict_res['result'] = resdict
 
-filename = get_filename(logfile, 'SnapTrajopt', method_name, args.outdir)
-
-import pickle
-pickle.dump(yamldict_res, open(filename+'.pkl','w'))
-
-for key, val in resdict['ok'].iteritems():
-    resdict[str(key)] = val
-    resdict.remove(key)
-for key, val in resdict['planning_times'].iteritems():
-    resdict[str(key)] = val
-    resdict.remove(key)
-
-yamldict_res['result'] = resdict
-with open(filename+'.pkl','w') as fp:
+filename = get_filename(logfile, str(actual_planner), method_name)
+with open(filename,'w') as fp:
     yaml.safe_dump(yamldict_res, fp)
     print ('\n{} written\n'.format(filename))
-
 
 
