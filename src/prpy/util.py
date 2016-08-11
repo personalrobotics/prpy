@@ -2129,3 +2129,38 @@ def GetPointFrom(focus):
         raise ValueError('Focus of the point is an unknown object')
 
     return coord
+
+def concatenateTrajectories(robot, traj_list):
+    """
+    Given a list of trajectories for a single manipulator,
+    concatenate them into a single trajectory
+
+    @param robot
+    @param traj_list List of consective trajectories for a given manipulator
+    @return base_traj Combined trajectory
+    """
+
+    base_traj = traj_list[0]
+    base_cspec = base_traj.GetConfigurationSpecification()
+    traj_indices = base_cspec.ExtractUsedIndices(robot)
+
+    offset = base_traj.GetNumWaypoints()
+    for i in xrange(1, len(traj_list)):
+        traj = traj_list[i]
+        cspec = traj.GetConfigurationSpecification()
+        sub = numpy.subtract(cspec.ExtractUsedIndices(robot), traj_indices)
+        if sub.sum() != 0:
+            raise ValueError('Trajectories are not on the same manipulator.')
+
+        epsilon = 0.01
+        previous_point = base_traj.GetWaypoint(base_traj.GetNumWaypoints()-1)
+        next_point = traj.GetWaypoint(0)
+        #TODO is there a better way to check for this?
+        if numpy.subtract(previous_point, next_point).sum() < epsilon:
+            raise ValueError('Trajectories are not consecutive.')
+
+        for j in xrange(traj.GetNumWaypoints()):
+            waypoint = traj.GetWaypoint(j)
+            base_traj.Insert(offset, waypoint)
+            offset += 1
+    return base_traj
