@@ -69,7 +69,7 @@ class TSRLibrary(object):
         if robot_name is not None:
             self.robot_name = robot_name
         else:
-            self.robot_name = self.get_object_type(robot)
+            self.robot_name = robot.GetName()
             logger.debug('Inferred robot name "%s" for TSRLibrary.', self.robot_name)
 
     def clone(self, cloned_robot):
