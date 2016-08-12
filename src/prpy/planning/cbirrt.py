@@ -225,6 +225,9 @@ class CBiRRTPlanner(BasePlanner):
         args += ['bdofresl2norm', '1']
         args += ['steplength', '0.05999']
 
+        if self._is_baked:
+            args += ['bbakedcheckers', '1']
+
         if extra_args is not None:
             args += extra_args
 
