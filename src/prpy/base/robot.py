@@ -219,7 +219,7 @@ class Robot(openravepy.Robot):
         return active_manipulators
 
     def PostProcessPath(self, path,
-                        constrained=None, smooth=None, default_timelimit=0.5,
+                        constrained=None, smooth=None, default_timelimit=None,
                         shortcut_options=None, smoothing_options=None,
                         retiming_options=None, affine_retiming_options=None,
                         **kwargs):
@@ -275,10 +275,13 @@ class Robot(openravepy.Robot):
         if affine_retiming_options is None:
             affine_retimer_options = dict()
 
-        shortcut_options.setdefault('timelimit', default_timelimit)
-        smoothing_options.setdefault('timelimit', default_timelimit)
-        retiming_options.setdefault('timelimit', default_timelimit)
-        affine_retimer_options.setdefault('timelimit', default_timelimit)
+        if default_timelimit is not None:
+            shortcut_options.setdefault('timelimit', default_timelimit)
+            smoothing_options.setdefault('timelimit', default_timelimit)
+            retiming_options.setdefault('timelimit', default_timelimit)
+            affine_retimer_options.setdefault('timelimit', default_timelimit)
+            warnings.warn('The "default_timelimit" argument is deprecated.',
+                DeprecationWarning)
 
         # Read default parameters from the trajectory's tags.
         tags = GetTrajectoryTags(path)
