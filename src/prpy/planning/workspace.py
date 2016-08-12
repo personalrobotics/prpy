@@ -79,7 +79,14 @@ class GreedyIKPlanner(BasePlanner):
                 maxaccelerations=0.1 * numpy.ones(7)
             )
 
-        return self.PlanWorkspacePath(robot, traj, timelimit)
+        qtraj = self.PlanWorkspacePath(robot, traj, timelimit)
+        # modify tags to reflect that we won't care about
+        # the entire path, but only the final pose
+        SetTrajectoryTags(qtraj, {
+            Tags.CONSTRAINED: False,
+            Tags.SMOOTH: True}, append=True)
+
+        return qtraj
 
     @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
