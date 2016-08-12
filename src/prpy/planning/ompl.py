@@ -123,6 +123,9 @@ class OMPLPlanner(BasePlanner):
         if formatted_extra_params is not None:
             extraParams += formatted_extra_params
 
+        if self._is_baked and (ompl_args is None or 'do_baked' not in ompl_args):
+            extraParams += '<do_baked>1</do_baked>'
+
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
         if goal is not None:
