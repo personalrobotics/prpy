@@ -43,8 +43,10 @@ import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
-    def __init__(self, robot_checker_factory=None):
+    def __init__(self, robot_checker_factory=None, timelimit=5.):
         super(CBiRRTPlanner, self).__init__()
+
+        self.timelimit = timelimit
 
         if robot_checker_factory is None:
             robot_checker_factory = DefaultRobotCollisionCheckerFactory
@@ -208,6 +210,13 @@ class CBiRRTPlanner(BasePlanner):
              extra_args=None, **kw_args):
         from openravepy import CollisionOptionsStateSaver
 
+        if timelimit is None:
+            timelimit = self.timelimit
+
+        if timelimit <= 0.:
+            raise ValueError('Invalid value for "timelimit". Limit must be'
+                             ' non-negative; got {:f}.'.format(timelimit))
+
         env = robot.GetEnv()
         is_endpoint_deterministic = True
         is_constrained = False
@@ -218,7 +227,8 @@ class CBiRRTPlanner(BasePlanner):
 
         env.LoadProblem(self.problem, robot.GetName())
 
-        args = ['RunCBiRRT']
+        args =  ['RunCBiRRT']
+        args += ['timelimit', str(timelimit)]
 
         # By default, CBiRRT interprets the DOF resolutions as an
         # L-infinity norm; this flag turns on the L-2 norm instead.
@@ -238,13 +248,6 @@ class CBiRRTPlanner(BasePlanner):
                                  .format(smoothingitrs))
 
             args += ['smoothingitrs', str(smoothingitrs)]
-
-        if timelimit is not None:
-            if not (timelimit > 0):
-                raise ValueError('Invalid value for "timelimit". Limit must be'
-                                 ' non-negative; got {:f}.'.format(timelimit))
-
-            args += ['timelimit', str(timelimit)]
 
         if allowlimadj is not None:
             args += ['allowlimadj', str(int(allowlimadj))]
