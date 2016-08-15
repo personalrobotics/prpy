@@ -141,7 +141,7 @@ class GreedyIKPlanner(BasePlanner):
 
     @ClonedPlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
-                          min_waypoint_index=None, **kw_args):
+                          min_waypoint_index=None, norm_order=2, **kw_args):
         """
         Plan a configuration space path given a workspace path.
         All timing information is ignored.
@@ -150,15 +150,28 @@ class GreedyIKPlanner(BasePlanner):
                     represented as OpenRAVE AffineTrajectory
         @param min_waypoint_index minimum waypoint index to reach
         @param timelimit timeout in seconds
+        @param norm_order: 1  ==>  The L1 norm
+                           2  ==>  The L2 norm
+                           inf  ==>  The L_infinity norm
+               Used to determine the resolution of collision checked waypoints
+               in the trajectory
         @return qtraj configuration space path
         """
-        from .exceptions import (TimeoutPlanningError,
-                                 CollisionPlanningError,
-                                 SelfCollisionPlanningError)
-        from openravepy import CollisionReport
+        from .exceptions import (
+            TimeoutPlanningError,
+            CollisionPlanningError,
+            SelfCollisionPlanningError
+        )
+        from openravepy import (
+            CollisionOptions,
+            CollisionOptionsStateSaver,
+            CollisionReport
+        )
+
         p = openravepy.KinBody.SaveParameters
 
-        with robot:
+        with robot, CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
+                                               CollisionOptions.ActiveDOFs):
             manip = robot.GetActiveManipulator()
             robot.SetActiveDOFs(manip.GetArmIndices())
 
@@ -171,8 +184,10 @@ class GreedyIKPlanner(BasePlanner):
             t = 0.
             dt = traj.GetDuration()
 
+            q_resolutions = robot.GetActiveDOFResolutions()
+            
             # Smallest CSpace step at which to give up
-            min_step = min(robot.GetActiveDOFResolutions()) / 100.
+            min_step = numpy.linalg.norm(robot.GetActiveDOFResolutions() / 100., ord=norm_order)
             ik_options = openravepy.IkFilterOptions.CheckEnvCollisions
             start_time = time.time()
             epsilon = 1e-6
@@ -180,10 +195,14 @@ class GreedyIKPlanner(BasePlanner):
             try:
                 while t < traj.GetDuration() + epsilon:
                     # Check for a timeout.
+                    # TODO: This is not really deterministic because we do not
+                    # have control over CPU time. However, it is exceedingly
+                    # unlikely that running the query again will change the
+                    # outcome unless there is a significant change in CPU load.
                     current_time = time.time()
                     if (timelimit is not None and
                             current_time - start_time > timelimit):
-                        raise TimeoutPlanningError(timelimit)
+                        raise TimeoutPlanningError(timelimit, deterministic=True)
 
                     # Hypothesize new configuration as closest IK to current
                     qcurr = robot.GetActiveDOFValues()  # Configuration at t.
@@ -198,11 +217,14 @@ class GreedyIKPlanner(BasePlanner):
                     infeasible_step = True
                     if qnew is not None:
                         # Found an IK
-                        step = abs(qnew - qcurr)
-                        if (max(step) < min_step) and qtraj:
+                        steps = abs(qnew - qcurr) / q_resolutions;
+                        norm = numpy.linalg.norm(steps, ord=norm_order)
+
+                        if (norm < min_step) and qtraj:
                             raise PlanningError('Not making progress.')
-                        infeasible_step = \
-                            any(step > robot.GetActiveDOFResolutions())
+
+                        infeasible_step = norm > 1.0
+
                     if infeasible_step:
                         # Backtrack and try half the step
                         dt = dt / 2.0
@@ -242,10 +264,12 @@ class GreedyIKPlanner(BasePlanner):
                             cr = CollisionReport()
                             if self.env.CheckCollision(robot, report=cr):
                                 collision_error = \
-                                    CollisionPlanningError.FromReport(cr)
+                                    CollisionPlanningError.FromReport(
+                                        cr, deterministic=True)
                             elif robot.CheckSelfCollision(report=cr):
                                 collision_error = \
-                                    SelfCollisionPlanningError.FromReport(cr)
+                                    SelfCollisionPlanningError.FromReport(
+                                        cr, deterministic=True)
                             else:
                                 collision_error = None
                     if collision_error is not None:
@@ -258,6 +282,10 @@ class GreedyIKPlanner(BasePlanner):
                     logger.warning('Terminated early at time %f < %f: %s',
                                    t, traj.GetDuration(), str(e))
 
-        # Return as much of the trajectory as we have solved.
-        SetTrajectoryTags(qtraj, {Tags.CONSTRAINED: True}, append=True)
+        SetTrajectoryTags(qtraj, {
+            Tags.CONSTRAINED: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return qtraj

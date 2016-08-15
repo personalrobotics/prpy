@@ -56,6 +56,7 @@ class TSRFactory(object):
 class TSRLibrary(object):
     all_factories = collections.defaultdict(lambda: collections.defaultdict(dict))
     generic_kinbody_key = "_*"  # Something that is unlikely to be an actual kinbody name
+    generic_robot_key = "_*"
     
     def __init__(self, robot, robot_name=None):
         """
@@ -70,6 +71,12 @@ class TSRLibrary(object):
         else:
             self.robot_name = self.get_object_type(robot)
             logger.debug('Inferred robot name "%s" for TSRLibrary.', self.robot_name)
+
+    def clone(self, cloned_robot):
+        import copy
+        cloned_library = TSRLibrary(cloned_robot)
+        cloned_library.all_factories = copy.deepcopy(self.all_factories)
+        return cloned_library
 
     def __call__(self, kinbody, action_name, *args, **kw_args):
         """
@@ -88,12 +95,28 @@ class TSRLibrary(object):
         f = None
         try:
             f = self.all_factories[self.robot_name][kinbody_name][action_name]
+            logger.info('Using robot specific TSR for object')
         except KeyError:
             pass
 
         if f is None:
             try:
+                f = self.all_factories[self.generic_robot_key][kinbody_name][action_name]
+                logger.info('Using generic TSR for object')
+            except KeyError:
+                pass
+
+        if f is None:
+            try:
                 f = self.all_factories[self.robot_name][self.generic_kinbody_key][action_name]
+                logger.info('Using robot specific generic object')
+            except KeyError:
+                pass
+
+        if f is None:
+            try:
+                f = self.all_factories[self.generic_robot_key][self.generic_kinbody_key][action_name]
+                logger.info('Using generic object')
             except KeyError:
                 raise KeyError('There is no TSR factory registered for action "{:s}"'
                                ' with robot "{:s}" and object "{:s}".'.format(
@@ -180,6 +203,9 @@ class TSRLibrary(object):
 
         if object_name is None:
             object_name = cls.generic_kinbody_key
+
+        if robot_name is None:
+            robot_name = cls.generic_robot_key
 
         if action_name in cls.all_factories[robot_name][object_name]:
             logger.warning('Overwriting duplicate TSR factory for action "%s"'

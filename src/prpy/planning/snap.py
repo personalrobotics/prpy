@@ -36,6 +36,7 @@ from prpy.planning.base import (
     ClonedPlanningMethod,
     Tags
 )
+from ..collision import DefaultRobotCollisionCheckerFactory
 
 
 class SnapPlanner(BasePlanner):
@@ -51,8 +52,13 @@ class SnapPlanner(BasePlanner):
     most commonly used as the first item in a Sequence meta-planner to
     avoid calling a motion planner when the trivial solution is valid.
     """
-    def __init__(self):
+    def __init__(self, robot_checker_factory=None):
         super(SnapPlanner, self).__init__()
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
+        self.robot_checker_factory = robot_checker_factory
 
     def __str__(self):
         return 'SnapPlanner'
@@ -113,11 +119,12 @@ class SnapPlanner(BasePlanner):
                 robot.SetActiveDOFValues(q)
                 report = openravepy.CollisionReport()
                 if self.env.CheckCollision(robot, report=report):
-                    raise CollisionPlanningError.FromReport(report)
+                    raise CollisionPlanningError.FromReport(report, deterministic=True)
                 elif robot.CheckSelfCollision(report=report):
-                    raise SelfCollisionPlanningError.FromReport(report)
+                    raise SelfCollisionPlanningError.FromReport(report, deterministic=True)
 
-            raise PlanningError('There is no IK solution at the goal pose.')
+            raise PlanningError(
+                'There is no IK solution at the goal pose.', deterministic=True)
 
         return self._Snap(robot, ik_solution, **kw_args)
 
@@ -137,7 +144,7 @@ class SnapPlanner(BasePlanner):
         # Check the start position is within joint limits,
         # this can throw a JointLimitError
         start = robot.GetActiveDOFValues()
-        CheckJointLimits(robot, start)
+        CheckJointLimits(robot, start, deterministic=True)
 
         # Add the start waypoint
         start_waypoint = numpy.zeros(cspec.GetDOF())
@@ -149,7 +156,7 @@ class SnapPlanner(BasePlanner):
         # Make the trajectory end at the goal configuration, as
         # long as it is not in collision and is not identical to
         # the start configuration.
-        CheckJointLimits(robot, goal)
+        CheckJointLimits(robot, goal, deterministic=True)
         if not numpy.allclose(start, goal):
             goal_waypoint = numpy.zeros(cspec.GetDOF())
             cspec.InsertJointValues(goal_waypoint, goal, robot,
@@ -173,19 +180,20 @@ class SnapPlanner(BasePlanner):
                                             norm_order=2,
                                             sampling_func=vdc)
 
-        # Run constraint checks at DOF resolution:
-        for t, q in checks:
-            # Set the joint positions
-            # Note: the planner is using a cloned 'robot' object
-            robot.SetActiveDOFValues(q)
+        with self.robot_checker_factory(robot) as robot_checker:
+            # Run constraint checks at DOF resolution:
+            for t, q in checks:
+                # Set the joint positions
+                # Note: the planner is using a cloned 'robot' object
+                robot.SetActiveDOFValues(q)
 
-            # Check for collisions
-            report = openravepy.CollisionReport()
-            if self.env.CheckCollision(robot, report=report):
-                raise CollisionPlanningError.FromReport(report)
-            elif robot.CheckSelfCollision(report=report):
-                raise SelfCollisionPlanningError.FromReport(report)
+                # Check collision (throws an exception on collision)
+                robot_checker.VerifyCollisionFree()
 
-        # Tag the return trajectory as smooth (in joint space).
-        SetTrajectoryTags(traj, {Tags.SMOOTH: True}, append=True)
+        SetTrajectoryTags(traj, {
+            Tags.SMOOTH: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return traj
