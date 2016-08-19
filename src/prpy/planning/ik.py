@@ -111,7 +111,6 @@ class IKPlanner(BasePlanner):
 
         # Sequentially plan to the solutions in descending order of cost.
         planner = self.delegate_planner or robot.planner
-        print planner
         p = openravepy.KinBody.SaveParameters
 
         all_deterministic=True
