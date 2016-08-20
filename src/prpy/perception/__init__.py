@@ -33,3 +33,4 @@ from apriltags import ApriltagsModule
 from simulated import SimulatedPerceptionModule
 from rock_module import RockModule
 from simtrack import SimtrackModule
+from perception_helper import RemoveAllObjects
