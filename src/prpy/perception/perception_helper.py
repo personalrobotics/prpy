@@ -28,16 +28,19 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-def RemoveAllObjects(env, robot, kept_bodies=[]):
+def RemoveAllObjects(env, robot, kept_bodies=None):
     """
-    Remove everything from the environment except robot and kept_bodies
-    @param env OpenRAVE environment to remove objects
+    Remove everything from the environment except robot and kept_bodies.
+    The environment must be locked while calling this method.
+    @param env OpenRAVE environment to remove objects 
     @param robot Robot in env to keep 
     @param kept_bodies Bodies to keep 
     """
-    with env:
-        for o in env.GetBodies():
-            if o != robot and o not in kept_bodies:
-                env.Remove(o)
+    if kept_bodies is None:
+        kept_bodies = []
+
+    for o in env.GetBodies():
+        if o != robot and o not in kept_bodies:
+            env.Remove(o)
 
 
