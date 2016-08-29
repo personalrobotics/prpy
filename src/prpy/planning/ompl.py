@@ -172,21 +172,34 @@ class OMPLRangedPlanner(OMPLPlanner):
 
     This class wraps OMPLPlanner by setting the default 'range' parameter,
     which defines the length of an extension in algorithms like RRT-Connect, to
-    include an fixed number 'multipler' of state validity checks.
+    include an fixed number of state validity checks.
+    
+    This number may be specified explicitly (using 'multiplier') or as an
+    approximate fraction of the longest extent of the state space (using
+    'fraction'). Exactly one of 'multiplier' or 'fraction' is required.
 
     @param algorithm name of the OMPL planner to create
     @param robot_checker_factory robot collision checker factory
     @param multiplier number of state validity checks per extension
+    @param fraction approximate fraction of the maximum extent of the state
+                    space per extension
     """
-    def __init__(self, algorithm='RRTConnect', robot_checker_factory=None,
-            multiplier=1):
-        if not (multiplier >= 1):
-            raise ValueError('Multiplier must be a positive integer.')
+    def __init__(self, multiplier=None, fraction=None,
+                 algorithm='RRTConnect', robot_checker_factory=None):
+        if multiplier is None and fraction is None:
+            raise ValueError('Either "multiplier" of "fraction" is required.')
+        if multiplier is not None and fraction is not None:
+            raise ValueError('"multiplier" and "fraction" are exclusive.')
+        if multiplier is not None and not (multiplier >= 1):
+            raise ValueError('"mutiplier" must be a positive integer.')
+        if fraction is not None and not (0. <= fraction <= 1.):
+            raise ValueError('"fraction" must be between zero and one.')
 
         OMPLPlanner.__init__(self, algorithm='RRTConnect',
                 robot_checker_factory=robot_checker_factory)
+
         self.multiplier = multiplier
-        self.epsilon = 1e-6
+        self.fraction = fraction
 
 
     """ Set a default 'range' parameter from DOF resolutions.
@@ -202,6 +215,8 @@ class OMPLRangedPlanner(OMPLPlanner):
     @return copy of ompl_args with 'range' set to the default value
     """
     def _SetPlannerRange(self, robot, ompl_args=None):
+        epsilon = 1e-6
+
         if ompl_args is None:
             ompl_args = dict()
         else:
@@ -223,15 +238,22 @@ class OMPLRangedPlanner(OMPLPlanner):
                                        - dof_limit_lower[index])
 
             # Duplicate the logic in or_ompl to convert the DOF resolutions to
-            # a fraction of the longest extent of the state space. Then, scale
-            # this by the user-supplied multiple. Finally, subtract a small
-            # value to cope with numerical precision issues inside OMPL.
+            # a fraction of the longest extent of the state space.
             maximum_extent = numpy.max(dof_ranges)
             dof_resolution = robot.GetActiveDOFResolutions()
             conservative_resolution = numpy.min(dof_resolution)
             conservative_fraction = conservative_resolution / maximum_extent
-            ompl_args['range'] = (
-                    self.multiplier * conservative_fraction - self.epsilon)
+
+            if self.multiplier is not None:
+                multiplier = self.multiplier
+            elif self.fraction is not None:
+                multiplier = int(self.fraction / conservative_fraction + 0.5)
+            else:
+                raise ValueError('Either multiplier or fraction must be set.')
+
+            # Then, scale this by the user-supplied multiple. Finally, subtract
+            # a small value to cope with numerical precision issues inside OMPL.
+            ompl_args['range'] = multiplier * conservative_fraction - epsilon
 
         return ompl_args
 
@@ -249,7 +271,7 @@ class OMPLRangedPlanner(OMPLPlanner):
 # Alias to maintain backwards compatability.
 class RRTConnect(OMPLRangedPlanner):
     def __init__(self):
-        super(RRTConnect, self).__init__(algorithm='RRTConnect')
+        super(RRTConnect, self).__init__(algorithm='RRTConnect', fraction=0.2)
         warnings.warn('RRTConnect has been replaced by OMPLRangedPlanner.',
                 DeprecationWarning)
 

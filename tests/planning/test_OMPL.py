@@ -13,4 +13,4 @@ class OMPLPlannerTests(BasePlannerTest,
                        PlanToConfigurationStraightLineTest,
                        PlanToConfigurationCompleteTest,
                        TestCase):
-    planner_factory = OMPLRangedPlanner
+    planner_factory = lambda _: OMPLRangedPlanner(fraction=0.2)
