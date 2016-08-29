@@ -31,6 +31,7 @@
 import logging
 import numpy
 import openravepy
+import warnings
 from ..util import CopyTrajectory, SetTrajectoryTags
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
@@ -163,10 +164,40 @@ class OMPLPlanner(BasePlanner):
         return traj
 
 
-class RRTConnect(OMPLPlanner):
-    def __init__(self):
-        OMPLPlanner.__init__(self, algorithm='RRTConnect')
+class OMPLRangedPlanner(OMPLPlanner):
+    """ Construct an OMPL planner with a default 'range' parameter set.
 
+    This class wraps OMPLPlanner by setting the default 'range' parameter,
+    which defines the length of an extension in algorithms like RRT-Connect, to
+    include an integer number 'multipler' of state validity checks.
+
+    @param algorithm name of the OMPL planner to create
+    @param robot_checker_factory robot collision checker factory
+    @param multiplier number of state validity checks per extension
+    """
+    def __init__(self, algorithm='RRTConnect', robot_checker_factory=None,
+            multiplier=1):
+        if multiplier < 1 or not isinstance(multiplier, int):
+            raise ValueError('Multiplier must be a positive integer.')
+
+        OMPLPlanner.__init__(self, algorithm='RRTConnect',
+                robot_checker_factory=robot_checker_factory)
+        self.multiplier = multiplier
+        self.epsilon = 1e-6
+
+
+    """ Set a default 'range' parameter from DOF resolutions.
+
+    This function returns a copy of the input 'ompl_args' argument with the
+    'range' parameter set to a default value, if it was not already set. The
+    default value is calculated from the active DOFs of 'robot such that there
+    will be an integer number of state validity checks per extension. That
+    multiplier is configured in the constructor of this class.
+
+    @param robot with active DOFs set
+    @param ompl_args arguments to append to, defaults to an empty dictionary
+    @return copy of ompl_args with 'range' set to the default value
+    """
     def _SetPlannerRange(self, robot, ompl_args=None):
         from copy import deepcopy
 
@@ -177,8 +208,6 @@ class RRTConnect(OMPLPlanner):
 
         # Set the default range to the collision checking resolution.
         if 'range' not in ompl_args:
-            epsilon = 1e-6
-
             # Compute the collision checking resolution as a conservative
             # fraction of the state space extents. This mimics the logic inside
             # or_ompl used to set collision checking resolution.
@@ -192,36 +221,32 @@ class RRTConnect(OMPLPlanner):
             # RRT-Connect's range to the same value used for collision
             # detection inside OpenRAVE.
             longest_extent = numpy.max(dof_ranges)
-            ompl_range = conservative_ratio * longest_extent - epsilon
+            ompl_range  = conservative_ratio * longest_extent - self.epsilon
+            ompl_range *= self.multiplier
 
             ompl_args['range'] = ompl_range
             logger.debug('Defaulted RRT-Connect range parameter to %.3f.',
                          ompl_range)
+
         return ompl_args
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
-        """
-        Plan to a desired configuration with OMPL. This will invoke the OMPL
-        planner specified in the OMPLPlanner constructor.
-        @param robot
-        @param goal desired configuration
-        @return traj
-        """
         ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
         return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
 
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
-        """
-        Plan using the given TSR chains with OMPL.
-        @param robot
-        @param tsrchains A list of TSRChain objects to respect during planning
-        @param ompl_args ompl RRTConnect specific parameters
-        @return traj
-        """
         ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
         return self._Plan(robot, tsrchains=tsrchains, ompl_args=ompl_args, **kw_args)
+
+
+# Alias to maintain backwards compatability.
+class RRTConnect(OMPLRangedPlanner):
+    def __init__(self):
+        super(RRTConnect, self).__init__(algorithm='RRTConnect')
+        warnings.warn('RRTConnect has been replaced by OMPLRangedPlanner.',
+                DeprecationWarning)
 
 
 class OMPLSimplifier(BasePlanner):

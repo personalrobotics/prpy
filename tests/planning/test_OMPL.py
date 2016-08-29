@@ -4,7 +4,7 @@ from methods import (
     PlanToConfigurationCompleteTest,
 )
 from planning_helpers import BasePlannerTest
-from prpy.planning.ompl import OMPLPlanner
+from prpy.planning.ompl import OMPLRangedPlanner
 from unittest import TestCase
 
 
@@ -13,4 +13,4 @@ class OMPLPlannerTests(BasePlannerTest,
                        PlanToConfigurationStraightLineTest,
                        PlanToConfigurationCompleteTest,
                        TestCase):
-    planner_factory = OMPLPlanner
+    planner_factory = OMPLRangedPlanner
