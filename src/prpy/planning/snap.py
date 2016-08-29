@@ -36,8 +36,7 @@ from prpy.planning.base import (
     ClonedPlanningMethod,
     Tags
 )
-from ..collision import SimpleRobotCollisionChecker
-from openravepy import CollisionOptions, CollisionOptionsStateSaver
+from ..collision import DefaultRobotCollisionCheckerFactory
 
 
 class SnapPlanner(BasePlanner):
@@ -53,9 +52,13 @@ class SnapPlanner(BasePlanner):
     most commonly used as the first item in a Sequence meta-planner to
     avoid calling a motion planner when the trivial solution is valid.
     """
-    def __init__(self, robot_collision_checker=SimpleRobotCollisionChecker):
+    def __init__(self, robot_checker_factory=None):
         super(SnapPlanner, self).__init__()
-        self.robot_collision_checker = robot_collision_checker
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
+        self.robot_checker_factory = robot_checker_factory
 
     def __str__(self):
         return 'SnapPlanner'
@@ -177,12 +180,7 @@ class SnapPlanner(BasePlanner):
                                             norm_order=2,
                                             sampling_func=vdc)
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
-
-            # Instantiate a robot checker
-            robot_checker = self.robot_collision_checker(robot)
-
+        with self.robot_checker_factory(robot) as robot_checker:
             # Run constraint checks at DOF resolution:
             for t, q in checks:
                 # Set the joint positions

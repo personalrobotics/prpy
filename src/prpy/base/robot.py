@@ -219,7 +219,7 @@ class Robot(openravepy.Robot):
         return active_manipulators
 
     def PostProcessPath(self, path,
-                        constrained=None, smooth=None, default_timelimit=0.5,
+                        constrained=None, smooth=None, default_timelimit=None,
                         shortcut_options=None, smoothing_options=None,
                         retiming_options=None, affine_retiming_options=None,
                         **kwargs):
@@ -275,10 +275,13 @@ class Robot(openravepy.Robot):
         if affine_retiming_options is None:
             affine_retimer_options = dict()
 
-        shortcut_options.setdefault('timelimit', default_timelimit)
-        smoothing_options.setdefault('timelimit', default_timelimit)
-        retiming_options.setdefault('timelimit', default_timelimit)
-        affine_retimer_options.setdefault('timelimit', default_timelimit)
+        if default_timelimit is not None:
+            shortcut_options.setdefault('timelimit', default_timelimit)
+            smoothing_options.setdefault('timelimit', default_timelimit)
+            retiming_options.setdefault('timelimit', default_timelimit)
+            affine_retimer_options.setdefault('timelimit', default_timelimit)
+            warnings.warn('The "default_timelimit" argument is deprecated.',
+                DeprecationWarning)
 
         # Read default parameters from the trajectory's tags.
         tags = GetTrajectoryTags(path)
@@ -346,19 +349,10 @@ class Robot(openravepy.Robot):
                 traj = self.affine_retimer.RetimeTrajectory(
                     cloned_robot, path, **affine_retimer_options)
             else:
-                # Directly compute a timing of smooth trajectories.
-                if smooth:
-                    logger.warning(
-                        'Post-processing smooth paths is not supported.'
-                        ' Using the default post-processing logic; this may'
-                        ' significantly change the geometric path.'
-                    )
-
                 # The trajectory is constrained. Retime it without changing the
                 # geometric path.
-                if constrained:
-                    logger.debug('Retiming a constrained path. The output'
-                                 ' trajectory will stop at every waypoint.')
+                if constrained or smooth:
+                    logger.debug('Retiming a smooth or constrained path.')
                     traj = self.retimer.RetimeTrajectory(
                         cloned_robot, path, **retiming_options)
                 # The trajectory is not constrained, so we can shortcut it

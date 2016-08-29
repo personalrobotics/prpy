@@ -31,6 +31,11 @@
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags
+from ..collision import (
+    DefaultRobotCollisionCheckerFactory,
+    BakedRobotCollisionCheckerFactory,
+    SimpleRobotCollisionCheckerFactory,
+)
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 import prpy.kin
@@ -38,12 +43,27 @@ import prpy.tsr
 
 
 class CBiRRTPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, robot_checker_factory=None, timelimit=5.):
         super(CBiRRTPlanner, self).__init__()
+
+        self.timelimit = timelimit
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
         self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
 
         if self.problem is None:
             raise UnsupportedPlanningError('Unable to create CBiRRT module.')
+
+        self.robot_checker_factory = robot_checker_factory
+        if isinstance(robot_checker_factory, SimpleRobotCollisionCheckerFactory):
+            self._is_baked = False
+        elif isinstance(robot_checker_factory, BakedRobotCollisionCheckerFactory):
+            self._is_baked = True
+        else:
+            raise NotImplementedError(
+                'CBiRRT only supports Simple and BakedRobotCollisionChecker.')
 
     def __str__(self):
         return 'CBiRRT'
@@ -188,8 +208,16 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
-        from openravepy import CollisionOptions, CollisionOptionsStateSaver
+        from openravepy import CollisionOptionsStateSaver
 
+        if timelimit is None:
+            timelimit = self.timelimit
+
+        if timelimit <= 0.:
+            raise ValueError('Invalid value for "timelimit". Limit must be'
+                             ' non-negative; got {:f}.'.format(timelimit))
+
+        env = robot.GetEnv()
         is_endpoint_deterministic = True
         is_constrained = False
 
@@ -197,14 +225,18 @@ class CBiRRTPlanner(BasePlanner):
         # when an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
         # self.ClearIkSolver(robot.GetActiveManipulator())
 
-        self.env.LoadProblem(self.problem, robot.GetName())
+        env.LoadProblem(self.problem, robot.GetName())
 
-        args = ['RunCBiRRT']
+        args =  ['RunCBiRRT']
+        args += ['timelimit', str(timelimit)]
 
         # By default, CBiRRT interprets the DOF resolutions as an
         # L-infinity norm; this flag turns on the L-2 norm instead.
         args += ['bdofresl2norm', '1']
         args += ['steplength', '0.05999']
+
+        if self._is_baked:
+            args += ['bbakedcheckers', '1']
 
         if extra_args is not None:
             args += extra_args
@@ -216,13 +248,6 @@ class CBiRRTPlanner(BasePlanner):
                                  .format(smoothingitrs))
 
             args += ['smoothingitrs', str(smoothingitrs)]
-
-        if timelimit is not None:
-            if not (timelimit > 0):
-                raise ValueError('Invalid value for "timelimit". Limit must be'
-                                 ' non-negative; got {:f}.'.format(timelimit))
-
-            args += ['timelimit', str(timelimit)]
 
         if allowlimadj is not None:
             args += ['allowlimadj', str(int(allowlimadj))]
@@ -278,8 +303,10 @@ class CBiRRTPlanner(BasePlanner):
         args += ['filename', traj_path]
         args_str = ' '.join(args)
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
+        # Bypass the context manager since CBiRRT does its own baking in C++.
+        collision_checker = self.robot_checker_factory(robot)
+        options = collision_checker.collision_options
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
             response = self.problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):
@@ -289,8 +316,7 @@ class CBiRRTPlanner(BasePlanner):
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
-            traj = openravepy.RaveCreateTrajectory(
-                self.env, 'GenericTrajectory')
+            traj = openravepy.RaveCreateTrajectory(env, '')
             traj.deserialize(traj_xml)
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
