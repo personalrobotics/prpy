@@ -202,69 +202,66 @@ class OMPLRangedPlanner(OMPLPlanner):
         self.fraction = fraction
 
 
-    """ Set a default 'range' parameter from DOF resolutions.
+    """ Computes the 'range' parameter from DOF resolutions.
 
-    This function returns a copy of the input 'ompl_args' argument with the
-    'range' parameter set to a default value, if it was not already set. The
-    default value is calculated from the active DOFs of 'robot' such that there
+    The value is calculated from the active DOFs of 'robot' such that there
     will be an fixed number of state validity checks per extension. That number
-    is configured in the constructor of this class.
+    is configured by the 'multiplier' or 'fraction' constructor arguments.
 
     @param robot with active DOFs set
-    @param ompl_args arguments to append to, defaults to an empty dictionary
-    @return copy of ompl_args with 'range' set to the default value
+    @return value of the range parameter
     """
-    def _SetPlannerRange(self, robot, ompl_args=None):
+    def ComputeRange(self, robot):
         epsilon = 1e-6
 
-        if ompl_args is None:
-            ompl_args = dict()
-        else:
-            ompl_args = deepcopy(ompl_args)
+        # Compute the maximum DOF range, treating circle joints as SO(2).
+        dof_limit_lower, dof_limit_upper = robot.GetActiveDOFLimits()
+        dof_ranges = numpy.zeros(robot.GetActiveDOF())
 
-        if 'range' not in ompl_args:
-            # Compute the maximum DOF range, treating circle joints as SO(2).
-            dof_limit_lower, dof_limit_upper = robot.GetActiveDOFLimits()
-            dof_ranges = numpy.zeros(robot.GetActiveDOF())
+        for index, dof_index in enumerate(robot.GetActiveDOFIndices()):
+            joint = robot.GetJointFromDOFIndex(dof_index)
+            axis_index = dof_index - joint.GetDOFIndex()
 
-            for index, dof_index in enumerate(robot.GetActiveDOFIndices()):
-                joint = robot.GetJointFromDOFIndex(dof_index)
-                axis_index = dof_index - joint.GetDOFIndex()
-
-                if joint.IsCircular(axis_index):
-                    dof_ranges[index] = 2 * numpy.pi
-                else:
-                    dof_ranges[index] = (dof_limit_upper[index]
-                                       - dof_limit_lower[index])
-
-            # Duplicate the logic in or_ompl to convert the DOF resolutions to
-            # a fraction of the longest extent of the state space.
-            maximum_extent = numpy.linalg.norm(dof_ranges)
-            dof_resolution = robot.GetActiveDOFResolutions()
-            conservative_resolution = numpy.min(dof_resolution)
-            conservative_fraction = conservative_resolution / maximum_extent
-
-            if self.multiplier is not None:
-                multiplier = self.multiplier
-            elif self.fraction is not None:
-                multiplier = numpy.ceil(self.fraction / conservative_fraction)
+            if joint.IsCircular(axis_index):
+                dof_ranges[index] = 2 * numpy.pi
             else:
-                raise ValueError('Either multiplier or fraction must be set.')
+                dof_ranges[index] = (dof_limit_upper[index]
+                                   - dof_limit_lower[index])
 
-            # Then, scale this by the user-supplied multiple. Finally, subtract
-            # a small value to cope with numerical precision issues inside OMPL.
-            ompl_args['range'] = multiplier * conservative_fraction - epsilon
+        # Duplicate the logic in or_ompl to convert the DOF resolutions to
+        # a fraction of the longest extent of the state space.
+        maximum_extent = numpy.linalg.norm(dof_ranges)
+        dof_resolution = robot.GetActiveDOFResolutions()
+        conservative_resolution = numpy.min(dof_resolution)
+        conservative_fraction = conservative_resolution / maximum_extent
 
-        return ompl_args
+        if self.multiplier is not None:
+            multiplier = self.multiplier
+        elif self.fraction is not None:
+            multiplier = numpy.ceil(self.fraction / conservative_fraction)
+        else:
+            raise ValueError('Either multiplier or fraction must be set.')
+
+        # Then, scale this by the user-supplied multiple. Finally, subtract
+        # a small value to cope with numerical precision issues inside OMPL.
+        return multiplier * conservative_fraction - epsilon
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
-        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        if ompl_args is None:
+            ompl_args = dict()
+
+        ompl_args.setdefault('range', self.ComputeRange(robot))
+
         return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
 
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
-        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        if ompl_args is None:
+            ompl_args = dict()
+
+        ompl_args.setdefault('range', self.ComputeRange(robot))
+
         return self._Plan(robot, tsrchains=tsrchains, ompl_args=ompl_args, **kw_args)
 
 
