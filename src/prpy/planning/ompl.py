@@ -238,7 +238,7 @@ class OMPLRangedPlanner(OMPLPlanner):
         if self.multiplier is not None:
             multiplier = self.multiplier
         elif self.fraction is not None:
-            multiplier = numpy.ceil(self.fraction / conservative_fraction)
+            multiplier = max(round(self.fraction / conservative_fraction), 1)
         else:
             raise ValueError('Either multiplier or fraction must be set.')
 
