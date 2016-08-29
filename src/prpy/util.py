@@ -2130,37 +2130,49 @@ def GetPointFrom(focus):
 
     return coord
 
-def concatenateTrajectories(robot, traj_list):
+def concatenateTrajectories(traj_list):
     """
     Given a list of trajectories for a single manipulator,
     concatenate them into a single trajectory
 
-    @param robot
     @param traj_list List of consective trajectories for a given manipulator
     @return base_traj Combined trajectory
     """
+    from planning.base import Tags
+
+    if len(traj_list) == 0:
+        raise ValueError('Trajectory list is empty')
 
     base_traj = traj_list[0]
     base_cspec = base_traj.GetConfigurationSpecification()
-    traj_indices = base_cspec.ExtractUsedIndices(robot)
+    base_robot = base_cspec.ExtractUsedBodies(base_traj.GetEnv())[0]
+    traj_indices = GetTrajectoryIndices(base_traj)
 
     offset = base_traj.GetNumWaypoints()
     for i in xrange(1, len(traj_list)):
-        traj = traj_list[i]
-        cspec = traj.GetConfigurationSpecification()
-        sub = numpy.subtract(cspec.ExtractUsedIndices(robot), traj_indices)
+        traj_i = traj_list[i]
+        cspec_i = traj_i.GetConfigurationSpecification()
+        robot_i = cspec_i.ExtractUsedBodies(traj_i.GetEnv())[0]
+        if robot_i != base_robot:
+            raise ValueError('Trajectories are not on the same robot')
+
+        sub = numpy.subtract(GetTrajectoryIndices(traj_i), traj_indices)
         if sub.sum() != 0:
             raise ValueError('Trajectories are not on the same manipulator.')
 
-        epsilon = 0.01
-        previous_point = base_traj.GetWaypoint(base_traj.GetNumWaypoints()-1)
-        next_point = traj.GetWaypoint(0)
-        #TODO is there a better way to check for this?
-        if numpy.subtract(previous_point, next_point).sum() < epsilon:
-            raise ValueError('Trajectories are not consecutive.')
+        tags_i = GetTrajectoryTags(traj_i)
+        # If one segment is not smooth, the entire trajectory is not (?)
+        if 'smooth' in tags_i and not tags_i['smooth']:
+            SetTrajectoryTags(base_traj, {TAGS.SMOOTH: True}, append=True)
 
-        for j in xrange(traj.GetNumWaypoints()):
-            waypoint = traj.GetWaypoint(j)
+        # The entire trajectory gets tagged as constrained if one of 
+        # the segments is constrained.
+        if 'constrained' in tags_i and tags_i['constrained']:
+            SetTrajectoryTags(base_traj, {TAGS.CONSTRAINED: True}, append=True)
+
+        # Add trajectory in by inserting each waypoint
+        for j in xrange(traj_i.GetNumWaypoints()):
+            waypoint = traj_i.GetWaypoint(j)
             base_traj.Insert(offset, waypoint)
             offset += 1
     return base_traj
