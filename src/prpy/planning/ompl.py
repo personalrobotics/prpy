@@ -239,7 +239,7 @@ class OMPLRangedPlanner(OMPLPlanner):
 
             # Duplicate the logic in or_ompl to convert the DOF resolutions to
             # a fraction of the longest extent of the state space.
-            maximum_extent = numpy.max(dof_ranges)
+            maximum_extent = numpy.linalg.norm(dof_ranges)
             dof_resolution = robot.GetActiveDOFResolutions()
             conservative_resolution = numpy.min(dof_resolution)
             conservative_fraction = conservative_resolution / maximum_extent
@@ -247,7 +247,7 @@ class OMPLRangedPlanner(OMPLPlanner):
             if self.multiplier is not None:
                 multiplier = self.multiplier
             elif self.fraction is not None:
-                multiplier = int(self.fraction / conservative_fraction + 0.5)
+                multiplier = numpy.ceil(self.fraction / conservative_fraction)
             else:
                 raise ValueError('Either multiplier or fraction must be set.')
 
