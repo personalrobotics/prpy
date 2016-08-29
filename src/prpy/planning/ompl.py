@@ -32,6 +32,7 @@ import logging
 import numpy
 import openravepy
 import warnings
+from copy import deepcopy
 from ..kin import H_from_op_diff, invert_H
 from ..util import CopyTrajectory, SetTrajectoryTags, GetManipulatorIndex
 from ..tsr.tsr import TSR, TSRChain
@@ -185,7 +186,7 @@ class OMPLRangedPlanner(OMPLPlanner):
 
     This class wraps OMPLPlanner by setting the default 'range' parameter,
     which defines the length of an extension in algorithms like RRT-Connect, to
-    include an integer number 'multipler' of state validity checks.
+    include an fixed number 'multipler' of state validity checks.
 
     @param algorithm name of the OMPL planner to create
     @param robot_checker_factory robot collision checker factory
@@ -193,7 +194,7 @@ class OMPLRangedPlanner(OMPLPlanner):
     """
     def __init__(self, algorithm='RRTConnect', robot_checker_factory=None,
             multiplier=1):
-        if multiplier < 1 or not isinstance(multiplier, int):
+        if not (multiplier >= 1):
             raise ValueError('Multiplier must be a positive integer.')
 
         OMPLPlanner.__init__(self, algorithm='RRTConnect',
@@ -206,43 +207,45 @@ class OMPLRangedPlanner(OMPLPlanner):
 
     This function returns a copy of the input 'ompl_args' argument with the
     'range' parameter set to a default value, if it was not already set. The
-    default value is calculated from the active DOFs of 'robot such that there
-    will be an integer number of state validity checks per extension. That
-    multiplier is configured in the constructor of this class.
+    default value is calculated from the active DOFs of 'robot' such that there
+    will be an fixed number of state validity checks per extension. That number
+    is configured in the constructor of this class.
 
     @param robot with active DOFs set
     @param ompl_args arguments to append to, defaults to an empty dictionary
     @return copy of ompl_args with 'range' set to the default value
     """
     def _SetPlannerRange(self, robot, ompl_args=None):
-        from copy import deepcopy
-
         if ompl_args is None:
             ompl_args = dict()
         else:
             ompl_args = deepcopy(ompl_args)
 
-        # Set the default range to the collision checking resolution.
         if 'range' not in ompl_args:
-            # Compute the collision checking resolution as a conservative
-            # fraction of the state space extents. This mimics the logic inside
-            # or_ompl used to set collision checking resolution.
+            # Compute the maximum DOF range, treating circle joints as SO(2).
             dof_limit_lower, dof_limit_upper = robot.GetActiveDOFLimits()
-            dof_ranges = dof_limit_upper - dof_limit_lower
+            dof_ranges = numpy.zeros(robot.GetActiveDOF())
+
+            for index, dof_index in enumerate(robot.GetActiveDOFIndices()):
+                joint = robot.GetJointFromDOFIndex(dof_index)
+                axis_index = dof_index - joint.GetDOFIndex()
+
+                if joint.IsCircular(axis_index):
+                    dof_ranges[index] = 2 * numpy.pi
+                else:
+                    dof_ranges[index] = (dof_limit_upper[index]
+                                       - dof_limit_lower[index])
+
+            # Duplicate the logic in or_ompl to convert the DOF resolutions to
+            # a fraction of the longest extent of the state space. Then, scale
+            # this by the user-supplied multiple. Finally, subtract a small
+            # value to cope with numerical precision issues inside OMPL.
+            maximum_extent = numpy.max(dof_ranges)
             dof_resolution = robot.GetActiveDOFResolutions()
-            ratios = dof_resolution / dof_ranges
-            conservative_ratio = numpy.min(ratios)
-
-            # Convert the ratio back to a collision checking resolution. Set
-            # RRT-Connect's range to the same value used for collision
-            # detection inside OpenRAVE.
-            longest_extent = numpy.max(dof_ranges)
-            ompl_range  = conservative_ratio * longest_extent - self.epsilon
-            ompl_range *= self.multiplier
-
-            ompl_args['range'] = ompl_range
-            logger.debug('Defaulted RRT-Connect range parameter to %.3f.',
-                         ompl_range)
+            conservative_resolution = numpy.min(dof_resolution)
+            conservative_fraction = conservative_resolution / maximum_extent
+            ompl_args['range'] = (
+                    self.multiplier * conservative_fraction - self.epsilon)
 
         return ompl_args
 
