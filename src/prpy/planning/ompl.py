@@ -223,7 +223,10 @@ class OMPLRangedPlanner(OMPLPlanner):
             axis_index = dof_index - joint.GetDOFIndex()
 
             if joint.IsCircular(axis_index):
-                dof_ranges[index] = 2 * numpy.pi
+                # There are 2*pi radians in a circular joint, but the maximum
+                # distance betwen any two points in SO(2) is pi. This is the
+                # definition used by OMPL.
+                dof_ranges[index] = numpy.pi
             else:
                 dof_ranges[index] = (dof_limit_upper[index]
                                    - dof_limit_lower[index])
