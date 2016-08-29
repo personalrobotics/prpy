@@ -34,14 +34,13 @@ import logging
 import numpy
 import openravepy
 from ..util import SetTrajectoryTags, GetLinearCollisionCheckPts
-from ..collision import SimpleRobotCollisionChecker
+from ..collision import DefaultRobotCollisionCheckerFactory
 from .exceptions import (
     CollisionPlanningError,
     SelfCollisionPlanningError
 )
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
-from openravepy import CollisionOptions, CollisionOptionsStateSaver
 from prpy.util import VanDerCorputSampleGenerator, SampleTimeGenerator
 import prpy.tsr
 
@@ -167,10 +166,15 @@ class DistanceFieldManager(object):
 
 
 class CHOMPPlanner(BasePlanner):
-    def __init__(self, require_cache=False, robot_collision_checker=SimpleRobotCollisionChecker):
+    def __init__(self, require_cache=False, robot_checker_factory=None):
         super(CHOMPPlanner, self).__init__()
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
+        self.robot_checker_factory = robot_checker_factory
         self.require_cache = require_cache
-        self.robot_collision_checker = robot_collision_checker
+
         self.setupEnv(self.env)
 
     def setupEnv(self, env):
@@ -276,17 +280,10 @@ class CHOMPPlanner(BasePlanner):
         checks = GetLinearCollisionCheckPts(robot, traj, norm_order=2,
             sampling_func=sampling_func)
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
-
-            # Instantiate a robot checker
-            robot_checker = self.robot_collision_checker(robot)
-
+        with self.robot_checker_factory(robot) as robot_checker:
             for t, q in checks:
                 robot.SetActiveDOFValues(q)
-
-                # Check collision (throws an exception on collision)
-                robot_checker.VerifyCollisionFree()
+                robot_checker.VerifyCollisionFree() # Throws on collision.
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
         # planner. Additionally tag the goal as non-deterministic if CBiRRT
