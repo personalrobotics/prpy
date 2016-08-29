@@ -97,6 +97,51 @@ class OMPLPlanner(BasePlanner):
         return self._Plan(robot, goal=goal, **kw_args)
 
     @ClonedPlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
+        epsilon = 0.001
+        direction = numpy.array(direction, dtype=float)
+
+        if direction.shape != (3,):
+            raise ValueError('Direction must be a three-dimensional vector.')
+        if not (distance >= 0):
+            raise ValueError('Distance must be non-negative; got {:f}.'.format(
+                             distance))
+
+        with robot:
+            manip = robot.GetActiveManipulator()
+            H_world_ee = manip.GetEndEffectorTransform()
+
+            # 'object frame w' is at ee, z pointed along direction to move
+            H_world_w = H_from_op_diff(H_world_ee[0:3, 3], direction)
+            H_w_ee = numpy.dot(invert_H(H_world_w), H_world_ee)
+
+            # Serialize TSR string (goal)
+            Hw_end = numpy.eye(4)
+            Hw_end[2, 3] = distance
+
+            goaltsr = prpy.tsr.tsr.TSR(T0_w=numpy.dot(H_world_w, Hw_end),
+                                       Tw_e=H_w_ee,
+                                       Bw=numpy.zeros((6, 2)),
+                                       manip=robot.GetActiveManipulatorIndex())
+            goal_tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True,
+                                                   TSRs=[goaltsr])
+            # Serialize TSR string (whole-trajectory constraint)
+            Bw = numpy.array([[-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [min(0.0, distance),  max(0.0, distance)],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon],
+                              [-epsilon,            epsilon]])
+
+            traj_tsr = prpy.tsr.tsr.TSR(
+                T0_w=H_world_w, Tw_e=H_w_ee, Bw=Bw,
+                manip=robot.GetActiveManipulatorIndex())
+            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True,
+                                                   TSRs=[traj_tsr])
+
+        return self._Plan(robot, tsrchains=[goal_tsr_chain, traj_tsr_chain], **kw_args)
+
+    @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, **kw_args):
         """
         Plan using the given set of TSR chains with OMPL.
