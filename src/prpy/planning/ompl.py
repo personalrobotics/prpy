@@ -31,7 +31,11 @@
 import logging
 import numpy
 import openravepy
+import warnings
 from ..util import CopyTrajectory, SetTrajectoryTags
+from copy import deepcopy
+from ..util import CopyTrajectory, SetTrajectoryTags, GetManipulatorIndex
+from ..tsr.tsr import TSR, TSRChain
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 from openravepy import (
@@ -163,65 +167,113 @@ class OMPLPlanner(BasePlanner):
         return traj
 
 
-class RRTConnect(OMPLPlanner):
-    def __init__(self):
-        OMPLPlanner.__init__(self, algorithm='RRTConnect')
+class OMPLRangedPlanner(OMPLPlanner):
+    """ Construct an OMPL planner with a default 'range' parameter set.
 
-    def _SetPlannerRange(self, robot, ompl_args=None):
-        from copy import deepcopy
+    This class wraps OMPLPlanner by setting the default 'range' parameter,
+    which defines the length of an extension in algorithms like RRT-Connect, to
+    include an fixed number of state validity checks.
+    
+    This number may be specified explicitly (using 'multiplier') or as an
+    approximate fraction of the longest extent of the state space (using
+    'fraction'). Exactly one of 'multiplier' or 'fraction' is required.
 
-        if ompl_args is None:
-            ompl_args = dict()
+    @param algorithm name of the OMPL planner to create
+    @param robot_checker_factory robot collision checker factory
+    @param multiplier number of state validity checks per extension
+    @param fraction approximate fraction of the maximum extent of the state
+                    space per extension
+    """
+    def __init__(self, multiplier=None, fraction=None,
+                 algorithm='RRTConnect', robot_checker_factory=None):
+        if multiplier is None and fraction is None:
+            raise ValueError('Either "multiplier" of "fraction" is required.')
+        if multiplier is not None and fraction is not None:
+            raise ValueError('"multiplier" and "fraction" are exclusive.')
+        if multiplier is not None and not (multiplier >= 1):
+            raise ValueError('"mutiplier" must be a positive integer.')
+        if fraction is not None and not (0. <= fraction <= 1.):
+            raise ValueError('"fraction" must be between zero and one.')
+
+        OMPLPlanner.__init__(self, algorithm='RRTConnect',
+                robot_checker_factory=robot_checker_factory)
+
+        self.multiplier = multiplier
+        self.fraction = fraction
+
+
+    """ Computes the 'range' parameter from DOF resolutions.
+
+    The value is calculated from the active DOFs of 'robot' such that there
+    will be an fixed number of state validity checks per extension. That number
+    is configured by the 'multiplier' or 'fraction' constructor arguments.
+
+    @param robot with active DOFs set
+    @return value of the range parameter
+    """
+    def ComputeRange(self, robot):
+        epsilon = 1e-6
+
+        # Compute the maximum DOF range, treating circle joints as SO(2).
+        dof_limit_lower, dof_limit_upper = robot.GetActiveDOFLimits()
+        dof_ranges = numpy.zeros(robot.GetActiveDOF())
+
+        for index, dof_index in enumerate(robot.GetActiveDOFIndices()):
+            joint = robot.GetJointFromDOFIndex(dof_index)
+            axis_index = dof_index - joint.GetDOFIndex()
+
+            if joint.IsCircular(axis_index):
+                # There are 2*pi radians in a circular joint, but the maximum
+                # distance betwen any two points in SO(2) is pi. This is the
+                # definition used by OMPL.
+                dof_ranges[index] = numpy.pi
+            else:
+                dof_ranges[index] = (dof_limit_upper[index]
+                                   - dof_limit_lower[index])
+
+        # Duplicate the logic in or_ompl to convert the DOF resolutions to
+        # a fraction of the longest extent of the state space.
+        maximum_extent = numpy.linalg.norm(dof_ranges)
+        dof_resolution = robot.GetActiveDOFResolutions()
+        conservative_resolution = numpy.min(dof_resolution)
+        conservative_fraction = conservative_resolution / maximum_extent
+
+        if self.multiplier is not None:
+            multiplier = self.multiplier
+        elif self.fraction is not None:
+            multiplier = max(round(self.fraction / conservative_fraction), 1)
         else:
-            ompl_args = deepcopy(ompl_args)
+            raise ValueError('Either multiplier or fraction must be set.')
 
-        # Set the default range to the collision checking resolution.
-        if 'range' not in ompl_args:
-            epsilon = 1e-6
-
-            # Compute the collision checking resolution as a conservative
-            # fraction of the state space extents. This mimics the logic inside
-            # or_ompl used to set collision checking resolution.
-            dof_limit_lower, dof_limit_upper = robot.GetActiveDOFLimits()
-            dof_ranges = dof_limit_upper - dof_limit_lower
-            dof_resolution = robot.GetActiveDOFResolutions()
-            ratios = dof_resolution / dof_ranges
-            conservative_ratio = numpy.min(ratios)
-
-            # Convert the ratio back to a collision checking resolution. Set
-            # RRT-Connect's range to the same value used for collision
-            # detection inside OpenRAVE.
-            longest_extent = numpy.max(dof_ranges)
-            ompl_range = conservative_ratio * longest_extent - epsilon
-
-            ompl_args['range'] = ompl_range
-            logger.debug('Defaulted RRT-Connect range parameter to %.3f.',
-                         ompl_range)
-        return ompl_args
+        # Then, scale this by the user-supplied multiple. Finally, subtract
+        # a small value to cope with numerical precision issues inside OMPL.
+        return multiplier * conservative_fraction - epsilon
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
-        """
-        Plan to a desired configuration with OMPL. This will invoke the OMPL
-        planner specified in the OMPLPlanner constructor.
-        @param robot
-        @param goal desired configuration
-        @return traj
-        """
-        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        if ompl_args is None:
+            ompl_args = dict()
+
+        ompl_args.setdefault('range', self.ComputeRange(robot))
+
         return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
 
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
-        """
-        Plan using the given TSR chains with OMPL.
-        @param robot
-        @param tsrchains A list of TSRChain objects to respect during planning
-        @param ompl_args ompl RRTConnect specific parameters
-        @return traj
-        """
-        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        if ompl_args is None:
+            ompl_args = dict()
+
+        ompl_args.setdefault('range', self.ComputeRange(robot))
+
         return self._Plan(robot, tsrchains=tsrchains, ompl_args=ompl_args, **kw_args)
+
+
+# Alias to maintain backwards compatability.
+class RRTConnect(OMPLRangedPlanner):
+    def __init__(self):
+        super(RRTConnect, self).__init__(algorithm='RRTConnect', fraction=0.2)
+        warnings.warn('RRTConnect has been replaced by OMPLRangedPlanner.',
+                DeprecationWarning)
 
 
 class OMPLSimplifier(BasePlanner):
