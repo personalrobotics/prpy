@@ -243,8 +243,9 @@ class OMPLRangedPlanner(OMPLPlanner):
     @param fraction approximate fraction of the maximum extent of the state
                     space per extension
     """
-    def __init__(self, multiplier=None, fraction=None,
-                 algorithm='RRTConnect', robot_checker_factory=None):
+    def __init__(self, multiplier=None, fraction=None, **kwargs):
+        OMPLPlanner.__init__(self, **kwargs)
+
         if multiplier is None and fraction is None:
             raise ValueError('Either "multiplier" of "fraction" is required.')
         if multiplier is not None and fraction is not None:
@@ -253,9 +254,6 @@ class OMPLRangedPlanner(OMPLPlanner):
             raise ValueError('"mutiplier" must be a positive integer.')
         if fraction is not None and not (0. <= fraction <= 1.):
             raise ValueError('"fraction" must be between zero and one.')
-
-        OMPLPlanner.__init__(self, algorithm='RRTConnect',
-                robot_checker_factory=robot_checker_factory)
 
         self.multiplier = multiplier
         self.fraction = fraction
@@ -329,8 +327,9 @@ class OMPLRangedPlanner(OMPLPlanner):
 
 # Alias to maintain backwards compatability.
 class RRTConnect(OMPLRangedPlanner):
-    def __init__(self):
-        super(RRTConnect, self).__init__(algorithm='RRTConnect', fraction=0.2)
+    def __init__(self, **kwargs):
+        super(RRTConnect, self).__init__(
+              algorithm='RRTConnect', fraction=0.2, **kwargs)
         warnings.warn('RRTConnect has been replaced by OMPLRangedPlanner.',
                 DeprecationWarning)
 
