@@ -247,7 +247,7 @@ class OMPLRangedPlanner(OMPLPlanner):
 
         # Then, scale this by the user-supplied multiple. Finally, subtract
         # a small value to cope with numerical precision issues inside OMPL.
-        return multiplier * conservative_fraction - epsilon
+        return multiplier * conservative_resolution - epsilon
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
