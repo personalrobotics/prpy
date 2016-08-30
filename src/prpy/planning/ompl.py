@@ -236,11 +236,11 @@ class OMPLRangedPlanner(OMPLPlanner):
         maximum_extent = numpy.linalg.norm(dof_ranges)
         dof_resolution = robot.GetActiveDOFResolutions()
         conservative_resolution = numpy.min(dof_resolution)
-        conservative_fraction = conservative_resolution / maximum_extent
 
         if self.multiplier is not None:
             multiplier = self.multiplier
         elif self.fraction is not None:
+            conservative_fraction = conservative_resolution / maximum_extent
             multiplier = max(round(self.fraction / conservative_fraction), 1)
         else:
             raise ValueError('Either multiplier or fraction must be set.')
