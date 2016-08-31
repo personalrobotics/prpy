@@ -111,7 +111,7 @@ class ApriltagsModule(PerceptionModule):
                                           reference_link)
 
             logger.warn('Waiting to detect objects...')
-            return detector.Update()
+            return detector.Update(**kw_args)
         except Exception, e:
             logger.error('Detecton failed update: %s' % str(e))
             raise
@@ -121,6 +121,7 @@ class ApriltagsModule(PerceptionModule):
         """
         Overriden method for detection_frame
         """
+
         added_kinbodies, updated_kinbodies = self._DetectObjects(robot.GetEnv(), **kw_args)
         return added_kinbodies + updated_kinbodies
                                           

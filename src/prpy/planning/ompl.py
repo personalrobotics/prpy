@@ -31,25 +31,57 @@
 import logging
 import numpy
 import openravepy
-from ..util import CopyTrajectory, SetTrajectoryTags
-from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  ClonedPlanningMethod, Tags)
+import warnings
+from copy import deepcopy
 from openravepy import (
     CollisionOptionsStateSaver,
     PlannerStatus,
+    RaveCreatePlanner,
+    RaveCreateTrajectory,
 )
 from ..collision import (
     BakedRobotCollisionCheckerFactory,
     DefaultRobotCollisionCheckerFactory,
     SimpleRobotCollisionCheckerFactory,
 )
+from ..util import (
+    CopyTrajectory,
+    SetTrajectoryTags,
+    GetManipulatorIndex,
+)
+from ..tsr.tsr import (
+    TSR,
+    TSRChain,
+)
+from .base import (
+    BasePlanner,
+    ClonedPlanningMethod,
+    PlanningError,
+    Tags,
+    UnsupportedPlanningError,
+)
 from .cbirrt import SerializeTSRChain
+
 
 logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
-    def __init__(self, algorithm='RRTConnect', robot_checker_factory=None):
+    """ An OMPL planner exposed by or_ompl.
+
+    This class makes an OMPL planner, exposed by or_ompl, comport to the PrPy
+    BasePlanner interface. Default values for planner-specific parameters may
+    be provided in the 'ompl_args' dictionary. These values are overriden by
+    any passed into a planning method.
+
+
+    @param algorithm name of a planner exposed by or_ompl
+    @param robot_checker_factory either Simple or BakedCollisionCheckerFactory
+    @param timelimit default planning timelimit, in seconds
+    @param ompl_args dictionary of planner-specific arguments 
+    """
+    def __init__(self, algorithm='RRTConnect', robot_checker_factory=None,
+                 timelimit=5., ompl_args=None):
         super(OMPLPlanner, self).__init__()
 
         if robot_checker_factory is None:
@@ -57,12 +89,15 @@ class OMPLPlanner(BasePlanner):
 
         self.setup = False
         self.algorithm = algorithm
-
+        self.default_timelimit = timelimit
+        self.default_ompl_args = ompl_args if ompl_args is not None else dict()
         self.robot_checker_factory = robot_checker_factory
 
-        if isinstance(robot_checker_factory, SimpleRobotCollisionCheckerFactory):
+        if isinstance(robot_checker_factory,
+                SimpleRobotCollisionCheckerFactory):
             self._is_baked = False
-        elif isinstance(robot_checker_factory, BakedRobotCollisionCheckerFactory):
+        elif isinstance(robot_checker_factory,
+                BakedRobotCollisionCheckerFactory):
             self._is_baked = True
         else:
             raise NotImplementedError(
@@ -70,7 +105,7 @@ class OMPLPlanner(BasePlanner):
                 ' BakedRobotCollisionCheckerFactory.')
 
         planner_name = 'OMPL_{:s}'.format(algorithm)
-        self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
+        self.planner = RaveCreatePlanner(self.env, planner_name)
 
         if self.planner is None:
             raise UnsupportedPlanningError(
@@ -78,15 +113,17 @@ class OMPLPlanner(BasePlanner):
                 .format(planner_name))
 
     def __str__(self):
-        return 'OMPL {0:s}'.format(self.algorithm)
+        return 'OMPL_{0:s}'.format(self.algorithm)
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
-        Plan to a desired configuration with OMPL. This will invoke the OMPL
-        planner specified in the OMPLPlanner constructor.
+        Plan to a configuration using the robot's active DOFs.
+
         @param robot
         @param goal desired configuration
+        @param timelimit planning timelimit, in seconds
+        @param ompl_args dictionary of planner-specific arguments
         @return traj
         """
         return self._Plan(robot, goal=goal, **kw_args)
@@ -94,63 +131,89 @@ class OMPLPlanner(BasePlanner):
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, **kw_args):
         """
-        Plan using the given set of TSR chains with OMPL.
+        Plan to one or more goal TSR chains using the robot's active DOFs. This
+        planner does not support start or constraint TSRs.
+
         @param robot
         @param tsrchains A list of tsrchains to use during planning
-        @param return traj
+        @param timelimit planning timelimit, in seconds
+        @param ompl_args dictionary of planner-specific arguments
+        @return traj
         """
         return self._Plan(robot, tsrchains=tsrchains, **kw_args)
 
-    def _Plan(self, robot, goal=None, tsrchains=None, timeout=30., shortcut_timeout=5.,
+    def _Plan(self, robot, goal=None, tsrchains=None, timelimit=None,
               continue_planner=False, ompl_args=None,
-              formatted_extra_params=None, **kw_args):
-        env = robot.GetEnv()
-        extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
+              formatted_extra_params=None, timeout=None, **kw_args):
+        extraParams = ''
 
-        if ompl_args is not None:
-            for key, value in ompl_args.iteritems():
-                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
-                    k=str(key), v=str(value))
+        # Handle the 'timelimit' parameter.
+        if timeout is not None:
+            warnings.warn('"timeout" has been replaced by "timelimit".',
+                    DeprecationWarning)
+            timelimit = timeout
 
+        if timelimit is None:
+            timelimit = self.default_timelimit
+
+        if timelimit <= 0.:
+            raise ValueError('"timelimit" must be positive.')
+
+        extraParams += '<time_limit>{:f}</time_limit>'.format(timelimit)
+
+        # Handle other parameters that get passed directly to OMPL.
+        if ompl_args is None:
+            ompl_args = dict()
+
+        merged_ompl_args = deepcopy(self.default_ompl_args)
+        merged_ompl_args.update(ompl_args)
+
+        for key, value in merged_ompl_args.iteritems():
+            extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
+                k=str(key), v=str(value))
+
+        # Serialize TSRs into the space-delimited format used by CBiRRT.
         if tsrchains is not None:
             for chain in tsrchains:
                 if chain.constrain or chain.sample_start: 
-                    raise UnsupportedPlanningError('Only goal tsr is supported by OMPL.')
+                    raise UnsupportedPlanningError(
+                        'Only goal tsr is supported by OMPL.')
                     
                 extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
                     k='tsr_chain', v=SerializeTSRChain(chain))
 
+        # Enable baked collision checking. This is handled natively.
+        if self._is_baked and merged_ompl_args.get('do_baked', True):
+            extraParams += '<do_baked>1</do_baked>'
+
+        # Serialize formatted values last, in case of any overrides.
         if formatted_extra_params is not None:
             extraParams += formatted_extra_params
 
-        if self._is_baked and (ompl_args is None or 'do_baked' not in ompl_args):
-            extraParams += '<do_baked>1</do_baked>'
-
+        # Setup the planning query.
         params = openravepy.Planner.PlannerParameters()
         params.SetRobotActiveJoints(robot)
         if goal is not None:
             params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
 
-        traj = openravepy.RaveCreateTrajectory(env, 'GenericTrajectory')
+        if (not continue_planner) or (not self.setup):
+            self.planner.InitPlan(robot, params)
+            self.setup = True
 
-        # Plan.
-        with env:
-            if (not continue_planner) or (not self.setup):
-                self.planner.InitPlan(robot, params)
-                self.setup = True
+        # Bypass the context manager since or_ompl does its own baking.
+        env = robot.GetEnv()
+        robot_checker = self.robot_checker_factory(robot)
+        options = robot_checker.collision_options
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
+            traj = RaveCreateTrajectory(env, 'GenericTrajectory')
+            status = self.planner.PlanPath(traj, releasegil=True)
 
-            # Bypass the context manager since or_ompl does its own baking.
-            robot_checker = self.robot_checker_factory(robot)
-            options = robot_checker.collision_options
-            with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
-                status = self.planner.PlanPath(traj, releasegil=True)
-
-            if status not in [PlannerStatus.HasSolution,
-                              PlannerStatus.InterruptedWithSolution]:
-                raise PlanningError(
-                    'Planner returned with status {:s}.'.format(str(status)),
-                    deterministic=False)
+        if status not in [PlannerStatus.HasSolution,
+                          PlannerStatus.InterruptedWithSolution]:
+            raise PlanningError(
+                'Planner returned with status {:s}.'.format(str(status)),
+                deterministic=False)
 
         # Tag the trajectory as non-determistic since most OMPL planners are
         # randomized. Additionally tag the goal as non-deterministic if OMPL
@@ -163,65 +226,112 @@ class OMPLPlanner(BasePlanner):
         return traj
 
 
-class RRTConnect(OMPLPlanner):
-    def __init__(self):
-        OMPLPlanner.__init__(self, algorithm='RRTConnect')
+class OMPLRangedPlanner(OMPLPlanner):
+    """ Construct an OMPL planner with a default 'range' parameter set.
 
-    def _SetPlannerRange(self, robot, ompl_args=None):
-        from copy import deepcopy
+    This class wraps OMPLPlanner by setting the default 'range' parameter,
+    which defines the length of an extension in algorithms like RRT-Connect, to
+    include an fixed number of state validity checks.
+    
+    This number may be specified explicitly (using 'multiplier') or as an
+    approximate fraction of the longest extent of the state space (using
+    'fraction'). Exactly one of 'multiplier' or 'fraction' is required.
 
-        if ompl_args is None:
-            ompl_args = dict()
+    @param algorithm name of the OMPL planner to create
+    @param robot_checker_factory robot collision checker factory
+    @param multiplier number of state validity checks per extension
+    @param fraction approximate fraction of the maximum extent of the state
+                    space per extension
+    """
+    def __init__(self, multiplier=None, fraction=None, **kwargs):
+        OMPLPlanner.__init__(self, **kwargs)
+
+        if multiplier is None and fraction is None:
+            raise ValueError('Either "multiplier" of "fraction" is required.')
+        if multiplier is not None and fraction is not None:
+            raise ValueError('"multiplier" and "fraction" are exclusive.')
+        if multiplier is not None and not (multiplier >= 1):
+            raise ValueError('"mutiplier" must be a positive integer.')
+        if fraction is not None and not (0. <= fraction <= 1.):
+            raise ValueError('"fraction" must be between zero and one.')
+
+        self.multiplier = multiplier
+        self.fraction = fraction
+
+
+    """ Computes the 'range' parameter from DOF resolutions.
+
+    The value is calculated from the active DOFs of 'robot' such that there
+    will be an fixed number of state validity checks per extension. That number
+    is configured by the 'multiplier' or 'fraction' constructor arguments.
+
+    @param robot with active DOFs set
+    @return value of the range parameter
+    """
+    def ComputeRange(self, robot):
+        epsilon = 1e-6
+
+        # Compute the maximum DOF range, treating circle joints as SO(2).
+        dof_limit_lower, dof_limit_upper = robot.GetActiveDOFLimits()
+        dof_ranges = numpy.zeros(robot.GetActiveDOF())
+
+        for index, dof_index in enumerate(robot.GetActiveDOFIndices()):
+            joint = robot.GetJointFromDOFIndex(dof_index)
+            axis_index = dof_index - joint.GetDOFIndex()
+
+            if joint.IsCircular(axis_index):
+                # There are 2*pi radians in a circular joint, but the maximum
+                # distance betwen any two points in SO(2) is pi. This is the
+                # definition used by OMPL.
+                dof_ranges[index] = numpy.pi
+            else:
+                dof_ranges[index] = (dof_limit_upper[index]
+                                   - dof_limit_lower[index])
+
+        # Duplicate the logic in or_ompl to convert the DOF resolutions to
+        # a fraction of the longest extent of the state space.
+        maximum_extent = numpy.linalg.norm(dof_ranges)
+        dof_resolution = robot.GetActiveDOFResolutions()
+        conservative_resolution = numpy.min(dof_resolution)
+
+        if self.multiplier is not None:
+            multiplier = self.multiplier
+        elif self.fraction is not None:
+            conservative_fraction = conservative_resolution / maximum_extent
+            multiplier = max(round(self.fraction / conservative_fraction), 1)
         else:
-            ompl_args = deepcopy(ompl_args)
+            raise ValueError('Either multiplier or fraction must be set.')
 
-        # Set the default range to the collision checking resolution.
-        if 'range' not in ompl_args:
-            epsilon = 1e-6
-
-            # Compute the collision checking resolution as a conservative
-            # fraction of the state space extents. This mimics the logic inside
-            # or_ompl used to set collision checking resolution.
-            dof_limit_lower, dof_limit_upper = robot.GetActiveDOFLimits()
-            dof_ranges = dof_limit_upper - dof_limit_lower
-            dof_resolution = robot.GetActiveDOFResolutions()
-            ratios = dof_resolution / dof_ranges
-            conservative_ratio = numpy.min(ratios)
-
-            # Convert the ratio back to a collision checking resolution. Set
-            # RRT-Connect's range to the same value used for collision
-            # detection inside OpenRAVE.
-            longest_extent = numpy.max(dof_ranges)
-            ompl_range = conservative_ratio * longest_extent - epsilon
-
-            ompl_args['range'] = ompl_range
-            logger.debug('Defaulted RRT-Connect range parameter to %.3f.',
-                         ompl_range)
-        return ompl_args
+        # Then, scale this by the user-supplied multiple. Finally, subtract
+        # a small value to cope with numerical precision issues inside OMPL.
+        return multiplier * conservative_resolution - epsilon
 
     @ClonedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
-        """
-        Plan to a desired configuration with OMPL. This will invoke the OMPL
-        planner specified in the OMPLPlanner constructor.
-        @param robot
-        @param goal desired configuration
-        @return traj
-        """
-        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        if ompl_args is None:
+            ompl_args = dict()
+
+        ompl_args.setdefault('range', self.ComputeRange(robot))
+
         return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
 
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
-        """
-        Plan using the given TSR chains with OMPL.
-        @param robot
-        @param tsrchains A list of TSRChain objects to respect during planning
-        @param ompl_args ompl RRTConnect specific parameters
-        @return traj
-        """
-        ompl_args = self._SetPlannerRange(robot, ompl_args=ompl_args)
+        if ompl_args is None:
+            ompl_args = dict()
+
+        ompl_args.setdefault('range', self.ComputeRange(robot))
+
         return self._Plan(robot, tsrchains=tsrchains, ompl_args=ompl_args, **kw_args)
+
+
+# Alias to maintain backwards compatability.
+class RRTConnect(OMPLRangedPlanner):
+    def __init__(self, **kwargs):
+        super(RRTConnect, self).__init__(
+              algorithm='RRTConnect', fraction=0.2, **kwargs)
+        warnings.warn('RRTConnect has been replaced by OMPLRangedPlanner.',
+                DeprecationWarning)
 
 
 class OMPLSimplifier(BasePlanner):
