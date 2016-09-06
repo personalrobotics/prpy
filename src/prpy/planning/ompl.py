@@ -187,7 +187,7 @@ class OMPLPlanner(BasePlanner):
                 if chain.constrain:
                     if self.supports_constraints:
                         extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
-                            k='tsr_chain_constraint', v=SerializeTSRChain(chain))
+                            k='tsr_chain_constraint', v=chain.to_json())
                     else:
                         raise UnsupportedPlanningError(
                             'The "{:s}" OMPL planner does not support TSR'
