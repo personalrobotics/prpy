@@ -81,7 +81,7 @@ class OMPLPlanner(BasePlanner):
     @param ompl_args dictionary of planner-specific arguments 
     """
     def __init__(self, algorithm='RRTConnect', robot_checker_factory=None,
-                 timelimit=5., ompl_args=None):
+                 timelimit=5., supports_constraints=False, ompl_args=None):
         super(OMPLPlanner, self).__init__()
 
         if robot_checker_factory is None:
@@ -92,6 +92,7 @@ class OMPLPlanner(BasePlanner):
         self.default_timelimit = timelimit
         self.default_ompl_args = ompl_args if ompl_args is not None else dict()
         self.robot_checker_factory = robot_checker_factory
+        self.supports_constraints = supports_constraints
 
         if isinstance(robot_checker_factory,
                 SimpleRobotCollisionCheckerFactory):
@@ -175,12 +176,22 @@ class OMPLPlanner(BasePlanner):
         # Serialize TSRs into the space-delimited format used by CBiRRT.
         if tsrchains is not None:
             for chain in tsrchains:
-                if chain.constrain or chain.sample_start: 
+                if chain.sample_start:
                     raise UnsupportedPlanningError(
-                        'Only goal tsr is supported by OMPL.')
-                    
-                extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
-                    k='tsr_chain', v=SerializeTSRChain(chain))
+                        'OMPL does not support start TSRs.')
+
+                if chain.sample_goal:
+                    extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
+                        k='tsr_chain', v=SerializeTSRChain(chain))
+
+                if chain.constrain:
+                    if self.supports_constraints:
+                        extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
+                            k='tsr_chain_constraint', v=SerializeTSRChain(chain))
+                    else:
+                        raise UnsupportedPlanningError(
+                            'The "{:s}" OMPL planner does not support TSR'
+                            ' constraints.'.format(self.algorithm))
 
         # Enable baked collision checking. This is handled natively.
         if self._is_baked and merged_ompl_args.get('do_baked', True):
