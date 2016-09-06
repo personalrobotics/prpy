@@ -16,6 +16,9 @@ from ..util import GetManipulatorIndex
 
 
 class PlanToEndEffectorOffsetTSRAdapter(Planner):
+    epsilon = 1e-3
+
+
     """ Plan PlanToEndEffectorOffset using PlanToTSR on a delegate planner.
 
     @param delegate_planner planner that supports goal and constraint TSRs
@@ -24,7 +27,6 @@ class PlanToEndEffectorOffsetTSRAdapter(Planner):
         super(PlanToEndEffectorOffsetTSRAdapter, self).__init__()
 
         self.delegate_planner = delegate_planner
-        self.epsilon = 0.001
         self.env = Environment()
 
 
@@ -43,6 +45,12 @@ class PlanToEndEffectorOffsetTSRAdapter(Planner):
     """
     @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, **kwargs):
+        chains = self.CreateTSRChains(robot, direction, distance)
+        return self.delegate_planner.PlanToTSR(robot, chains, **kwargs)
+
+
+    @classmethod
+    def CreateTSRChains(cls, robot, direction, distance):
         direction = numpy.array(direction, dtype=float)
 
         if direction.shape != (3,):
@@ -72,13 +80,12 @@ class PlanToEndEffectorOffsetTSRAdapter(Planner):
             T0_w=H_world_w,
             Tw_e=H_w_ee,
             Bw=numpy.array([
-                [-self.epsilon, self.epsilon],
-                [-self.epsilon, self.epsilon],
+                [-cls.epsilon, cls.epsilon],
+                [-cls.epsilon, cls.epsilon],
                 [min(0.0, distance), max(0.0, distance)],
-                [-self.epsilon, self.epsilon],
-                [-self.epsilon, self.epsilon],
-                [-self.epsilon, self.epsilon]]),
+                [-cls.epsilon, cls.epsilon],
+                [-cls.epsilon, cls.epsilon],
+                [-cls.epsilon, cls.epsilon]]),
             manip=manip_index))
 
-        return self.delegate_planner.PlanToTSR(
-            robot, [goal_chain, constraint_chain], **kwargs)
+        return [goal_chain, constraint_chain]
