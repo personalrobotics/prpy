@@ -111,6 +111,13 @@ class Clone(object):
                             cloned_robot = Cloned(robot, into=self.clone_env)
                             cloned_robot.RegrabAll()
 
+                            #regrab manually to set ignore links
+                            for grab_info in robot.GetGrabbedInfo():
+                                item_to_grab = self.clone_env.GetKinBody(grab_info._grabbedname)
+                                grablink = cloned_robot.GetLink(grab_info._robotlinkname)
+                                linkstoignore = grab_info._setRobotLinksToIgnore
+                                cloned_robot.Grab(item_to_grab, grablink=grablink, linkstoignore=linkstoignore)
+
             # Required for InstanceDeduplicator to call CloneBindings for
             # PrPy-annotated classes.
             setattr(self.clone_env, 'clone_parent', self.clone_parent)
