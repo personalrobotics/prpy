@@ -67,21 +67,25 @@ logger = logging.getLogger(__name__)
 
 
 class OMPLPlanner(BasePlanner):
-    """ An OMPL planner exposed by or_ompl.
-
-    This class makes an OMPL planner, exposed by or_ompl, comport to the PrPy
-    BasePlanner interface. Default values for planner-specific parameters may
-    be provided in the 'ompl_args' dictionary. These values are overriden by
-    any passed into a planning method.
-
-
-    @param algorithm name of a planner exposed by or_ompl
-    @param robot_checker_factory either Simple or BakedCollisionCheckerFactory
-    @param timelimit default planning timelimit, in seconds
-    @param ompl_args dictionary of planner-specific arguments 
-    """
     def __init__(self, algorithm='RRTConnect', robot_checker_factory=None,
                  timelimit=5., supports_constraints=False, ompl_args=None):
+        """ An OMPL planner exposed by or_ompl.
+
+        This class makes an OMPL planner, exposed by or_ompl, comport to the
+        PrPy BasePlanner interface. Default values for planner-specific
+        parameters may be provided in the 'ompl_args' dictionary. These values
+        are overriden by any passed into a planning method.
+
+        If support_constraints is True, then the planner will accept constraint
+        TSRs. This is only supported if 'algorithm' must be a planner that
+        implements the 'pr_constraint_or_ompl' interface.
+
+        @param algorithm name of a planner exposed by or_ompl
+        @param robot_checker_factory Simple or BakedCollisionCheckerFactory
+        @param timelimit default planning timelimit, in seconds
+        @param supports_constraints whether constraint TSRs are supported
+        @param ompl_args dictionary of planner-specific arguments 
+        """
         super(OMPLPlanner, self).__init__()
 
         if robot_checker_factory is None:
@@ -180,10 +184,14 @@ class OMPLPlanner(BasePlanner):
                     raise UnsupportedPlanningError(
                         'OMPL does not support start TSRs.')
 
+                # Goal TSRs are parsed using the space delimited CBiRRT format.
                 if chain.sample_goal:
                     extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
                         k='tsr_chain', v=SerializeTSRChain(chain))
 
+                # Constraint TSRs are parsed by pr_constraint_or_ompl, which
+                # uses a JSON format. This differs from the space delimited
+                # format used by CBiRRT.
                 if chain.constrain:
                     if self.supports_constraints:
                         extraParams += '<{k:s}>{v:s}</{k:s}>'.format(
@@ -238,23 +246,24 @@ class OMPLPlanner(BasePlanner):
 
 
 class OMPLRangedPlanner(OMPLPlanner):
-    """ Construct an OMPL planner with a default 'range' parameter set.
-
-    This class wraps OMPLPlanner by setting the default 'range' parameter,
-    which defines the length of an extension in algorithms like RRT-Connect, to
-    include an fixed number of state validity checks.
-    
-    This number may be specified explicitly (using 'multiplier') or as an
-    approximate fraction of the longest extent of the state space (using
-    'fraction'). Exactly one of 'multiplier' or 'fraction' is required.
-
-    @param algorithm name of the OMPL planner to create
-    @param robot_checker_factory robot collision checker factory
-    @param multiplier number of state validity checks per extension
-    @param fraction approximate fraction of the maximum extent of the state
-                    space per extension
-    """
     def __init__(self, multiplier=None, fraction=None, **kwargs):
+        """ Construct an OMPL planner with a default 'range' parameter set.
+
+        This class wraps OMPLPlanner by setting the default 'range' parameter,
+        which defines the length of an extension in algorithms like
+        RRT-Connect, to include an fixed number of state validity checks.
+        
+        This number may be specified explicitly (using 'multiplier') or as an
+        approximate fraction of the longest extent of the state space (using
+        'fraction'). Exactly one of 'multiplier' or 'fraction' is required.
+
+        @param algorithm name of the OMPL planner to create
+        @param robot_checker_factory robot collision checker factory
+        @param multiplier number of state validity checks per extension
+        @param fraction approximate fraction of the maximum extent of the state
+                        space per extension
+        """
+
         OMPLPlanner.__init__(self, **kwargs)
 
         if multiplier is None and fraction is None:
@@ -270,16 +279,17 @@ class OMPLRangedPlanner(OMPLPlanner):
         self.fraction = fraction
 
 
-    """ Computes the 'range' parameter from DOF resolutions.
-
-    The value is calculated from the active DOFs of 'robot' such that there
-    will be an fixed number of state validity checks per extension. That number
-    is configured by the 'multiplier' or 'fraction' constructor arguments.
-
-    @param robot with active DOFs set
-    @return value of the range parameter
-    """
     def ComputeRange(self, robot):
+        """ Computes the 'range' parameter from DOF resolutions.
+
+        The value is calculated from the active DOFs of 'robot' such that there
+        will be an fixed number of state validity checks per extension. That
+        number is configured by the 'multiplier' or 'fraction' constructor
+        arguments.
+
+        @param robot with active DOFs set
+        @return value of the range parameter
+        """
         epsilon = 1e-6
 
         # Compute the maximum DOF range, treating circle joints as SO(2).
