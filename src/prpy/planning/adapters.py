@@ -19,32 +19,33 @@ class PlanToEndEffectorOffsetTSRAdapter(Planner):
     epsilon = 1e-3
 
 
-    """ Plan PlanToEndEffectorOffset using PlanToTSR on a delegate planner.
-
-    @param delegate_planner planner that supports goal and constraint TSRs
-    """
     def __init__(self, delegate_planner):
+        """ Plan PlanToEndEffectorOffset using PlanToTSR on a delegate planner.
+
+        @param delegate_planner planner that supports goal and constraint TSRs
+        """
         super(PlanToEndEffectorOffsetTSRAdapter, self).__init__()
 
         self.delegate_planner = delegate_planner
         self.env = Environment()
 
 
-    """ Plan to a desired end-effector offset with fixed orientation.
-
-    This function converts a PlanToEndEffectorOffset query into: (1) a goal TSR
-    at "distance" away from the start pose along "direction" and (2) a
-    constraint TSR that keeps the end-effector's position constrained to that
-    line segment with fixed orientation. Those TSRs are forwarded to PlanToTSR
-    on the delegate planner.
-
-    @param robot 
-    @param direction unit vector in the world frame
-    @param distance distance to move, in meters
-    @param **kwargs arguments forwarded to the delegate planner
-    """
     @ClonedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, **kwargs):
+        """ Plan to a desired end-effector offset with fixed orientation.
+
+        This function converts a PlanToEndEffectorOffset query into: (1) a goal
+        TSR at "distance" away from the start pose along "direction" and (2) a
+        constraint TSR that keeps the end-effector's position constrained to
+        that line segment with fixed orientation. Those TSRs are forwarded to
+        PlanToTSR on the delegate planner.
+
+        @param robot 
+        @param direction unit vector in the world frame
+        @param distance distance to move, in meters
+        @param **kwargs arguments forwarded to the delegate planner
+        @return output trajectory
+        """
         chains = self.CreateTSRChains(robot, direction, distance)
         return self.delegate_planner.PlanToTSR(robot, chains, **kwargs)
 
