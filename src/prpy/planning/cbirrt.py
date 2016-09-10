@@ -30,16 +30,21 @@
 
 import numpy
 import openravepy
-from ..util import SetTrajectoryTags
 from ..collision import (
-    DefaultRobotCollisionCheckerFactory,
     BakedRobotCollisionCheckerFactory,
+    DefaultRobotCollisionCheckerFactory,
     SimpleRobotCollisionCheckerFactory,
 )
-from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  ClonedPlanningMethod, Tags)
-import prpy.kin
-import prpy.tsr
+from ..tsr import TSR, TSRChain
+from ..util import SetTrajectoryTags
+from .adapters import PlanToEndEffectorOffsetTSRAdapter
+from .base import (
+    BasePlanner,
+    ClonedPlanningMethod,
+    PlanningError,
+    Tags,
+    UnsupportedPlanningError,
+)
 
 
 class CBiRRTPlanner(BasePlanner):
@@ -102,76 +107,30 @@ class CBiRRTPlanner(BasePlanner):
         @return traj output path
         """
         manipulator_index = robot.GetActiveManipulatorIndex()
-        goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
-        tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
+        goal_tsr = TSR(T0_w=goal_pose, manip=manipulator_index)
+        tsr_chain = TSRChain(sample_goal=True, TSR=goal_tsr)
 
         kw_args.setdefault('psample', 0.1)
         kw_args.setdefault('smoothingitrs', 0)
 
         return self.Plan(robot, tsr_chains=[tsr_chain], **kw_args)
 
+
     @ClonedPlanningMethod
-    def PlanToEndEffectorOffset(self, robot, direction, distance,
-                                smoothingitrs=100, **kw_args):
+    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
         """
         Plan to a desired end-effector offset.
+
         @param robot
         @param direction unit vector in the direction of motion
         @param distance minimum distance in meters
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
-        direction = numpy.array(direction, dtype=float)
+        chains = PlanToEndEffectorOffsetTSRAdapter.CreateTSRChains(
+                    robot, direction, distance)
+        return self.PlanToTSR(robot, tsr_chains=chains, **kw_args)
 
-        if direction.shape != (3,):
-            raise ValueError('Direction must be a three-dimensional vector.')
-        if not (distance >= 0):
-            raise ValueError('Distance must be non-negative; got {:f}.'.format(
-                             distance))
-
-        with robot:
-            manip = robot.GetActiveManipulator()
-            H_world_ee = manip.GetEndEffectorTransform()
-
-            # 'object frame w' is at ee, z pointed along direction to move
-            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3, 3], direction)
-            H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
-
-            # Serialize TSR string (goal)
-            Hw_end = numpy.eye(4)
-            Hw_end[2, 3] = distance
-
-            goaltsr = prpy.tsr.tsr.TSR(T0_w=numpy.dot(H_world_w, Hw_end),
-                                       Tw_e=H_w_ee,
-                                       Bw=numpy.zeros((6, 2)),
-                                       manip=robot.GetActiveManipulatorIndex())
-            goal_tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True,
-                                                   TSRs=[goaltsr])
-            # Serialize TSR string (whole-trajectory constraint)
-            Bw = numpy.zeros((6, 2))
-            epsilon = 0.001
-            Bw = numpy.array([[-epsilon,            epsilon],
-                              [-epsilon,            epsilon],
-                              [min(0.0, distance),  max(0.0, distance)],
-                              [-epsilon,            epsilon],
-                              [-epsilon,            epsilon],
-                              [-epsilon,            epsilon]])
-
-            traj_tsr = prpy.tsr.tsr.TSR(
-                T0_w=H_world_w, Tw_e=H_w_ee, Bw=Bw,
-                manip=robot.GetActiveManipulatorIndex())
-            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True,
-                                                   TSRs=[traj_tsr])
-
-        kw_args.setdefault('psample', 0.1)
-
-        return self.Plan(
-            robot,
-            tsr_chains=[goal_tsr_chain, traj_tsr_chain],
-            # Smooth since this is a constrained trajectory.
-            smoothingitrs=smoothingitrs,
-            **kw_args
-        )
 
     @ClonedPlanningMethod
     def PlanToTSR(self, robot, tsr_chains, smoothingitrs=100, **kw_args):
