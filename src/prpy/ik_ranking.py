@@ -76,3 +76,20 @@ class NominalConfiguration(object):
             L_2[L_inf > self.max_deviation] = numpy.inf
 
         return L_2
+
+
+
+class MultipleNominalConfigurations(object):
+    def __init__(self, q_nominal_list, max_deviation=2*numpy.pi):
+        """
+        Score IK solutions by their summed distance to multiple configurations
+        @param q_nominal_list list of configurations to compare distance to
+        @param max_deviation specify a maximum allowable per-joint deviation
+                             from the nominal configuration, default is 2*PI
+        """
+        self.all_scorers = [NominalConfiguration(q_nominal, max_deviation) for q_nominal in q_nominal_list]
+        self.max_deviation = max_deviation
+
+    def __call__(self, robot, ik_solutions):
+        return sum([scorer(robot, ik_solutions) for scorer in self.all_scorers])
+
