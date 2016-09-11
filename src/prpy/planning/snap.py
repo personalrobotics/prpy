@@ -76,58 +76,6 @@ class SnapPlanner(BasePlanner):
         """
         return self._Snap(robot, goal, **kw_args)
 
-    @ClonedPlanningMethod
-    def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
-        """
-        Attempt to plan a straight line trajectory from the robot's
-        current configuration to a desired end-effector pose. This
-        happens by finding the closest IK solution to the robot's
-        current configuration and attempts to snap there
-        (using PlanToConfiguration) if possible.
-        In the case of a redundant manipulator, no attempt is
-        made to check other IK solutions.
-
-        @param robot
-        @param goal_pose desired end-effector pose
-        @return traj
-        """
-        from prpy.planning.exceptions import CollisionPlanningError
-        from prpy.planning.exceptions import SelfCollisionPlanningError
-
-        ikp = openravepy.IkParameterizationType
-        ikfo = openravepy.IkFilterOptions
-
-        # Find an IK solution. OpenRAVE tries to return a solution that is
-        # close to the configuration of the arm, so we don't need to do any
-        # custom IK ranking.
-        manipulator = robot.GetActiveManipulator()
-        ik_param = openravepy.IkParameterization(goal_pose, ikp.Transform6D)
-        ik_solution = manipulator.FindIKSolution(
-            ik_param, ikfo.CheckEnvCollisions,
-            ikreturn=False, releasegil=True
-        )
-
-        if ik_solution is None:
-            # FindIKSolutions is slower than FindIKSolution,
-            # so call this only to identify and raise error when
-            # there is no solution
-            ik_solutions = manipulator.FindIKSolutions(
-                ik_param, ikfo.IgnoreSelfCollisions,
-                ikreturn=False, releasegil=True)
-
-            for q in ik_solutions:
-                robot.SetActiveDOFValues(q)
-                report = openravepy.CollisionReport()
-                if self.env.CheckCollision(robot, report=report):
-                    raise CollisionPlanningError.FromReport(report, deterministic=True)
-                elif robot.CheckSelfCollision(report=report):
-                    raise SelfCollisionPlanningError.FromReport(report, deterministic=True)
-
-            raise PlanningError(
-                'There is no IK solution at the goal pose.', deterministic=True)
-
-        return self._Snap(robot, ik_solution, **kw_args)
-
     def _Snap(self, robot, goal, **kw_args):
         from prpy.util import CheckJointLimits
         from prpy.util import GetLinearCollisionCheckPts
