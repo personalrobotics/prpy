@@ -459,7 +459,8 @@ class VectorFieldPlanner(BasePlanner):
         nonlocals = {
             'exception': None,
             't_cache': None,
-            't_check': 0.,
+            # Must be negative so we check the start of the trajectory.
+            't_check': -1.,
         }
 
         env = robot.GetEnv()
@@ -532,19 +533,25 @@ class VectorFieldPlanner(BasePlanner):
                 if path.GetNumWaypoints() == 1:
                     checks = [(t, q)]
                 else:
-                    # TODO: This will recheck the entire trajectory
-                    #  Ideally should just check the new portion of the trajectory
+                    # This returns collision checks for the entire trajectory,
+                    # including the part that has already been checked. These
+                    # duplicate checks will be filtered out below.
                     checks = GetLinearCollisionCheckPts(robot, path,
                                                         norm_order=norm_order,
                                                         sampling_func=sampling_func)
-                    # start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
-                    fn_status_callback(t_check, q_check)
+                    # TODO: It would be more efficient to only generate checks
+                    # for the new part of the trajectory.
+                    if t_check <= nonlocals['t_check']:
+                        continue
 
-                    # Record the time of this check so we continue checking at
-                    # DOF resolution the next time the integrator takes a step.
+                    # Record the time of this check so we continue checking
+                    # from where we left off. We do this first, just in case
+                    # fn_status_callback raises an exception.
                     nonlocals['t_check'] = t_check
+
+                    fn_status_callback(t_check, q_check)
 
                 return 0  # Keep going.
             except PlanningError as e:
