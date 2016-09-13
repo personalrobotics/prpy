@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2015, Carnegie Mellon University
+# Copyright (c) 2016, Carnegie Mellon University
 # All rights reserved.
-# Authors: Jennifer King <jeking@cs.cmu.edu>
+# Authors: Gilwoo Lee <gilwool@cs.cmu.edu>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,9 +28,19 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from base import PerceptionModule, PerceptionMethod
-from apriltags import ApriltagsModule
-from simulated import SimulatedPerceptionModule
-from rock_module import RockModule
-from simtrack import SimtrackModule
-from perception_helper import RemoveAllObjects
+def RemoveAllObjects(env, robot, kept_bodies=None):
+    """
+    Remove everything from the environment except robot and kept_bodies.
+    The environment must be locked while calling this method.
+    @param env OpenRAVE environment to remove objects 
+    @param robot Robot in env to keep 
+    @param kept_bodies Bodies to keep 
+    """
+    if kept_bodies is None:
+        kept_bodies = []
+
+    for o in env.GetBodies():
+        if o != robot and o not in kept_bodies:
+            env.Remove(o)
+
+
