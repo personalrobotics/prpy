@@ -2130,7 +2130,7 @@ def GetPointFrom(focus):
 
     return coord
 
-def concatenateTrajectories(traj_list):
+def ConcatenateTrajectories(traj_list):
     """
     Given a list of trajectories for a single manipulator,
     concatenate them into a single trajectory
@@ -2145,34 +2145,45 @@ def concatenateTrajectories(traj_list):
 
     base_traj = traj_list[0]
     base_cspec = base_traj.GetConfigurationSpecification()
-    base_robot = base_cspec.ExtractUsedBodies(base_traj.GetEnv())[0]
-    traj_indices = GetTrajectoryIndices(base_traj)
+
+    smoothFlag = True
+    constrainedFlag = False
+    deterministicTrajectoryFlag = True
+    deterministicEndPointFlag = False
 
     offset = base_traj.GetNumWaypoints()
     for i in xrange(1, len(traj_list)):
         traj_i = traj_list[i]
-        cspec_i = traj_i.GetConfigurationSpecification()
-        robot_i = cspec_i.ExtractUsedBodies(traj_i.GetEnv())[0]
-        if robot_i != base_robot:
-            raise ValueError('Trajectories are not on the same robot')
 
-        sub = numpy.subtract(GetTrajectoryIndices(traj_i), traj_indices)
-        if sub.sum() != 0:
-            raise ValueError('Trajectories are not on the same manipulator.')
+        cspec_i = traj_i.GetConfigurationSpecification()
+        if base_cspec != cspec_i:
+            raise ValueError('The configuration specifications of the trajectory do not match')
 
         tags_i = GetTrajectoryTags(traj_i)
-        # If one segment is not smooth, the entire trajectory is not (?)
+        # Only True if all trajectories have this set
         if 'smooth' in tags_i and not tags_i['smooth']:
-            SetTrajectoryTags(base_traj, {TAGS.SMOOTH: True}, append=True)
+            smoothFlag = False
 
-        # The entire trajectory gets tagged as constrained if one of 
-        # the segments is constrained.
+        # True if any trajectory has this set
         if 'constrained' in tags_i and tags_i['constrained']:
-            SetTrajectoryTags(base_traj, {TAGS.CONSTRAINED: True}, append=True)
+            constrainedFlag = True
+
+         # Only True if all trajectories have this set
+        if 'deterministic' in tags_i and not tags_i['deterministic']:
+            deterministcTrajectoryFlag = False
+
+        # True if the last trajectory has this set
+        if i == len(traj_list)-1 and 'deterministic_endpoint' in tags_i and tags_i['determinstic_endpoint']:
+             deterministicEndPointFlag = True
 
         # Add trajectory in by inserting each waypoint
         for j in xrange(traj_i.GetNumWaypoints()):
             waypoint = traj_i.GetWaypoint(j)
             base_traj.Insert(offset, waypoint)
             offset += 1
+
+    flagSettings = {TAGS.SMOOTH: smoothFlag, TAGS.CONSTRAINED: constrainedFlag, 
+                    TAGS.DETERMINISTIC_TRAJECTORY: deterministicTrajectoryFlag,
+                    TAGS.DETERMINISTIC_ENDPOINT: deterministicEndPointFlag}
+    SetTrajectoryTags(base_traj, flagSettings, append=True)
     return base_traj
