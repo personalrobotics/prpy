@@ -72,6 +72,12 @@ class TSRLibrary(object):
             self.robot_name = self.get_object_type(robot)
             logger.debug('Inferred robot name "%s" for TSRLibrary.', self.robot_name)
 
+    def clone(self, cloned_robot):
+        import copy
+        cloned_library = TSRLibrary(cloned_robot)
+        cloned_library.all_factories = copy.deepcopy(self.all_factories)
+        return cloned_library
+
     def __call__(self, kinbody, action_name, *args, **kw_args):
         """
         Return a list of TSRChains to perform an action on an object with this
