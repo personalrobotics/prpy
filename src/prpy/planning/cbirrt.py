@@ -52,6 +52,7 @@ class CBiRRTPlanner(BasePlanner):
         super(CBiRRTPlanner, self).__init__()
 
         self.timelimit = timelimit
+        self.mimic_trajectories = {}
 
         if robot_checker_factory is None:
             robot_checker_factory = DefaultRobotCollisionCheckerFactory
@@ -166,7 +167,7 @@ class CBiRRTPlanner(BasePlanner):
 
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
-             extra_args=None, **kw_args):
+             extra_args=None, save_mimic_trajectories=False, **kw_args):
         from openravepy import CollisionOptionsStateSaver
 
         if timelimit is None:
@@ -188,11 +189,6 @@ class CBiRRTPlanner(BasePlanner):
 
         args =  ['RunCBiRRT']
         args += ['timelimit', str(timelimit)]
-
-        # By default, CBiRRT interprets the DOF resolutions as an
-        # L-infinity norm; this flag turns on the L-2 norm instead.
-        args += ['bdofresl2norm', '1']
-        args += ['steplength', '0.05999']
 
         if self._is_baked:
             args += ['bbakedcheckers', '1']
@@ -230,7 +226,7 @@ class CBiRRTPlanner(BasePlanner):
                     )
                 args += (['jointstarts'] +
                          self.serialize_dof_values(start_config))
-
+                
         #TODO need to change robot.GetActiveDOF() to something else
         # That can take into account another robot
         if jointgoals is not None:
@@ -246,6 +242,7 @@ class CBiRRTPlanner(BasePlanner):
                 '''
                 args += ['jointgoals'] + self.serialize_dof_values(goal_config)
 
+                
             if len(jointgoals) > 1:
                 is_endpoint_deterministic = False
 
@@ -258,6 +255,11 @@ class CBiRRTPlanner(BasePlanner):
                 if tsr_chain.constrain:
                     is_constrained = True
 
+        # By default, CBiRRT interprets the DOF resolutions as an
+        # L-infinity norm; this flag turns on the L-2 norm instead.
+        args += ['bdofresl2norm', '1']
+        args += ['steplength', '0.05999']                
+
         # FIXME: Why can't we write to anything other than cmovetraj.txt or
         # /tmp/cmovetraj.txt with CBiRRT?
         traj_path = 'cmovetraj.txt'
@@ -269,6 +271,7 @@ class CBiRRTPlanner(BasePlanner):
         options = collision_checker.collision_options
         with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
             response = self.problem.SendCommand(args_str, True)
+            print args_str
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response,
@@ -282,12 +285,25 @@ class CBiRRTPlanner(BasePlanner):
 
 
         #TODO Mimic traj processing. Change format?
-        self.mimic_traj = prpy.util.CopyTrajectory(traj)
-        full_cspec = self.mimic_traj.GetConfigurationSpecification()
-        traj_bodies = full_cspec.ExtractUsedBodies(robot.GetEnv())
-        object_body = [body for body in traj_bodies if body.GetName() != robot.GetName()][0]
-        object_cspec = object_body.GetActiveConfigurationSpecification('GenericTrajectory')
-        openravepy.planningutils.ConvertTrajectorySpecification(self.mimic_traj, object_cspec)
+        if save_mimic_trajectories:
+            from prpy.util import CopyTrajectory
+
+            cspec = traj.GetConfigurationSpecification()
+            traj_bodies = cspec.ExtractUsedBodies(robot.GetEnv())
+            
+            self.mimic_trajectories = {}
+            for body in traj_bodies:
+                if body.GetName() == robot.GetName():
+                    continue
+
+                object_cspec = body.GetActiveConfigurationSpecification('GenericTrajectory')
+                with open(traj_path, 'rb') as traj_file:
+                    traj_xml = traj_file.read()
+                    object_traj = openravepy.RaveCreateTrajectory(env, '')
+                    object_traj.deserialize(traj_xml)
+#                object_traj = CopyTrajectory(traj)
+                openravepy.planningutils.ConvertTrajectorySpecification(object_traj, object_cspec)
+                self.mimic_trajectories[body.GetName()] = object_traj
 
         # Tag the trajectory as non-determistic since CBiRRT is a randomized
         # planner. Additionally tag the goal as non-deterministic if CBiRRT
@@ -305,9 +321,12 @@ class CBiRRTPlanner(BasePlanner):
 
         return traj
 
-    def GetLastMimicTraj(self):
-        #FIXME how to handle if no traj exists?
-        return self.mimic_traj
+    def GetMimicPath(self, body_name, env=None):
+        traj = self.mimic_trajectories.get(body_name, None)
+        if traj is not None and env is not None:
+            from prpy.util import CopyTrajectory
+            traj = CopyTrajectory(traj, env=env)
+        return traj
 
     def ClearIkSolver(self, manip):
         manip.SetIkSolver(None)
@@ -392,4 +411,5 @@ def SerializeTSRChain(self):
     if len(self.mimicbodyjoints) > 0:
         outstring += ' %d %s' % (len(self.mimicbodyjoints),
                                  SerializeArray(self.mimicbodyjoints))
+#        outstring += ' %s' % SerializeArray(self.mimicbodyjoints)
     return outstring
