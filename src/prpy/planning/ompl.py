@@ -38,6 +38,7 @@ from openravepy import (
     PlannerStatus,
     RaveCreatePlanner,
     RaveCreateTrajectory,
+    Robot
 )
 from ..collision import (
     BakedRobotCollisionCheckerFactory,
@@ -55,7 +56,7 @@ from ..tsr.tsr import (
 )
 from .base import (
     BasePlanner,
-    ClonedPlanningMethod,
+    LockedPlanningMethod,
     PlanningError,
     Tags,
     UnsupportedPlanningError,
@@ -109,18 +110,10 @@ class OMPLPlanner(BasePlanner):
                 'or_ompl only supports Simple and'
                 ' BakedRobotCollisionCheckerFactory.')
 
-        planner_name = 'OMPL_{:s}'.format(algorithm)
-        self.planner = RaveCreatePlanner(self.env, planner_name)
-
-        if self.planner is None:
-            raise UnsupportedPlanningError(
-                'Unable to create "{:s}" planner. Is or_ompl installed?'
-                .format(planner_name))
-
     def __str__(self):
         return 'OMPL_{0:s}'.format(self.algorithm)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a configuration using the robot's active DOFs.
@@ -133,7 +126,7 @@ class OMPLPlanner(BasePlanner):
         """
         return self._Plan(robot, goal=goal, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, **kw_args):
         """
         Plan to one or more goal TSR chains using the robot's active DOFs. This
@@ -165,6 +158,15 @@ class OMPLPlanner(BasePlanner):
             raise ValueError('"timelimit" must be positive.')
 
         extraParams += '<time_limit>{:f}</time_limit>'.format(timelimit)
+
+        env = robot.GetEnv()
+        planner_name = 'OMPL_{:s}'.format(self.algorithm)
+        planner = RaveCreatePlanner(env, planner_name)
+
+        if planner is None:
+            raise UnsupportedPlanningError(
+                'Unable to create "{:s}" planner. Is or_ompl installed?'
+                .format(planner_name))
 
         # Handle other parameters that get passed directly to OMPL.
         if ompl_args is None:
@@ -217,8 +219,8 @@ class OMPLPlanner(BasePlanner):
         params.SetExtraParameters(extraParams)
 
         if (not continue_planner) or (not self.setup):
-            self.planner.InitPlan(robot, params)
-            self.setup = True
+            planner.InitPlan(robot, params)
+            setup = True
 
         # Bypass the context manager since or_ompl does its own baking.
         env = robot.GetEnv()
@@ -226,7 +228,7 @@ class OMPLPlanner(BasePlanner):
         options = robot_checker.collision_options
         with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
             traj = RaveCreateTrajectory(env, 'GenericTrajectory')
-            status = self.planner.PlanPath(traj, releasegil=True)
+            status = planner.PlanPath(traj, releasegil=True)
 
         if status not in [PlannerStatus.HasSolution,
                           PlannerStatus.InterruptedWithSolution]:
@@ -327,7 +329,7 @@ class OMPLRangedPlanner(OMPLPlanner):
         # a small value to cope with numerical precision issues inside OMPL.
         return multiplier * conservative_resolution - epsilon
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, ompl_args=None, **kw_args):
         if ompl_args is None:
             ompl_args = dict()
@@ -336,7 +338,7 @@ class OMPLRangedPlanner(OMPLPlanner):
 
         return self._Plan(robot, goal=goal, ompl_args=ompl_args, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, ompl_args=None, **kw_args):
         if ompl_args is None:
             ompl_args = dict()
@@ -359,21 +361,23 @@ class OMPLSimplifier(BasePlanner):
     def __init__(self):
         super(OMPLSimplifier, self).__init__()
 
-        planner_name = 'OMPL_Simplifier'
-        self.planner = openravepy.RaveCreatePlanner(self.env, planner_name)
-
-        if self.planner is None:
-            raise UnsupportedPlanningError(
-                'Unable to create OMPL_Simplifier planner.')
-
     def __str__(self):
         return 'OMPL Simplifier'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def ShortcutPath(self, robot, path, timeout=1., **kwargs):
         # The planner operates in-place, so we need to copy the input path. We
         # also need to copy the trajectory into the planning environment.
-        output_path = CopyTrajectory(path, env=self.env)
+
+        planner_name = 'OMPL_Simplifier'
+        env = robot.GetEnv()
+        planner = openravepy.RaveCreatePlanner(env, planner_name)
+
+        if planner is None:
+            raise UnsupportedPlanningError(
+                'Unable to create OMPL_Simplifier planner.')
+
+        output_path = CopyTrajectory(path, env=env)
 
         extraParams = '<time_limit>{:f}</time_limit>'.format(timeout)
 
@@ -384,8 +388,8 @@ class OMPLSimplifier(BasePlanner):
         # TODO: It would be nice to call planningutils.SmoothTrajectory here,
         # but we can't because it passes a NULL robot to InitPlan. This is an
         # issue that needs to be fixed in or_ompl.
-        self.planner.InitPlan(robot, params)
-        status = self.planner.PlanPath(output_path, releasegil=True)
+        planner.InitPlan(robot, params)
+        status = planner.PlanPath(output_path, releasegil=True)
         if status not in [PlannerStatus.HasSolution,
                           PlannerStatus.InterruptedWithSolution]:
             raise PlanningError('Simplifier returned with status {0:s}.'

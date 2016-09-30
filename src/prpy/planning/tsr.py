@@ -32,7 +32,7 @@ import time
 import itertools
 import numpy
 import openravepy
-from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
+from base import (BasePlanner, LockedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 from .base import Tags
 from ..util import SetTrajectoryTags
@@ -40,7 +40,8 @@ from ..collision import DefaultRobotCollisionCheckerFactory
 from openravepy import (
     IkFilterOptions,
     IkParameterization,
-    IkParameterizationType
+    IkParameterizationType,
+    Robot
 )
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ class TSRPlanner(BasePlanner):
 
     # TODO: Temporarily disabled based on Pras' feedback.
     """
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToIK(self, robot, goal_pose, **kw_args):
         from ..tsr import TSR, TSRChain
 
@@ -85,7 +86,7 @@ class TSRPlanner(BasePlanner):
         return self.PlanToTSR(robot, [tsr_chain], **kw_args)
     """
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=0.5,
                   num_attempts=3, chunk_size=1, num_candidates=50, ranker=None,
                   max_deviation=2 * numpy.pi, **kw_args):
@@ -128,11 +129,6 @@ class TSRPlanner(BasePlanner):
                 raise UnsupportedPlanningError(
                     'Cannot handle start or trajectory-wide TSR constraints.')
         tsrchains = [t for t in tsrchains if t.sample_goal]
-
-        # We assume the active manipulator's DOFs are active when computing IK,
-        # calling the delegate planners, and collision checking with the
-        # ActiveDOFs option set.
-        robot.SetActiveDOFs(manipulator.GetArmIndices())
 
         def compute_ik_solutions(tsrchain):
             pose = tsrchain.sample()
@@ -178,7 +174,15 @@ class TSRPlanner(BasePlanner):
             # Set ActiveDOFs for IK collision checking. We intentionally
             # restore the original collision checking options before calling
             # the planner to give it a pristine environment.
-            with self.robot_checker_factory(robot) as robot_checker:
+            with self.robot_checker_factory(robot) as robot_checker, \
+                robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOFs, \
+                                Robot.SaveParameters.LinkTransformation):
+
+                # We assume the active manipulator's DOFs are active when computing IK,
+                # calling the delegate planners, and collision checking with the
+                # ActiveDOFs option set.
+                robot.SetActiveDOFs(manipulator.GetArmIndices())
+
                 while is_time_available() and len(configurations_chunk) < chunk_size:
                     # Generate num_candidates candidates and rank them using the
                     # user-supplied IK ranker.

@@ -40,7 +40,7 @@ from ..util import SetTrajectoryTags
 from .adapters import PlanToEndEffectorOffsetTSRAdapter
 from .base import (
     BasePlanner,
-    ClonedPlanningMethod,
+    LockedPlanningMethod,
     PlanningError,
     Tags,
     UnsupportedPlanningError,
@@ -56,11 +56,6 @@ class CBiRRTPlanner(BasePlanner):
         if robot_checker_factory is None:
             robot_checker_factory = DefaultRobotCollisionCheckerFactory
 
-        self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
-
-        if self.problem is None:
-            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
-
         self.robot_checker_factory = robot_checker_factory
         if isinstance(robot_checker_factory, SimpleRobotCollisionCheckerFactory):
             self._is_baked = False
@@ -73,7 +68,7 @@ class CBiRRTPlanner(BasePlanner):
     def __str__(self):
         return 'CBiRRT'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to multiple goal configurations with CBiRRT. This adds each goal
@@ -86,7 +81,7 @@ class CBiRRTPlanner(BasePlanner):
         kw_args.setdefault('smoothingitrs', 0)
         return self.Plan(robot, jointgoals=goals, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a single goal configuration with CBiRRT.
@@ -97,7 +92,7 @@ class CBiRRTPlanner(BasePlanner):
         kw_args.setdefault('smoothingitrs', 0)
         return self.Plan(robot, jointgoals=[goal], **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Plan to a desired end-effector pose.
@@ -116,7 +111,7 @@ class CBiRRTPlanner(BasePlanner):
         return self.Plan(robot, tsr_chains=[tsr_chain], **kw_args)
 
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
         """
         Plan to a desired end-effector offset.
@@ -132,7 +127,7 @@ class CBiRRTPlanner(BasePlanner):
         return self.PlanToTSR(robot, tsr_chains=chains, **kw_args)
 
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsr_chains, smoothingitrs=100, **kw_args):
         """
         Plan to a goal specified as a list of TSR chains. CBiRRT supports an
@@ -177,6 +172,11 @@ class CBiRRTPlanner(BasePlanner):
                              ' non-negative; got {:f}.'.format(timelimit))
 
         env = robot.GetEnv()
+        problem = openravepy.RaveCreateProblem(env, 'CBiRRT')
+
+        if problem is None:
+            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
+
         is_endpoint_deterministic = True
         is_constrained = False
 
@@ -184,7 +184,7 @@ class CBiRRTPlanner(BasePlanner):
         # when an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
         # self.ClearIkSolver(robot.GetActiveManipulator())
 
-        env.LoadProblem(self.problem, robot.GetName())
+        env.LoadProblem(problem, robot.GetName())
 
         args =  ['RunCBiRRT']
         args += ['timelimit', str(timelimit)]
@@ -266,7 +266,7 @@ class CBiRRTPlanner(BasePlanner):
         collision_checker = self.robot_checker_factory(robot)
         options = collision_checker.collision_options
         with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
-            response = self.problem.SendCommand(args_str, True)
+            response = problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response,

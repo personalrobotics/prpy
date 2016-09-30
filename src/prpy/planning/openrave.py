@@ -35,7 +35,7 @@ import openravepy
 from base import (BasePlanner,
                   PlanningError,
                   UnsupportedPlanningError,
-                  ClonedPlanningMethod)
+                  LockedPlanningMethod)
 
 
 class OpenRAVEPlanner(BasePlanner):
@@ -45,16 +45,10 @@ class OpenRAVEPlanner(BasePlanner):
         self.setup = False
         self.algorithm = algorithm
 
-        try:
-            self.planner = openravepy.RaveCreatePlanner(self.env, algorithm)
-        except openravepy.openrave_exception:
-            raise UnsupportedPlanningError('Unable to create {:s} module.'
-                                           .format(str(self)))
-
     def __str__(self):
         return 'OpenRAVE {0:s}'.format(self.algorithm)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OpenRAVE. This will invoke the
@@ -68,6 +62,14 @@ class OpenRAVEPlanner(BasePlanner):
 
     def _Plan(self, robot, goals, maxiter=500, continue_planner=False,
               or_args=None, **kw_args):
+
+        env = robot.GetEnv()
+
+        try:
+            planner = openravepy.RaveCreatePlanner(env, algorithm)
+        except openravepy.openrave_exception:
+            raise UnsupportedPlanningError('Unable to create {:s} module.'
+                                           .format(str(self)))
 
         # Get rid of default postprocessing
         extraParams = ('<_postprocessing planner="">'
@@ -87,17 +89,17 @@ class OpenRAVEPlanner(BasePlanner):
         params.SetGoalConfig(goals)
         params.SetExtraParameters(extraParams)
 
-        traj = openravepy.RaveCreateTrajectory(self.env, 'GenericTrajectory')
+        traj = openravepy.RaveCreateTrajectory(env, 'GenericTrajectory')
 
         try:
-            self.env.Lock()
+            env.Lock()
 
             # Plan.
             if (not continue_planner) or not self.setup:
-                self.planner.InitPlan(robot, params)
+                planner.InitPlan(robot, params)
                 self.setup = True
 
-            status = self.planner.PlanPath(traj, releasegil=True)
+            status = planner.PlanPath(traj, releasegil=True)
             from openravepy import PlannerStatus
             if status not in [PlannerStatus.HasSolution,
                               PlannerStatus.InterruptedWithSolution]:
@@ -106,7 +108,7 @@ class OpenRAVEPlanner(BasePlanner):
         except Exception as e:
             raise PlanningError('Planning failed with error: {:s}'.format(e))
         finally:
-            self.env.Unlock()
+            env.Unlock()
 
         return traj
 
@@ -116,7 +118,7 @@ class BiRRTPlanner(OpenRAVEPlanner):
     def __init__(self):
         OpenRAVEPlanner.__init__(self, algorithm='birrt')
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a desired configuration with OpenRAVE. This will invoke the
@@ -127,7 +129,7 @@ class BiRRTPlanner(OpenRAVEPlanner):
         """
         return self._Plan(robot, goal, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to one of many configuration with OpenRAVE's BiRRT planner.
