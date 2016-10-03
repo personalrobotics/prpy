@@ -134,12 +134,17 @@ class TSRPlanner(BasePlanner):
         # ActiveDOFs option set.
         robot.SetActiveDOFs(manipulator.GetArmIndices())
 
+        from openravepy import CollisionReport 
+        report = CollisionReport()
         def compute_ik_solutions(tsrchain):
             pose = tsrchain.sample()
             ik_param = IkParameterization(pose,
                 IkParameterizationType.Transform6D)
+
             ik_solutions = manipulator.FindIKSolutions(
-                ik_param, IkFilterOptions.IgnoreSelfCollisions,
+                ik_param, IkFilterOptions.IgnoreSelfCollisions |
+                IkFilterOptions.IgnoreEndEffectorCollisions |
+                IkFilterOptions.IgnoreEndEffectorSelfCollisions,
                 ikreturn=False, releasegil=True)
 
             statistics['num_tsr_samples'] += 1
@@ -151,7 +156,7 @@ class TSRPlanner(BasePlanner):
             p = openravepy.KinBody.SaveParameters
             with robot.CreateRobotStateSaver(p.LinkTransformation):
                 robot.SetActiveDOFValues(ik_solution)
-                return not robot_checker.CheckCollision()
+                return not robot_checker.CheckCollision(report=report)
 
         def is_time_available(*args):
             # time_start and time_expired are defined below.
@@ -204,6 +209,7 @@ class TSRPlanner(BasePlanner):
             time_expired += time.time() - time_start
 
             if len(configurations_chunk) == 0:
+
                 raise PlanningError(
                     'Reached TSR sampling timelimit on attempt {:d} of {:d}: Failed'
                     ' to generate any collision free IK solutions after attempting'
@@ -235,6 +241,7 @@ class TSRPlanner(BasePlanner):
 
                 return traj
             except PlanningError as e:
+                print "TSR Planner: ", e
                 logger.warning('Planning attempt %d of %d failed: %s',
                     iattempt + 1, num_attempts, e)
 
