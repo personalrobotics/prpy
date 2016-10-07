@@ -34,14 +34,38 @@ import numpy
 import openravepy
 from base import (BasePlanner, ClonedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
+from .base import Tags
+from ..util import SetTrajectoryTags
+from ..collision import DefaultRobotCollisionCheckerFactory
+from openravepy import (
+    IkFilterOptions,
+    IkParameterization,
+    IkParameterizationType
+)
 
 logger = logging.getLogger(__name__)
 
 
+# Source: http://stackoverflow.com/a/8991553/111426
+def grouper(n, iterable):
+    it = iter(iterable)
+    while True:
+       chunk = tuple(itertools.islice(it, n))
+       if not chunk:
+           return
+       yield chunk
+
+
+
 class TSRPlanner(BasePlanner):
-    def __init__(self, delegate_planner=None):
+    def __init__(self, delegate_planner=None, robot_checker_factory=None):
         super(TSRPlanner, self).__init__()
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
         self.delegate_planner = delegate_planner
+        self.robot_checker_factory = robot_checker_factory
 
     def __str__(self):
         if self.delegate_planner is not None:
@@ -62,8 +86,8 @@ class TSRPlanner(BasePlanner):
     """
 
     @ClonedPlanningMethod
-    def PlanToTSR(self, robot, tsrchains, tsr_timeout=2.0,
-                  num_attempts=3, chunk_size=1, ranker=None,
+    def PlanToTSR(self, robot, tsrchains, tsr_timeout=0.5,
+                  num_attempts=3, chunk_size=1, num_candidates=50, ranker=None,
                   max_deviation=2 * numpy.pi, **kw_args):
         """
         Plan to a desired TSR set using a-priori goal sampling.  This planner
@@ -78,6 +102,7 @@ class TSRPlanner(BasePlanner):
         @param robot the robot whose active manipulator will be used
         @param tsrchains a list of TSR chains that define a goal set
         @param num_attempts the maximum number of planning attempts to make
+        @param num_candidates the number of candidate IK solutions to rank
         @param chunk_size the number of sampled goals to use per planning call
         @param tsr_timeout the maximum time to spend sampling goal TSR chains
         @param ranker an IK ranking function to use over the IK solutions
@@ -89,14 +114,13 @@ class TSRPlanner(BasePlanner):
         delegate_planner = self.delegate_planner or robot.planner
 
         # Plan using the active manipulator.
-        with robot.GetEnv():
-            manipulator = robot.GetActiveManipulator()
+        manipulator = robot.GetActiveManipulator()
 
-            # Distance from current configuration is default ranking.
-            if ranker is None:
-                from ..ik_ranking import NominalConfiguration
-                ranker = NominalConfiguration(manipulator.GetArmDOFValues(),
-                                              max_deviation=max_deviation)
+        # Distance from current configuration is default ranking.
+        if ranker is None:
+            from ..ik_ranking import NominalConfiguration
+            ranker = NominalConfiguration(manipulator.GetArmDOFValues(),
+                                          max_deviation=max_deviation)
 
         # Test for tsrchains that cannot be handled.
         for tsrchain in tsrchains:
@@ -105,77 +129,114 @@ class TSRPlanner(BasePlanner):
                     'Cannot handle start or trajectory-wide TSR constraints.')
         tsrchains = [t for t in tsrchains if t.sample_goal]
 
-        # Create an iterator that cycles through each TSR chain.
-        tsr_cycler = itertools.cycle(tsrchains)
+        # We assume the active manipulator's DOFs are active when computing IK,
+        # calling the delegate planners, and collision checking with the
+        # ActiveDOFs option set.
+        robot.SetActiveDOFs(manipulator.GetArmIndices())
 
-        # Create an iterator that cycles TSR chains until the timelimit.
-        tsr_timelimit = time.time() + tsr_timeout
-        tsr_sampler = itertools.takewhile(
-            lambda v: time.time() < tsr_timelimit, tsr_cycler)
+        def compute_ik_solutions(tsrchain):
+            pose = tsrchain.sample()
+            ik_param = IkParameterization(pose,
+                IkParameterizationType.Transform6D)
+            ik_solutions = manipulator.FindIKSolutions(
+                ik_param, IkFilterOptions.IgnoreSelfCollisions,
+                ikreturn=False, releasegil=True)
 
-        # Sample a list of TSR poses and collate valid IK solutions.
-        from openravepy import (IkFilterOptions,
-                                IkParameterization,
-                                IkParameterizationType)
-        ik_solutions = []
-        for tsrchain in tsr_sampler:
-            ik_param = IkParameterization(
-                tsrchain.sample(), IkParameterizationType.Transform6D)
-            ik_solution = manipulator.FindIKSolutions(
-                ik_param, IkFilterOptions.CheckEnvCollisions,
-                ikreturn=False, releasegil=True
-            )
-            if ik_solution.shape[0] > 0:
-                ik_solutions.append(ik_solution)
+            statistics['num_tsr_samples'] += 1
+            statistics['num_ik_solutions'] += ik_solutions.shape[0]
 
-        if len(ik_solutions) == 0:
-            raise PlanningError('No collision-free IK solutions at goal TSRs.')
+            return ik_solutions
 
-        # Sort the IK solutions in ascending order by the costs returned by the
-        # ranker. Lower cost solutions are better and infinite cost solutions
-        # are assumed to be infeasible.
-        ik_solutions = numpy.vstack(ik_solutions)
-        scores = ranker(robot, ik_solutions)
-        valid_idxs = ~numpy.isposinf(scores)
-        valid_scores = scores[valid_idxs]
-        valid_solutions = ik_solutions[valid_idxs, :]
-        ranked_indices = numpy.argsort(valid_scores)
-        ranked_ik_solutions = valid_solutions[ranked_indices, :]
+        def is_configuration_valid(ik_solution):
+            p = openravepy.KinBody.SaveParameters
+            with robot.CreateRobotStateSaver(p.LinkTransformation):
+                robot.SetActiveDOFValues(ik_solution)
+                return not robot_checker.CheckCollision()
 
-        # Group the IK solutions into sets of the specified size
-        # (plan for each set of IK solutions together).
-        ranked_ik_solution_sets = [
-            ranked_ik_solutions[i:i + chunk_size, :]
-            for i in range(0, ranked_ik_solutions.shape[0], chunk_size)
-        ]
+        def is_time_available(*args):
+            # time_start and time_expired are defined below.
+            return time.time() - time_start + time_expired < tsr_timeout
 
-        num_attempts = min(len(ranked_ik_solution_sets), num_attempts)
-        ik_set_list = enumerate(ranked_ik_solution_sets[:num_attempts])
+        time_expired = 0.
+        statistics = {
+            'num_tsr_samples': 0,
+            'num_ik_solutions': 0
+        }
 
-        # Configure the robot to use the active manipulator for planning.
-        p = openravepy.KinBody.SaveParameters
-        with robot.CreateRobotStateSaver(p.ActiveDOF):
-            robot.SetActiveDOFs(manipulator.GetArmIndices())
+        configuration_generator = itertools.chain.from_iterable(
+            itertools.ifilter(
+                lambda configurations: configurations.shape[0] > 0,
+                itertools.imap(compute_ik_solutions,
+                    itertools.takewhile(
+                        is_time_available,
+                        itertools.cycle(tsrchains)))))
 
-            # Try planning to each solution set in descending cost order.
-            for i, ik_set in ik_set_list:
-                try:
-                    if ik_set.shape[0] > 1:
-                        traj = delegate_planner.PlanToConfigurations(
-                            robot, ik_set, **kw_args)
-                    else:
-                        traj = delegate_planner.PlanToConfiguration(
-                            robot, ik_set[0], **kw_args)
+        for iattempt in xrange(num_attempts):
+            configurations_chunk = []
+            time_start = time.time()
 
-                    logger.info('Planned to IK solution set %d of %d.',
-                                i + 1, num_attempts)
-                    return traj
-                except PlanningError as e:
-                    logger.warning(
-                        'Planning to IK solution set %d of %d failed: %s',
-                        i + 1, num_attempts, e)
+            # Set ActiveDOFs for IK collision checking. We intentionally
+            # restore the original collision checking options before calling
+            # the planner to give it a pristine environment.
+            with self.robot_checker_factory(robot) as robot_checker:
+                while is_time_available() and len(configurations_chunk) < chunk_size:
+                    # Generate num_candidates candidates and rank them using the
+                    # user-supplied IK ranker.
+                    candidates = list(itertools.islice(configuration_generator, num_candidates))
+                    if not candidates:
+                        break
 
-        # If none of the planning attempts succeeded, report failure.
-        raise PlanningError(
-            'Planning to the top {:d} of {:d} IK solution sets failed.'
-            .format(num_attempts, len(ranked_ik_solution_sets)))
+                    candidates_scores = ranker(robot, numpy.array(candidates))
+                    candidates_scored = zip(candidates_scores, candidates)
+                    candidates_scored.sort(key=lambda (score, _): score)
+                    candidates_ranked = [q for _, q in candidates_scored]
+
+                    # Select valid IK solutions from the chunk.
+                    candidates_valid = itertools.islice(
+                        itertools.ifilter(
+                            is_configuration_valid,
+                            itertools.takewhile(
+                                is_time_available,
+                                candidates_ranked)),
+                        chunk_size - len(configurations_chunk))
+                    configurations_chunk.extend(candidates_valid)
+
+            time_expired += time.time() - time_start
+
+            if len(configurations_chunk) == 0:
+                raise PlanningError(
+                    'Reached TSR sampling timelimit on attempt {:d} of {:d}: Failed'
+                    ' to generate any collision free IK solutions after attempting'
+                    ' {:d} TSR samples with {:d} candidate IK solutions.'.format(
+                        iattempt + 1, num_attempts,
+                        statistics['num_tsr_samples'], statistics['num_ik_solutions']))
+            elif len(configurations_chunk) < chunk_size:
+                logger.warning(
+                    'Reached TSR sampling timelimit on attempt %d of %d: got %d'
+                    ' of %d IK solutions.',
+                    iattempt + 1, num_attempts,
+                    len(configurations_chunk), chunk_size)
+
+            try:
+                logger.info('Planning attempt %d of %d to a set of %d IK solution(s).',
+                    iattempt + 1, num_attempts, len(configurations_chunk))
+
+                if chunk_size == 1:
+                    traj = delegate_planner.PlanToConfiguration(
+                        robot, configurations_chunk[0], **kw_args)
+                else:
+                    traj = delegate_planner.PlanToConfigurations(
+                        robot, configurations_chunk, **kw_args)
+
+                SetTrajectoryTags(traj, {
+                    Tags.DETERMINISTIC_TRAJECTORY: False,
+                    Tags.DETERMINISTIC_ENDPOINT: False,
+                }, append=True)
+
+                return traj
+            except PlanningError as e:
+                logger.warning('Planning attempt %d of %d failed: %s',
+                    iattempt + 1, num_attempts, e)
+
+        raise PlanningError('Failed to find a solution in {:d} attempts.'.format(
+            iattempt + 1))

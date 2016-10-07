@@ -33,8 +33,9 @@
 import logging
 import numpy
 import openravepy
+from .base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
 from .. import util
-from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
+from ..collision import DefaultRobotCollisionCheckerFactory
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -73,8 +74,13 @@ class Status(Enum):
 
 
 class VectorFieldPlanner(BasePlanner):
-    def __init__(self):
+    def __init__(self, robot_checker_factory=None):
         super(VectorFieldPlanner, self).__init__()
+
+        if robot_checker_factory is None:
+            robot_checker_factory = DefaultRobotCollisionCheckerFactory
+
+        self.robot_checker_factory = robot_checker_factory
 
     def __str__(self):
         return 'VectorFieldPlanner'
@@ -418,9 +424,9 @@ class VectorFieldPlanner(BasePlanner):
 
     @ClonedPlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
-                          integration_time_interval=10.0,
-                          timelimit=5.0,
-                          **kw_args):
+                          integration_time_interval=10.0, timelimit=5.0,
+                          sampling_func=util.SampleTimeGenerator,
+                          norm_order=2, **kw_args):
         """
         Follow a joint space vectorfield to termination.
 
@@ -430,6 +436,11 @@ class VectorFieldPlanner(BasePlanner):
         @param integration_time_interval The time interval to integrate
                                          over.
         @param timelimit time limit before giving up
+        @param sampling_func sample generator to compute validity checks
+           Note: Function will terminate as soon as invalid configuration is 
+                 encountered. No more samples will be requested from the 
+                 sampling_func after this occurs.
+        @param norm_order order of norm to use for collision checking
         @param kw_args keyword arguments to be passed to fn_vectorfield
         @return traj
         """
@@ -438,7 +449,7 @@ class VectorFieldPlanner(BasePlanner):
             SelfCollisionPlanningError,
         )
         from openravepy import CollisionReport, RaveCreateTrajectory
-        from ..util import GetCollisionCheckPts
+        from ..util import GetLinearCollisionCheckPts
         import time
         import scipy.integrate
 
@@ -448,7 +459,8 @@ class VectorFieldPlanner(BasePlanner):
         nonlocals = {
             'exception': None,
             't_cache': None,
-            't_check': 0.,
+            # Must be negative so we check the start of the trajectory.
+            't_check': -1.,
         }
 
         env = robot.GetEnv()
@@ -494,12 +506,8 @@ class VectorFieldPlanner(BasePlanner):
 
             robot.SetActiveDOFValues(q)
 
-            # Check collision.
-            report = CollisionReport()
-            if env.CheckCollision(robot, report=report):
-                raise CollisionPlanningError.FromReport(report)
-            elif robot.CheckSelfCollision(report=report):
-                raise SelfCollisionPlanningError.FromReport(report)
+            # Check collision (throws an exception on collision)
+            robot_checker.VerifyCollisionFree()
 
             # Check the termination condition.
             status = fn_terminate()
@@ -525,48 +533,56 @@ class VectorFieldPlanner(BasePlanner):
                 if path.GetNumWaypoints() == 1:
                     checks = [(t, q)]
                 else:
-                    # TODO: This should start at t_check. Unfortunately, a bug
-                    # in GetCollisionCheckPts causes this to enter an infinite
-                    # loop.
-                    checks = GetCollisionCheckPts(robot, path,
-                                                  include_start=False)
-                    # start_time=nonlocals['t_check'])
+                    # This returns collision checks for the entire trajectory,
+                    # including the part that has already been checked. These
+                    # duplicate checks will be filtered out below.
+                    checks = GetLinearCollisionCheckPts(robot, path,
+                                                        norm_order=norm_order,
+                                                        sampling_func=sampling_func)
 
                 for t_check, q_check in checks:
-                    fn_status_callback(t_check, q_check)
+                    # TODO: It would be more efficient to only generate checks
+                    # for the new part of the trajectory.
+                    if t_check <= nonlocals['t_check']:
+                        continue
 
-                    # Record the time of this check so we continue checking at
-                    # DOF resolution the next time the integrator takes a step.
+                    # Record the time of this check so we continue checking
+                    # from where we left off. We do this first, just in case
+                    # fn_status_callback raises an exception.
                     nonlocals['t_check'] = t_check
+
+                    fn_status_callback(t_check, q_check)
 
                 return 0  # Keep going.
             except PlanningError as e:
                 nonlocals['exception'] = e
                 return -1  # Stop.
 
-        # Integrate the vector field to get a configuration space path.
-        #
-        # TODO: Tune the integrator parameters.
-        #
-        # Integrator: 'dopri5'
-        # DOPRI (Dormand & Prince 1980) is an explicit method for solving ODEs.
-        # It is a member of the Runge-Kutta family of solvers.
-        integrator = scipy.integrate.ode(f=fn_wrapper)
-        integrator.set_integrator(name='dopri5',
-                                  first_step=0.1,
-                                  atol=1e-3,
-                                  rtol=1e-3)
-        # Set function to be called at every successful integration step.
-        integrator.set_solout(fn_callback)
-        # Initial conditions
-        integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
-        integrator.integrate(t=integration_time_interval)
+        with self.robot_checker_factory(robot) as robot_checker:
+            # Integrate the vector field to get a configuration space path.
+            #
+            # TODO: Tune the integrator parameters.
+            #
+            # Integrator: 'dopri5'
+            # DOPRI (Dormand & Prince 1980) is an explicit method for solving ODEs.
+            # It is a member of the Runge-Kutta family of solvers.
+            integrator = scipy.integrate.ode(f=fn_wrapper)
+            integrator.set_integrator(name='dopri5',
+                                      first_step=0.1,
+                                      atol=1e-3,
+                                      rtol=1e-3)
+            # Set function to be called at every successful integration step.
+            integrator.set_solout(fn_callback)
+            integrator.set_initial_value(y=robot.GetActiveDOFValues(), t=0.)
+
+            integrator.integrate(t=integration_time_interval)
 
         t_cache = nonlocals['t_cache']
         exception = nonlocals['exception']
 
         if t_cache is None:
-            raise exception or PlanningError('An unknown error has occurred.')
+            raise exception or PlanningError(
+                'An unknown error has occurred.', deterministic=True)
         elif exception:
             logger.warning('Terminated early: %s', str(exception))
 
@@ -586,11 +602,11 @@ class VectorFieldPlanner(BasePlanner):
                            path.Sample(t_cache),
                            cspec)
 
-        # Flag this trajectory as constrained.
-        util.SetTrajectoryTags(
-            output_path, {
-                Tags.CONSTRAINED: 'true',
-                Tags.SMOOTH: 'true'
-            }, append=True
-        )
+        util.SetTrajectoryTags(output_path, {
+            Tags.SMOOTH: True,
+            Tags.CONSTRAINED: True,
+            Tags.DETERMINISTIC_TRAJECTORY: True,
+            Tags.DETERMINISTIC_ENDPOINT: True,
+        }, append=True)
+
         return output_path

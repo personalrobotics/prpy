@@ -83,6 +83,17 @@ class Tags(object):
     The amount of time that was spent actually running a trajectory.
     """
 
+    DETERMINISTIC_TRAJECTORY = 'deterministic'
+    """
+    Whether repeating the same planning query will produce the same trajectory.
+    """
+
+    DETERMINISTIC_ENDPOINT = 'deterministic_endpoint'
+    """
+    Whether repeating the same planning query will produce a trajectory with
+    the same endpoint as this trajectory.
+    """
+
 
 class LockedPlanningMethod(object):
     """
@@ -273,9 +284,15 @@ class MetaPlanner(Planner):
 
 
 class Sequence(MetaPlanner):
-    def __init__(self, *planners):
+    KNOWN_KWARGS = set(['allow_nondeterministic'])
+
+    def __init__(self, *planners, **kwargs):
+        assert self.KNOWN_KWARGS.issuperset(kwargs.keys())
+
         super(Sequence, self).__init__()
         self._planners = planners
+        self._allow_nondeterministic = kwargs.get(
+            'allow_nondeterministic', False)
 
     def __str__(self):
         return 'Sequence({:s})'.format(', '.join(map(str, self._planners)))
@@ -288,8 +305,11 @@ class Sequence(MetaPlanner):
         from ..util import Timer
 
         errors = dict()
+        is_sequence_deterministic = True
 
         for planner in self._planners:
+            e = None
+
             try:
                 if planner.has_planning_method(method):
                     logger.info('Sequence - Calling planner "%s".', str(planner))
@@ -297,6 +317,23 @@ class Sequence(MetaPlanner):
 
                     with Timer() as timer:
                         output = planner_method(*args, **kw_args)
+
+                    if not is_sequence_deterministic:
+                        # TODO: It is overly conservative to set _ENDPOINT,
+                        # e.g. for PlanToConfiguration. Unfortunately, there is
+                        # no easy way to detect this special case.
+                        SetTrajectoryTags(output, {
+                            Tags.DETERMINISTIC_TRAJECTORY: False,
+                            Tags.DETERMINISTIC_ENDPOINT: False,
+                        }, append=True)
+
+                        if not self._allow_nondeterministic:
+                            logger.warning(
+                                'Tagging trajectory as non-deterministic because an'
+                                ' earlier planner in the Sequence threw a'
+                                ' non-deterministic PlanningError. Pass the'
+                                ' "allow_nondeterministic" to this Sequence'
+                                ' constructor if you intended this behavior.')
 
                     logger.info('Sequence - Planning succeeded after %.3f'
                                 ' seconds with "%s".',
@@ -306,12 +343,25 @@ class Sequence(MetaPlanner):
                     logger.debug('Sequence - Skipping planner "%s"; does not'
                                  ' have "%s" method.', str(planner), method)
             except MetaPlanningError as e:
-                errors[planner] = e
+                pass # Exception handled below.
             except PlanningError as e:
                 logger.warning('Planning with %s failed: %s', planner, e)
+                # Exception handled below.
+
+            if e is not None:
+                if e.deterministic is None:
+                    is_sequence_deterministic = False
+                    logger.warning(
+                        'Planner %s raised a PlanningError without the'
+                        ' "deterministic" flag set. Assuming the result'
+                        ' is non-deterministic.', planner)
+                elif not e.deterministic:
+                    is_sequence_deterministic = False
+
                 errors[planner] = e
 
-        raise MetaPlanningError('All planners failed.', errors)
+        raise MetaPlanningError(
+            'All planners failed.', errors, deterministic=is_sequence_deterministic)
 
 
 class Ranked(MetaPlanner):
