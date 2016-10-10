@@ -45,6 +45,7 @@ from .base import (
     Tags,
     UnsupportedPlanningError,
 )
+import contextlib
 
 
 class CBiRRTPlanner(BasePlanner):
@@ -162,7 +163,7 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
-        from openravepy import CollisionOptionsStateSaver
+        from openravepy import CollisionOptionsStateSaver, Robot, KinBody
 
         if timelimit is None:
             timelimit = self.timelimit
@@ -265,12 +266,30 @@ class CBiRRTPlanner(BasePlanner):
         # Bypass the context manager since CBiRRT does its own baking in C++.
         collision_checker = self.robot_checker_factory(robot)
         options = collision_checker.collision_options
-        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
+        
+        if tsr_chains is not None:
+            mimicbodies = [env.GetKinBody(chain.mimicbodyname) 
+                           for chain in tsr_chains if chain.mimicbodyname is not 'NULL']
+            mimicbody_savers = [
+                mimicbody.CreateKinBodyStateSaver(KinBody.SaveParameters.LinkTransformation)
+                for mimicbody in mimicbodies]
+        else:
+            mimicbody_savers = []
+
+        upper, lower = robot.GetDOFLimits()
+
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options), \
+            robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF | 
+                                        Robot.SaveParameters.LinkTransformation), \
+            contextlib.nested(*mimicbody_savers):
             response = problem.SendCommand(args_str, True)
+
+        robot.SetDOFLimits(upper, lower)
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response,
                 deterministic=False)
+
 
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
