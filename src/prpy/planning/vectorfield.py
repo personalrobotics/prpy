@@ -560,8 +560,7 @@ class VectorFieldPlanner(BasePlanner):
                 return -1  # Stop.
 
         with self.robot_checker_factory(robot) as robot_checker, \
-            robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF |
-                            Robot.SaveParameters.LinkTransformation):
+            robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
             # Integrate the vector field to get a configuration space path.
             #
             # TODO: Tune the integrator parameters.

@@ -74,18 +74,6 @@ class TSRPlanner(BasePlanner):
         else:
             return 'TSRPlanner'
 
-    # TODO: Temporarily disabled based on Pras' feedback.
-    """
-    @LockedPlanningMethod
-    def PlanToIK(self, robot, goal_pose, **kw_args):
-        from ..tsr import TSR, TSRChain
-
-        tsr = TSR(T0_w=goal_pose, Tw_e=numpy.eye(4), Bw=numpy.zeros((6,2)))
-        tsr_chain = TSRChain(sample_goal=True, TSR=tsr)
-
-        return self.PlanToTSR(robot, [tsr_chain], **kw_args)
-    """
-
     @LockedPlanningMethod
     def PlanToTSR(self, robot, tsrchains, tsr_timeout=0.5,
                   num_attempts=3, chunk_size=1, num_candidates=50, ranker=None,

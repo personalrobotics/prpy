@@ -94,17 +94,18 @@ class OpenRAVEPlanner(BasePlanner):
         try:
             env.Lock()
 
-            # Plan.
-            if (not continue_planner) or not self.setup:
-                planner.InitPlan(robot, params)
-                self.setup = True
+            with robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
+                # Plan.
+                if (not continue_planner) or not self.setup:
+                    planner.InitPlan(robot, params)
+                    self.setup = True
 
-            status = planner.PlanPath(traj, releasegil=True)
-            from openravepy import PlannerStatus
-            if status not in [PlannerStatus.HasSolution,
-                              PlannerStatus.InterruptedWithSolution]:
-                raise PlanningError('Planner returned with status {:s}.'
-                                    .format(str(status)))
+                status = planner.PlanPath(traj, releasegil=True)
+                from openravepy import PlannerStatus
+                if status not in [PlannerStatus.HasSolution,
+                                  PlannerStatus.InterruptedWithSolution]:
+                    raise PlanningError('Planner returned with status {:s}.'
+                                        .format(str(status)))
         except Exception as e:
             raise PlanningError('Planning failed with error: {:s}'.format(e))
         finally:

@@ -226,7 +226,8 @@ class OMPLPlanner(BasePlanner):
         env = robot.GetEnv()
         robot_checker = self.robot_checker_factory(robot)
         options = robot_checker.collision_options
-        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options), \
+            robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
             traj = RaveCreateTrajectory(env, 'GenericTrajectory')
             status = planner.PlanPath(traj, releasegil=True)
 
@@ -388,12 +389,13 @@ class OMPLSimplifier(BasePlanner):
         # TODO: It would be nice to call planningutils.SmoothTrajectory here,
         # but we can't because it passes a NULL robot to InitPlan. This is an
         # issue that needs to be fixed in or_ompl.
-        planner.InitPlan(robot, params)
-        status = planner.PlanPath(output_path, releasegil=True)
-        if status not in [PlannerStatus.HasSolution,
-                          PlannerStatus.InterruptedWithSolution]:
-            raise PlanningError('Simplifier returned with status {0:s}.'
-                                .format(str(status)))
+        with robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
+            planner.InitPlan(robot, params)
+            status = planner.PlanPath(output_path, releasegil=True)
+            if status not in [PlannerStatus.HasSolution,
+                              PlannerStatus.InterruptedWithSolution]:
+                raise PlanningError('Simplifier returned with status {0:s}.'
+                                    .format(str(status)))
 
         # Tag the trajectory as non-deterministic since the OMPL path
         # simplifier samples random candidate shortcuts. It does not, however,

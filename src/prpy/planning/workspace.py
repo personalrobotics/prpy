@@ -75,11 +75,14 @@ class GreedyIKPlanner(BasePlanner):
                         openravepy.poseFromMatrix(start_pose))
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(goal_pose))
-            openravepy.planningutils.RetimeAffineTrajectory(
-                traj,
-                maxvelocities=0.1 * numpy.ones(7),
-                maxaccelerations=0.1 * numpy.ones(7)
-            )
+
+            with robot.CreateRobotStateSaver(
+                Robot.SaveParameters.LinkTransformation):
+                openravepy.planningutils.RetimeAffineTrajectory(
+                    traj,
+                    maxvelocities=0.1 * numpy.ones(7),
+                    maxaccelerations=0.1 * numpy.ones(7)
+                )
 
         qtraj = self.PlanWorkspacePath(robot, traj, timelimit)
         # modify tags to reflect that we won't care about
@@ -140,11 +143,13 @@ class GreedyIKPlanner(BasePlanner):
                 max_pose[0:3, 3] += max_distance * direction
                 traj.Insert(traj.GetNumWaypoints(),
                             openravepy.poseFromMatrix(max_pose))
-            openravepy.planningutils.RetimeAffineTrajectory(
-                traj,
-                maxvelocities=0.1 * numpy.ones(7),
-                maxaccelerations=0.1 * numpy.ones(7)
-            )
+            with robot.CreateRobotStateSaver(
+                Robot.SaveParameters.LinkTransformation):
+                openravepy.planningutils.RetimeAffineTrajectory(
+                    traj,
+                    maxvelocities=0.1 * numpy.ones(7),
+                    maxaccelerations=0.1 * numpy.ones(7)
+                )
 
         return self.PlanWorkspacePath(robot, traj,
                                       timelimit, min_waypoint_index=1)

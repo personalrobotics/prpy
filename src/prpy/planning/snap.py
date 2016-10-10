@@ -131,8 +131,7 @@ class SnapPlanner(BasePlanner):
                                             sampling_func=vdc)
 
         with self.robot_checker_factory(robot) as robot_checker, \
-        robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF | 
-                                Robot.SaveParameters.LinkTransformation):
+        robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
             # Run constraint checks at DOF resolution:
             for t, q in checks:
                 # Set the joint positions
