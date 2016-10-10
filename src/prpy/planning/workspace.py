@@ -77,7 +77,7 @@ class GreedyIKPlanner(BasePlanner):
                         openravepy.poseFromMatrix(goal_pose))
 
             with robot.CreateRobotStateSaver(
-                Robot.SaveParameters.LinkTransformation):
+                    Robot.SaveParameters.LinkTransformation):
                 openravepy.planningutils.RetimeAffineTrajectory(
                     traj,
                     maxvelocities=0.1 * numpy.ones(7),
@@ -144,7 +144,7 @@ class GreedyIKPlanner(BasePlanner):
                 traj.Insert(traj.GetNumWaypoints(),
                             openravepy.poseFromMatrix(max_pose))
             with robot.CreateRobotStateSaver(
-                Robot.SaveParameters.LinkTransformation):
+                    Robot.SaveParameters.LinkTransformation):
                 openravepy.planningutils.RetimeAffineTrajectory(
                     traj,
                     maxvelocities=0.1 * numpy.ones(7),

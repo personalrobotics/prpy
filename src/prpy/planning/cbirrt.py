@@ -290,7 +290,6 @@ class CBiRRTPlanner(BasePlanner):
             raise PlanningError('Unknown error: ' + response,
                 deterministic=False)
 
-
         # Construct the output trajectory.
         with open(traj_path, 'rb') as traj_file:
             traj_xml = traj_file.read()
