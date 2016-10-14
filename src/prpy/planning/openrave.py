@@ -65,9 +65,8 @@ class OpenRAVEPlanner(BasePlanner):
 
         env = robot.GetEnv()
 
-        try:
-            planner = openravepy.RaveCreatePlanner(env, algorithm)
-        except openravepy.openrave_exception:
+        planner = openravepy.RaveCreatePlanner(env, self.algorithm)
+        if planner is None:
             raise UnsupportedPlanningError('Unable to create {:s} module.'
                                            .format(str(self)))
 
@@ -94,7 +93,8 @@ class OpenRAVEPlanner(BasePlanner):
         try:
             env.Lock()
 
-            with robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
+            with robot.CreateRobotStateSaver(
+                openravepy.Robot.SaveParameters.LinkTransformation):
                 # Plan.
                 if (not continue_planner) or not self.setup:
                     planner.InitPlan(robot, params)

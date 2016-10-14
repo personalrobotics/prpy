@@ -34,7 +34,7 @@ from prpy.util import SetTrajectoryTags
 from prpy.planning.base import (
     BasePlanner,
     PlanningError,
-    ClonedPlanningMethod,
+    LockedPlanningMethod,
     Tags
 )
 from ..collision import DefaultRobotCollisionCheckerFactory
@@ -64,7 +64,7 @@ class SnapPlanner(BasePlanner):
     def __str__(self):
         return 'SnapPlanner'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's

@@ -92,7 +92,6 @@ class OMPLPlanner(BasePlanner):
         if robot_checker_factory is None:
             robot_checker_factory = DefaultRobotCollisionCheckerFactory
 
-        self.setup = False
         self.algorithm = algorithm
         self.default_timelimit = timelimit
         self.default_ompl_args = ompl_args if ompl_args is not None else dict()
@@ -141,8 +140,8 @@ class OMPLPlanner(BasePlanner):
         return self._Plan(robot, tsrchains=tsrchains, **kw_args)
 
     def _Plan(self, robot, goal=None, tsrchains=None, timelimit=None,
-              continue_planner=False, ompl_args=None,
-              formatted_extra_params=None, timeout=None, **kw_args):
+              ompl_args=None, formatted_extra_params=None,
+              timeout=None, **kw_args):
         extraParams = ''
 
         # Handle the 'timelimit' parameter.
@@ -218,9 +217,7 @@ class OMPLPlanner(BasePlanner):
             params.SetGoalConfig(goal)
         params.SetExtraParameters(extraParams)
 
-        if (not continue_planner) or (not self.setup):
-            planner.InitPlan(robot, params)
-            setup = True
+        planner.InitPlan(robot, params)
 
         # Bypass the context manager since or_ompl does its own baking.
         env = robot.GetEnv()
@@ -376,7 +373,7 @@ class OMPLSimplifier(BasePlanner):
 
         if planner is None:
             raise UnsupportedPlanningError(
-                'Unable to create OMPL_Simplifier planner.')
+                'Unable to create {} planner.'.format(planner_name))
 
         output_path = CopyTrajectory(path, env=env)
 

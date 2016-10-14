@@ -44,6 +44,7 @@ from .base import (
     PlanningError,
     Tags,
     UnsupportedPlanningError,
+    save_dof_limits
 )
 import contextlib
 
@@ -163,6 +164,10 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
+        """
+        @param allowlimadj If True, adjust the joint limits to include
+            the robot's start configuration
+        """
         from openravepy import CollisionOptionsStateSaver, Robot, KinBody
 
         if timelimit is None:
@@ -276,15 +281,12 @@ class CBiRRTPlanner(BasePlanner):
         else:
             mimicbody_savers = []
 
-        upper, lower = robot.GetDOFLimits()
-
         with CollisionOptionsStateSaver(env.GetCollisionChecker(), options), \
             robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF | 
                                         Robot.SaveParameters.LinkTransformation), \
-            contextlib.nested(*mimicbody_savers):
+            contextlib.nested(*mimicbody_savers), save_dof_limits(robot):
             response = problem.SendCommand(args_str, True)
 
-        robot.SetDOFLimits(upper, lower)
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response,

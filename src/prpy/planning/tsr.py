@@ -163,7 +163,7 @@ class TSRPlanner(BasePlanner):
             # restore the original collision checking options before calling
             # the planner to give it a pristine environment.
             with self.robot_checker_factory(robot) as robot_checker, \
-                robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOFs, \
+                robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF |
                                 Robot.SaveParameters.LinkTransformation):
 
                 # We assume the active manipulator's DOFs are active when computing IK,
