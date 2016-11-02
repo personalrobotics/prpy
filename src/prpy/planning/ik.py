@@ -31,14 +31,14 @@ import logging
 import numpy
 import openravepy
 from .. import ik_ranking
-from base import (BasePlanner,
+from base import (Planner,
                   PlanningError,
                   LockedPlanningMethod)
 
 logger = logging.getLogger(__name__)
 
 
-class IKPlanner(BasePlanner):
+class IKPlanner(Planner):
     def __init__(self, delegate_planner=None):
         super(IKPlanner, self).__init__()
         self.delegate_planner = delegate_planner

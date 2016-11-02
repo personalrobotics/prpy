@@ -32,7 +32,7 @@ import openravepy
 from openravepy import Robot
 from prpy.util import SetTrajectoryTags
 from prpy.planning.base import (
-    BasePlanner,
+    Planner,
     PlanningError,
     LockedPlanningMethod,
     Tags
@@ -40,7 +40,7 @@ from prpy.planning.base import (
 from ..collision import DefaultRobotCollisionCheckerFactory
 
 
-class SnapPlanner(BasePlanner):
+class SnapPlanner(Planner):
     """Planner that checks the straight-line trajectory to the goal.
 
     SnapPlanner is a utility planner class that collision checks the

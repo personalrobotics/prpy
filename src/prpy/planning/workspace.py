@@ -34,13 +34,13 @@ import numpy
 import openravepy
 import time
 from ..util import SetTrajectoryTags
-from base import BasePlanner, PlanningError, LockedPlanningMethod, Tags
+from base import Planner, PlanningError, LockedPlanningMethod, Tags
 from openravepy import Robot
 
 logger = logging.getLogger(__name__)
 
 
-class GreedyIKPlanner(BasePlanner):
+class GreedyIKPlanner(Planner):
     def __init__(self):
         super(GreedyIKPlanner, self).__init__()
 

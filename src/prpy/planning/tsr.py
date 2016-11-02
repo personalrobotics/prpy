@@ -32,7 +32,7 @@ import time
 import itertools
 import numpy
 import openravepy
-from base import (BasePlanner, LockedPlanningMethod, PlanningError,
+from base import (Planner, LockedPlanningMethod, PlanningError,
                   UnsupportedPlanningError)
 from .base import Tags
 from ..util import SetTrajectoryTags
@@ -58,7 +58,7 @@ def grouper(n, iterable):
 
 
 
-class TSRPlanner(BasePlanner):
+class TSRPlanner(Planner):
     def __init__(self, delegate_planner=None, robot_checker_factory=None):
         super(TSRPlanner, self).__init__()
 

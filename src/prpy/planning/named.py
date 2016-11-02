@@ -28,9 +28,9 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 import logging, numpy, openravepy
-from base import BasePlanner, PlanningError, LockedPlanningMethod
+from base import Planner, PlanningError, LockedPlanningMethod
 
-class NamedPlanner(BasePlanner):
+class NamedPlanner(Planner):
     def __init__(self, delegate_planner=None):
         """
         @param delegate_planner planner used for PlanToConfiguration

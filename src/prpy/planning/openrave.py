@@ -32,13 +32,13 @@
 
 import numpy
 import openravepy
-from base import (BasePlanner,
+from base import (Planner,
                   PlanningError,
                   UnsupportedPlanningError,
                   LockedPlanningMethod)
 
 
-class OpenRAVEPlanner(BasePlanner):
+class OpenRAVEPlanner(Planner):
     def __init__(self, algorithm='birrt'):
         super(OpenRAVEPlanner, self).__init__()
 

@@ -33,14 +33,14 @@ import openravepy
 from copy import deepcopy
 from ..util import (CreatePlannerParametersString, CopyTrajectory,
                     SimplifyTrajectory, HasAffineDOFs, IsTimedTrajectory)
-from base import (BasePlanner, PlanningError, LockedPlanningMethod,
+from .base import (Planner, PlanningError, LockedPlanningMethod,
                   UnsupportedPlanningError)
-from openravepy import PlannerStatus, Planner, Robot
+from openravepy import PlannerStatus, Robot
 
 logger = logging.getLogger(__name__)
 
 
-class OpenRAVERetimer(BasePlanner):
+class OpenRAVERetimer(Planner):
     def __init__(self, algorithm, default_options=None):
         super(OpenRAVERetimer, self).__init__()
 
@@ -76,7 +76,7 @@ class OpenRAVERetimer(BasePlanner):
             all_options.update(options)
 
         env = robot.GetEnv()
-        params = Planner.PlannerParameters()
+        params = openravepy.Planner.PlannerParameters()
         params.SetConfigurationSpecification(
             env, cspec.GetTimeDerivativeSpecification(0))
 
@@ -161,7 +161,7 @@ class HauserParabolicSmoother(OpenRAVERetimer):
         return super(HauserParabolicSmoother, self).RetimeTrajectory(
             robot, path, options=new_options, **kw_args)
 
-class OpenRAVEAffineRetimer(BasePlanner):
+class OpenRAVEAffineRetimer(Planner):
     def __init__(self,):
         super(OpenRAVEAffineRetimer, self).__init__()
 
@@ -209,7 +209,7 @@ class OpenRAVEAffineRetimer(BasePlanner):
         return output_traj
 
 
-class OptimizingPlannerSmoother(BasePlanner):
+class OptimizingPlannerSmoother(Planner):
 
     def __init__(self, optimizing_planner, **kwargs):
         super(OptimizingPlannerSmoother, self).__init__()

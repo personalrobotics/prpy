@@ -55,7 +55,7 @@ from ..tsr.tsr import (
     TSRChain,
 )
 from .base import (
-    BasePlanner,
+    Planner,
     LockedPlanningMethod,
     PlanningError,
     Tags,
@@ -67,7 +67,7 @@ from .cbirrt import SerializeTSRChain
 logger = logging.getLogger(__name__)
 
 
-class OMPLPlanner(BasePlanner):
+class OMPLPlanner(Planner):
     def __init__(self, algorithm='RRTConnect', robot_checker_factory=None,
                  timelimit=5., supports_constraints=False, ompl_args=None):
         """ An OMPL planner exposed by or_ompl.
@@ -355,7 +355,7 @@ class RRTConnect(OMPLRangedPlanner):
                 DeprecationWarning)
 
 
-class OMPLSimplifier(BasePlanner):
+class OMPLSimplifier(Planner):
     def __init__(self):
         super(OMPLSimplifier, self).__init__()
 

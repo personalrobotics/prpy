@@ -33,7 +33,7 @@
 import logging
 import numpy
 import openravepy
-from .base import BasePlanner, PlanningError, LockedPlanningMethod, Tags
+from .base import Planner, PlanningError, LockedPlanningMethod, Tags
 from .. import util
 from ..collision import DefaultRobotCollisionCheckerFactory
 from enum import Enum
@@ -74,7 +74,7 @@ class Status(Enum):
         return status in [cls.CACHE_AND_CONTINUE, cls.CACHE_AND_TERMINATE]
 
 
-class VectorFieldPlanner(BasePlanner):
+class VectorFieldPlanner(Planner):
     def __init__(self, robot_checker_factory=None):
         super(VectorFieldPlanner, self).__init__()
 

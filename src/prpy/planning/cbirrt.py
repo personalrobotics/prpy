@@ -39,7 +39,7 @@ from ..tsr import TSR, TSRChain
 from ..util import SetTrajectoryTags
 from .adapters import PlanToEndEffectorOffsetTSRAdapter
 from .base import (
-    BasePlanner,
+    Planner,
     LockedPlanningMethod,
     PlanningError,
     Tags,
@@ -49,7 +49,7 @@ from .base import (
 import contextlib
 
 
-class CBiRRTPlanner(BasePlanner):
+class CBiRRTPlanner(Planner):
     def __init__(self, robot_checker_factory=None, timelimit=5.):
         super(CBiRRTPlanner, self).__init__()
 
