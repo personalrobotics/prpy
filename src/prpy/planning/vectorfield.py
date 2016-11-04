@@ -33,10 +33,11 @@
 import logging
 import numpy
 import openravepy
-from .base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
+from .base import Planner, PlanningError, LockedPlanningMethod, Tags
 from .. import util
 from ..collision import DefaultRobotCollisionCheckerFactory
 from enum import Enum
+from openravepy import Robot
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ class Status(Enum):
         return status in [cls.CACHE_AND_CONTINUE, cls.CACHE_AND_TERMINATE]
 
 
-class VectorFieldPlanner(BasePlanner):
+class VectorFieldPlanner(Planner):
     def __init__(self, robot_checker_factory=None):
         super(VectorFieldPlanner, self).__init__()
 
@@ -85,7 +86,7 @@ class VectorFieldPlanner(BasePlanner):
     def __str__(self):
         return 'VectorFieldPlanner'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               pose_error_tol=0.01,
                               integration_interval=10.0,
@@ -142,7 +143,7 @@ class VectorFieldPlanner(BasePlanner):
         util.SetTrajectoryTags(traj, {Tags.CONSTRAINED: False}, append=True)
         return traj
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 position_tolerance=0.01,
@@ -234,7 +235,7 @@ class VectorFieldPlanner(BasePlanner):
                                       integration_interval, timelimit,
                                       **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanWorkspacePath(self, robot, traj,
                           timelimit=5.0,
                           position_tolerance=0.01,
@@ -422,7 +423,7 @@ class VectorFieldPlanner(BasePlanner):
                                       integration_interval,
                                       timelimit, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def FollowVectorField(self, robot, fn_vectorfield, fn_terminate,
                           integration_time_interval=10.0, timelimit=5.0,
                           sampling_func=util.SampleTimeGenerator,
@@ -459,7 +460,8 @@ class VectorFieldPlanner(BasePlanner):
         nonlocals = {
             'exception': None,
             't_cache': None,
-            't_check': 0.,
+            # Must be negative so we check the start of the trajectory.
+            't_check': -1.,
         }
 
         env = robot.GetEnv()
@@ -532,26 +534,33 @@ class VectorFieldPlanner(BasePlanner):
                 if path.GetNumWaypoints() == 1:
                     checks = [(t, q)]
                 else:
-                    # TODO: This will recheck the entire trajectory
-                    #  Ideally should just check the new portion of the trajectory
+                    # This returns collision checks for the entire trajectory,
+                    # including the part that has already been checked. These
+                    # duplicate checks will be filtered out below.
                     checks = GetLinearCollisionCheckPts(robot, path,
                                                         norm_order=norm_order,
                                                         sampling_func=sampling_func)
-                    # start_time=nonlocals['t_check'])
 
                 for t_check, q_check in checks:
-                    fn_status_callback(t_check, q_check)
+                    # TODO: It would be more efficient to only generate checks
+                    # for the new part of the trajectory.
+                    if t_check <= nonlocals['t_check']:
+                        continue
 
-                    # Record the time of this check so we continue checking at
-                    # DOF resolution the next time the integrator takes a step.
+                    # Record the time of this check so we continue checking
+                    # from where we left off. We do this first, just in case
+                    # fn_status_callback raises an exception.
                     nonlocals['t_check'] = t_check
+
+                    fn_status_callback(t_check, q_check)
 
                 return 0  # Keep going.
             except PlanningError as e:
                 nonlocals['exception'] = e
                 return -1  # Stop.
 
-        with self.robot_checker_factory(robot) as robot_checker:
+        with self.robot_checker_factory(robot) as robot_checker, \
+            robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
             # Integrate the vector field to get a configuration space path.
             #
             # TODO: Tune the integrator parameters.

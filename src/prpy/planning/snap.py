@@ -29,17 +29,18 @@
 # POSSIBILITY OF SUCH DAMAGE.
 import numpy
 import openravepy
+from openravepy import Robot
 from prpy.util import SetTrajectoryTags
 from prpy.planning.base import (
-    BasePlanner,
+    Planner,
     PlanningError,
-    ClonedPlanningMethod,
+    LockedPlanningMethod,
     Tags
 )
 from ..collision import DefaultRobotCollisionCheckerFactory
 
 
-class SnapPlanner(BasePlanner):
+class SnapPlanner(Planner):
     """Planner that checks the straight-line trajectory to the goal.
 
     SnapPlanner is a utility planner class that collision checks the
@@ -63,7 +64,7 @@ class SnapPlanner(BasePlanner):
     def __str__(self):
         return 'SnapPlanner'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Attempt to plan a straight line trajectory from the robot's
@@ -85,7 +86,8 @@ class SnapPlanner(BasePlanner):
         # Create a two-point trajectory between the
         # current configuration and the goal.
         # (a straight line in joint space)
-        traj = openravepy.RaveCreateTrajectory(self.env, '')
+        env = robot.GetEnv()
+        traj = openravepy.RaveCreateTrajectory(env, '')
         cspec = robot.GetActiveConfigurationSpecification('linear')
         active_indices = robot.GetActiveDOFIndices()
 
@@ -128,7 +130,8 @@ class SnapPlanner(BasePlanner):
                                             norm_order=2,
                                             sampling_func=vdc)
 
-        with self.robot_checker_factory(robot) as robot_checker:
+        with self.robot_checker_factory(robot) as robot_checker, \
+            robot.CreateRobotStateSaver(Robot.SaveParameters.LinkTransformation):
             # Run constraint checks at DOF resolution:
             for t, q in checks:
                 # Set the joint positions

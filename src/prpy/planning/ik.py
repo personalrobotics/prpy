@@ -31,14 +31,14 @@ import logging
 import numpy
 import openravepy
 from .. import ik_ranking
-from base import (BasePlanner,
+from base import (Planner,
                   PlanningError,
-                  ClonedPlanningMethod)
+                  LockedPlanningMethod)
 
 logger = logging.getLogger(__name__)
 
 
-class IKPlanner(BasePlanner):
+class IKPlanner(Planner):
     def __init__(self, delegate_planner=None):
         super(IKPlanner, self).__init__()
         self.delegate_planner = delegate_planner
@@ -47,7 +47,7 @@ class IKPlanner(BasePlanner):
         return 'IKPlanner'
 
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToIK(self, robot, pose, **kwargs):
         """
         Plan to a desired end effector pose with IKPlanner.
@@ -61,7 +61,7 @@ class IKPlanner(BasePlanner):
         """
         return self._PlanToIK(robot, pose, **kwargs)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, pose, **kwargs):
         """
         Plan to a desired end effector pose with IKPlanner.

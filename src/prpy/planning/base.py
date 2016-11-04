@@ -38,6 +38,7 @@ from ..futures import defer
 from ..util import CopyTrajectory, GetTrajectoryTags, SetTrajectoryTags
 from .exceptions import (ClonedPlanningError, MetaPlanningError,
                          PlanningError, UnsupportedPlanningError)
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -464,3 +465,11 @@ class MethodMask(MetaPlanner):
             return plan_fn(*args, **kw_args)
         else:
             raise UnsupportedPlanningError()
+
+@contextmanager
+def save_dof_limits(robot):
+    upper, lower = robot.GetDOFLimits()
+    try:
+        yield
+    finally:
+        robot.SetDOFLimits(upper, lower)
