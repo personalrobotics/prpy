@@ -1,7 +1,7 @@
 import numpy
 from openravepy import Environment
 from .base import (
-    ClonedPlanningMethod,
+    LockedPlanningMethod,
     Planner,
 )
 from ..kin import (
@@ -27,10 +27,8 @@ class PlanToEndEffectorOffsetTSRAdapter(Planner):
         super(PlanToEndEffectorOffsetTSRAdapter, self).__init__()
 
         self.delegate_planner = delegate_planner
-        self.env = Environment()
 
-
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance, **kwargs):
         """ Plan to a desired end-effector offset with fixed orientation.
 

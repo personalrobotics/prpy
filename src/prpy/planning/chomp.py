@@ -187,9 +187,10 @@ class CHOMPPlanner(BasePlanner):
         except ImportError:
             raise UnsupportedPlanningError(
                 'Unable to import "orcdchomp". Is or_cdchomp installed?')
-        except openravepy.openrave_exception as e:
+
+        if module is None:
             raise UnsupportedPlanningError(
-                'Failed loading "orcdchomp" module: ' + str(e))
+                'Failed loading "orcdchomp" module')
 
         if module is None:
             raise UnsupportedPlanningError(
