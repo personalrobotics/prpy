@@ -292,7 +292,7 @@ class CBiRRTPlanner(Planner):
             response = problem.SendCommand(args_str, True)
 
         with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
-            response = self.problem.SendCommand(args_str, True)
+            response = problem.SendCommand(args_str, True)
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response,
@@ -304,25 +304,25 @@ class CBiRRTPlanner(Planner):
             traj = openravepy.RaveCreateTrajectory(env, '')
             traj.deserialize(traj_xml)
 
-
-        #TODO Mimic traj processing. Change format?
+        # Mimic traj processing if requested
         if save_mimic_trajectories:
             from prpy.util import CopyTrajectory
 
             cspec = traj.GetConfigurationSpecification()
             traj_bodies = cspec.ExtractUsedBodies(robot.GetEnv())
-            
+          
+            # Extract non-robot trajecotry
             self.mimic_trajectories = {}
             for body in traj_bodies:
                 if body.GetName() == robot.GetName():
                     continue
 
+                
                 object_cspec = body.GetActiveConfigurationSpecification('GenericTrajectory')
                 with open(traj_path, 'rb') as traj_file:
                     traj_xml = traj_file.read()
                     object_traj = openravepy.RaveCreateTrajectory(env, '')
                     object_traj.deserialize(traj_xml)
-#                object_traj = CopyTrajectory(traj)
                 openravepy.planningutils.ConvertTrajectorySpecification(object_traj, object_cspec)
                 self.mimic_trajectories[body.GetName()] = object_traj
 
