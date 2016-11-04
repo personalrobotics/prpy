@@ -235,6 +235,12 @@ class CBiRRTPlanner(Planner):
                 
         #TODO need to change robot.GetActiveDOF() to something else
         # That can take into account another robot
+
+        #FIXME Ordinally we perform this check. However it assumes that
+        # we are only planning for the robot, which is not true
+        # if we are planning a constrained task with an object
+        # (ie opening a door). I'm unsure how to modify this check 
+        # to account for that. 
         if jointgoals is not None:
             for goal_config in jointgoals:
                 '''
@@ -252,6 +258,7 @@ class CBiRRTPlanner(Planner):
             if len(jointgoals) > 1:
                 is_endpoint_deterministic = False
 
+        raw_input("Continue?")
         if tsr_chains is not None:
             for tsr_chain in tsr_chains:
                 args += ['TSRChain', SerializeTSRChain(tsr_chain)]
