@@ -49,3 +49,4 @@ from openrave import BiRRTPlanner
 from tsr import TSRPlanner
 from workspace import GreedyIKPlanner
 from vectorfield import VectorFieldPlanner
+from pomp import POMPPlanner
