@@ -8,7 +8,7 @@ from ..kin import (
     H_from_op_diff,
     invert_H,
 )
-from ..tsr.tsr import (
+from tsr.tsr import (
     TSR,
     TSRChain,
 )

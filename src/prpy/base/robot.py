@@ -31,7 +31,7 @@ import collections
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, exceptions, util
 from ..clone import Clone, Cloned
-from ..tsr.tsrlibrary import TSRLibrary
+from tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence, Tags
 from ..planning.ompl import OMPLSimplifier
 from ..planning.retimer import OpenRAVEAffineRetimer, ParabolicRetimer

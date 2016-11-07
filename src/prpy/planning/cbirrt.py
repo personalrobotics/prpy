@@ -35,7 +35,7 @@ from ..collision import (
     DefaultRobotCollisionCheckerFactory,
     SimpleRobotCollisionCheckerFactory,
 )
-from ..tsr import TSR, TSRChain
+from tsr import TSR, TSRChain
 from ..util import SetTrajectoryTags
 from .adapters import PlanToEndEffectorOffsetTSRAdapter
 from .base import (

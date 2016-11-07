@@ -11,7 +11,6 @@ d = generate_distutils_setup(
         'prpy.perception',
         'prpy.planning',
         'prpy.simulation',
-        'prpy.tsr',
     ],
     package_dir={'': 'src'},
 )
