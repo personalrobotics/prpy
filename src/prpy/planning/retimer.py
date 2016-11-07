@@ -33,32 +33,24 @@ import openravepy
 from copy import deepcopy
 from ..util import (CreatePlannerParametersString, CopyTrajectory,
                     SimplifyTrajectory, HasAffineDOFs, IsTimedTrajectory)
-from base import (BasePlanner, PlanningError, ClonedPlanningMethod,
+from .base import (Planner, PlanningError, LockedPlanningMethod,
                   UnsupportedPlanningError)
-from openravepy import PlannerStatus, Planner
+from openravepy import PlannerStatus, Robot
 
 logger = logging.getLogger(__name__)
 
 
-class OpenRAVERetimer(BasePlanner):
+class OpenRAVERetimer(Planner):
     def __init__(self, algorithm, default_options=None):
-        from .base import UnsupportedPlanningError
-        from openravepy import RaveCreatePlanner
-
         super(OpenRAVERetimer, self).__init__()
 
         self.algorithm = algorithm
         self.default_options = default_options or dict()
 
-        self.planner = RaveCreatePlanner(self.env, algorithm)
-        if self.planner is None:
-            raise UnsupportedPlanningError(
-                'Unable to create "{:s}" planner.'.format(algorithm))
-
     def __str__(self):
         return self.algorithm
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
         from openravepy import CollisionOptions, CollisionOptionsStateSaver
         from copy import deepcopy
@@ -83,32 +75,38 @@ class OpenRAVERetimer(BasePlanner):
         if options is not None:
             all_options.update(options)
 
-        params = Planner.PlannerParameters()
+        env = robot.GetEnv()
+        params = openravepy.Planner.PlannerParameters()
         params.SetConfigurationSpecification(
-            self.env, cspec.GetTimeDerivativeSpecification(0))
+            env, cspec.GetTimeDerivativeSpecification(0))
 
         params_str = CreatePlannerParametersString(all_options, params)
 
         # Copy the input trajectory into the planning environment. This is
         # necessary for two reasons: (1) the input trajectory may be in another
         # environment and/or (2) the retimer modifies the trajectory in-place.
-        output_traj = CopyTrajectory(path, env=self.env)
+        output_traj = CopyTrajectory(path, env=env)
 
         # Remove co-linear waypoints. Some of the default OpenRAVE retimers do
         # not perform this check internally (e.g. ParabolicTrajectoryRetimer).
         if not IsTimedTrajectory(output_traj):
             output_traj = SimplifyTrajectory(output_traj, robot)
 
-        # Only collision check the active DOFs.
-        dof_indices, _ = cspec.ExtractUsedIndices(robot)
-        robot.SetActiveDOFs(dof_indices)
+        with robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF), \
+            CollisionOptionsStateSaver(env.GetCollisionChecker(),
+                                       CollisionOptions.ActiveDOFs):
+            # Only collision check the active DOFs.
+            dof_indices, _ = cspec.ExtractUsedIndices(robot)
+            robot.SetActiveDOFs(dof_indices)
 
-        # Compute the timing. This happens in-place.
-        self.planner.InitPlan(None, params_str)
+            # Compute the timing. This happens in-place.
+            planner = openravepy.RaveCreatePlanner(env, self.algorithm)
+            if planner is None:
+                raise UnsupportedPlanningError(
+                    'Unable to create "{:s}" planner.'.format(self.algorithm))
+            planner.InitPlan(None, params_str)
 
-        with CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                        CollisionOptions.ActiveDOFs):
-            status = self.planner.PlanPath(output_traj, releasegil=True)
+            status = planner.PlanPath(output_traj, releasegil=True)
 
         if status not in [PlannerStatus.HasSolution,
                           PlannerStatus.InterruptedWithSolution]:
@@ -155,7 +153,7 @@ class HauserParabolicSmoother(OpenRAVERetimer):
             'time_limit': float(timelimit),
         })
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kw_args):
         new_options = deepcopy(options) if options else dict()
         if 'timelimit' in kw_args:
@@ -163,11 +161,11 @@ class HauserParabolicSmoother(OpenRAVERetimer):
         return super(HauserParabolicSmoother, self).RetimeTrajectory(
             robot, path, options=new_options, **kw_args)
 
-class OpenRAVEAffineRetimer(BasePlanner):
+class OpenRAVEAffineRetimer(Planner):
     def __init__(self,):
         super(OpenRAVEAffineRetimer, self).__init__()
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def RetimeTrajectory(self, robot, path, **kw_args):
 
         RetimeTrajectory = openravepy.planningutils.RetimeAffineTrajectory
@@ -193,7 +191,7 @@ class OpenRAVEAffineRetimer(BasePlanner):
         # Copy the input trajectory into the planning environment. This is
         # necessary for two reasons: (1) the input trajectory may be in another
         # environment and/or (2) the retimer modifies the trajectory in-place.
-        output_traj = CopyTrajectory(path, env=self.env)
+        output_traj = CopyTrajectory(path, env=env)
 
         # Compute the timing. This happens in-place.
         max_velocities = [robot.GetAffineTranslationMaxVels()[0],
@@ -211,7 +209,7 @@ class OpenRAVEAffineRetimer(BasePlanner):
         return output_traj
 
 
-class OptimizingPlannerSmoother(BasePlanner):
+class OptimizingPlannerSmoother(Planner):
 
     def __init__(self, optimizing_planner, **kwargs):
         super(OptimizingPlannerSmoother, self).__init__()
@@ -221,7 +219,7 @@ class OptimizingPlannerSmoother(BasePlanner):
     def __str__(self):
         return 'OptimizingPlannerSmoother({})'.format(str(self.planner))
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def RetimeTrajectory(self, robot, path, options=None, **kwargs):
         logger.warning(
             'OptimizingPlannerSmoother is very experimental!')

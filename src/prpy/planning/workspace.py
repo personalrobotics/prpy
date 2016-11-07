@@ -34,19 +34,20 @@ import numpy
 import openravepy
 import time
 from ..util import SetTrajectoryTags
-from base import BasePlanner, PlanningError, ClonedPlanningMethod, Tags
+from base import Planner, PlanningError, LockedPlanningMethod, Tags
+from openravepy import Robot
 
 logger = logging.getLogger(__name__)
 
 
-class GreedyIKPlanner(BasePlanner):
+class GreedyIKPlanner(Planner):
     def __init__(self):
         super(GreedyIKPlanner, self).__init__()
 
     def __str__(self):
         return 'GreedyIKPlanner'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, timelimit=5.0,
                               **kw_args):
         """
@@ -62,9 +63,10 @@ class GreedyIKPlanner(BasePlanner):
 
         with robot:
             # Create geodesic trajectory in SE(3)
+            env = robot.GetEnv()
             manip = robot.GetActiveManipulator()
             start_pose = manip.GetEndEffectorTransform()
-            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            traj = openravepy.RaveCreateTrajectory(env, '')
             spec = openravepy.IkParameterization.\
                 GetConfigurationSpecificationFromType(
                     openravepy.IkParameterizationType.Transform6D, 'linear')
@@ -73,11 +75,14 @@ class GreedyIKPlanner(BasePlanner):
                         openravepy.poseFromMatrix(start_pose))
             traj.Insert(traj.GetNumWaypoints(),
                         openravepy.poseFromMatrix(goal_pose))
-            openravepy.planningutils.RetimeAffineTrajectory(
-                traj,
-                maxvelocities=0.1 * numpy.ones(7),
-                maxaccelerations=0.1 * numpy.ones(7)
-            )
+
+            with robot.CreateRobotStateSaver(
+                    Robot.SaveParameters.LinkTransformation):
+                openravepy.planningutils.RetimeAffineTrajectory(
+                    traj,
+                    maxvelocities=0.1 * numpy.ones(7),
+                    maxaccelerations=0.1 * numpy.ones(7)
+                )
 
         qtraj = self.PlanWorkspacePath(robot, traj, timelimit)
         # modify tags to reflect that we won't care about
@@ -88,7 +93,7 @@ class GreedyIKPlanner(BasePlanner):
 
         return qtraj
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorOffset(self, robot, direction, distance,
                                 max_distance=None, timelimit=5.0,
                                 **kw_args):
@@ -104,6 +109,7 @@ class GreedyIKPlanner(BasePlanner):
         @param timelimit timeout in seconds
         @return traj
         """
+        env = robot.GetEnv()
 
         if distance < 0:
             raise ValueError('Distance must be non-negative.')
@@ -121,7 +127,7 @@ class GreedyIKPlanner(BasePlanner):
         with robot:
             manip = robot.GetActiveManipulator()
             start_pose = manip.GetEndEffectorTransform()
-            traj = openravepy.RaveCreateTrajectory(self.env, '')
+            traj = openravepy.RaveCreateTrajectory(env, '')
             spec = openravepy.IkParameterization.\
                 GetConfigurationSpecificationFromType(
                     openravepy.IkParameterizationType.Transform6D, 'linear')
@@ -137,16 +143,18 @@ class GreedyIKPlanner(BasePlanner):
                 max_pose[0:3, 3] += max_distance * direction
                 traj.Insert(traj.GetNumWaypoints(),
                             openravepy.poseFromMatrix(max_pose))
-            openravepy.planningutils.RetimeAffineTrajectory(
-                traj,
-                maxvelocities=0.1 * numpy.ones(7),
-                maxaccelerations=0.1 * numpy.ones(7)
-            )
+            with robot.CreateRobotStateSaver(
+                    Robot.SaveParameters.LinkTransformation):
+                openravepy.planningutils.RetimeAffineTrajectory(
+                    traj,
+                    maxvelocities=0.1 * numpy.ones(7),
+                    maxaccelerations=0.1 * numpy.ones(7)
+                )
 
         return self.PlanWorkspacePath(robot, traj,
                                       timelimit, min_waypoint_index=1)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanWorkspacePath(self, robot, traj, timelimit=5.0,
                           min_waypoint_index=None, norm_order=2, **kw_args):
         """
@@ -164,6 +172,8 @@ class GreedyIKPlanner(BasePlanner):
                in the trajectory
         @return qtraj configuration space path
         """
+        env = robot.GetEnv()
+
         from .exceptions import (
             TimeoutPlanningError,
             CollisionPlanningError,
@@ -177,13 +187,15 @@ class GreedyIKPlanner(BasePlanner):
 
         p = openravepy.KinBody.SaveParameters
 
-        with robot, CollisionOptionsStateSaver(self.env.GetCollisionChecker(),
-                                               CollisionOptions.ActiveDOFs):
+        with robot, CollisionOptionsStateSaver(env.GetCollisionChecker(),
+                                               CollisionOptions.ActiveDOFs), \
+            robot.CreateRobotStateSaver(p.ActiveDOF | p.LinkTransformation):
+
             manip = robot.GetActiveManipulator()
             robot.SetActiveDOFs(manip.GetArmIndices())
 
             # Create a new trajectory starting at current robot location.
-            qtraj = openravepy.RaveCreateTrajectory(self.env, '')
+            qtraj = openravepy.RaveCreateTrajectory(env, '')
             qtraj.Init(manip.GetArmConfigurationSpecification('linear'))
             qtraj.Insert(0, robot.GetActiveDOFValues())
 
@@ -269,7 +281,7 @@ class GreedyIKPlanner(BasePlanner):
                         for q in ik_solutions:
                             robot.SetActiveDOFValues(q)
                             cr = CollisionReport()
-                            if self.env.CheckCollision(robot, report=cr):
+                            if env.CheckCollision(robot, report=cr):
                                 collision_error = \
                                     CollisionPlanningError.FromReport(
                                         cr, deterministic=True)

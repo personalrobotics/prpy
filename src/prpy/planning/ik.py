@@ -31,14 +31,14 @@ import logging
 import numpy
 import openravepy
 from .. import ik_ranking
-from base import (BasePlanner,
+from base import (Planner,
                   PlanningError,
-                  ClonedPlanningMethod)
+                  LockedPlanningMethod)
 
 logger = logging.getLogger(__name__)
 
 
-class IKPlanner(BasePlanner):
+class IKPlanner(Planner):
     def __init__(self, delegate_planner=None):
         super(IKPlanner, self).__init__()
         self.delegate_planner = delegate_planner
@@ -46,20 +46,47 @@ class IKPlanner(BasePlanner):
     def __str__(self):
         return 'IKPlanner'
 
-    @ClonedPlanningMethod
-    def PlanToIK(self, robot, goal_pose, ranker=ik_ranking.JointLimitAvoidance,
-                 num_attempts=1, **kw_args):
+
+    @LockedPlanningMethod
+    def PlanToIK(self, robot, pose, **kwargs):
+        """
+        Plan to a desired end effector pose with IKPlanner.
+
+        An IK ranking function can optionally be specified to select a
+        preferred IK solution from those available at the goal pose.
+
+        @param robot the robot whose active manipulator will be used
+        @param pose the desired manipulator end effector pose
+        @return traj a trajectory from current configuration to specified pose
+        """
+        return self._PlanToIK(robot, pose, **kwargs)
+
+    @LockedPlanningMethod
+    def PlanToEndEffectorPose(self, robot, pose, **kwargs):
+        """
+        Plan to a desired end effector pose with IKPlanner.
+
+        This function is internally implemented identically to PlanToIK().
+
+        @param robot the robot whose active manipulator will be used
+        @param pose the desired manipulator end effector pose
+        @return traj a trajectory from current configuration to specified pose
+        """
+        return self._PlanToIK(robot, pose, **kwargs)
+
+
+    def _PlanToIK(self, robot, goal_pose, ranker=None, num_attempts=1, **kw_args):
         from openravepy import (IkFilterOptions,
                                 IkParameterization,
                                 IkParameterizationType)
 
-        # FIXME: Currently meta-planners duplicate IK ranking in each planning
-        # thread. It should be possible to fix this by IK ranking once, then
-        # calling PlanToConfiguration in separate threads.
+        manipulator = robot.GetActiveManipulator()
+
+        if ranker is None:
+          ranker = ik_ranking.NominalConfiguration(manipulator.GetArmDOFValues())
 
         # Find an unordered list of IK solutions.
         with robot.GetEnv():
-            manipulator = robot.GetActiveManipulator()
             ik_param = IkParameterization(
                 goal_pose, IkParameterizationType.Transform6D)
             ik_solutions = manipulator.FindIKSolutions(
@@ -68,7 +95,8 @@ class IKPlanner(BasePlanner):
             )
 
         if ik_solutions.shape[0] == 0:
-            raise PlanningError('There is no IK solution at the goal pose.')
+            raise PlanningError(
+                'There is no IK solution at the goal pose.', deterministic=True)
 
         # Sort the IK solutions in ascending order by the costs returned by the
         # ranker. Lower cost solutions are better and infinite cost solutions
@@ -79,12 +107,13 @@ class IKPlanner(BasePlanner):
         ranked_ik_solutions = ik_solutions[ranked_indices, :]
 
         if ranked_ik_solutions.shape[0] == 0:
-            raise PlanningError('All IK solutions have infinite cost.')
+            raise PlanningError('All IK solutions have infinite cost.', deterministic=True)
 
         # Sequentially plan to the solutions in descending order of cost.
         planner = self.delegate_planner or robot.planner
         p = openravepy.KinBody.SaveParameters
 
+        all_deterministic=True
         with robot.CreateRobotStateSaver(p.ActiveDOF):
             robot.SetActiveDOFs(manipulator.GetArmIndices())
 
@@ -99,7 +128,15 @@ class IKPlanner(BasePlanner):
                     logger.warning(
                         'Planning to IK solution %d of %d failed: %s',
                         i + 1, num_attempts, e)
+                    if e.deterministic is None:
+                        all_deterministic = False
+                        logger.warning(
+                            'Planner %s raised a PlanningError without the'
+                            ' "deterministic" flag set. Assuming the result'
+                            ' is non-deterministic.', planner)
+                    elif not e.deterministic:
+                        all_deterministic = False
 
         raise PlanningError(
             'Planning to the top {:d} of {:d} IK solutions failed.'
-            .format(num_attempts, ranked_ik_solutions.shape[0]))
+            .format(num_attempts, ranked_ik_solutions.shape[0]), deterministic=all_deterministic)

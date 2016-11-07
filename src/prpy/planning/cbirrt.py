@@ -30,19 +30,26 @@
 
 import numpy
 import openravepy
-from ..util import SetTrajectoryTags
 from ..collision import (
-    DefaultRobotCollisionCheckerFactory,
     BakedRobotCollisionCheckerFactory,
+    DefaultRobotCollisionCheckerFactory,
     SimpleRobotCollisionCheckerFactory,
 )
-from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
-                  ClonedPlanningMethod, Tags)
-import prpy.kin
-import prpy.tsr
+from ..tsr import TSR, TSRChain
+from ..util import SetTrajectoryTags
+from .adapters import PlanToEndEffectorOffsetTSRAdapter
+from .base import (
+    Planner,
+    LockedPlanningMethod,
+    PlanningError,
+    Tags,
+    UnsupportedPlanningError,
+    save_dof_limits
+)
+import contextlib
 
 
-class CBiRRTPlanner(BasePlanner):
+class CBiRRTPlanner(Planner):
     def __init__(self, robot_checker_factory=None, timelimit=5.):
         super(CBiRRTPlanner, self).__init__()
 
@@ -50,11 +57,6 @@ class CBiRRTPlanner(BasePlanner):
 
         if robot_checker_factory is None:
             robot_checker_factory = DefaultRobotCollisionCheckerFactory
-
-        self.problem = openravepy.RaveCreateProblem(self.env, 'CBiRRT')
-
-        if self.problem is None:
-            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
 
         self.robot_checker_factory = robot_checker_factory
         if isinstance(robot_checker_factory, SimpleRobotCollisionCheckerFactory):
@@ -68,7 +70,7 @@ class CBiRRTPlanner(BasePlanner):
     def __str__(self):
         return 'CBiRRT'
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfigurations(self, robot, goals, **kw_args):
         """
         Plan to multiple goal configurations with CBiRRT. This adds each goal
@@ -81,7 +83,7 @@ class CBiRRTPlanner(BasePlanner):
         kw_args.setdefault('smoothingitrs', 0)
         return self.Plan(robot, jointgoals=goals, **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToConfiguration(self, robot, goal, **kw_args):
         """
         Plan to a single goal configuration with CBiRRT.
@@ -92,7 +94,7 @@ class CBiRRTPlanner(BasePlanner):
         kw_args.setdefault('smoothingitrs', 0)
         return self.Plan(robot, jointgoals=[goal], **kw_args)
 
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToEndEffectorPose(self, robot, goal_pose, **kw_args):
         """
         Plan to a desired end-effector pose.
@@ -102,78 +104,32 @@ class CBiRRTPlanner(BasePlanner):
         @return traj output path
         """
         manipulator_index = robot.GetActiveManipulatorIndex()
-        goal_tsr = prpy.tsr.tsr.TSR(T0_w=goal_pose, manip=manipulator_index)
-        tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True, TSR=goal_tsr)
+        goal_tsr = TSR(T0_w=goal_pose, manip=manipulator_index)
+        tsr_chain = TSRChain(sample_goal=True, TSR=goal_tsr)
 
         kw_args.setdefault('psample', 0.1)
         kw_args.setdefault('smoothingitrs', 0)
 
         return self.Plan(robot, tsr_chains=[tsr_chain], **kw_args)
 
-    @ClonedPlanningMethod
-    def PlanToEndEffectorOffset(self, robot, direction, distance,
-                                smoothingitrs=100, **kw_args):
+
+    @LockedPlanningMethod
+    def PlanToEndEffectorOffset(self, robot, direction, distance, **kw_args):
         """
         Plan to a desired end-effector offset.
+
         @param robot
         @param direction unit vector in the direction of motion
         @param distance minimum distance in meters
         @param smoothingitrs number of smoothing iterations to run
         @return traj output path
         """
-        direction = numpy.array(direction, dtype=float)
+        chains = PlanToEndEffectorOffsetTSRAdapter.CreateTSRChains(
+                    robot, direction, distance)
+        return self.PlanToTSR(robot, tsr_chains=chains, **kw_args)
 
-        if direction.shape != (3,):
-            raise ValueError('Direction must be a three-dimensional vector.')
-        if not (distance >= 0):
-            raise ValueError('Distance must be non-negative; got {:f}.'.format(
-                             distance))
 
-        with robot:
-            manip = robot.GetActiveManipulator()
-            H_world_ee = manip.GetEndEffectorTransform()
-
-            # 'object frame w' is at ee, z pointed along direction to move
-            H_world_w = prpy.kin.H_from_op_diff(H_world_ee[0:3, 3], direction)
-            H_w_ee = numpy.dot(prpy.kin.invert_H(H_world_w), H_world_ee)
-
-            # Serialize TSR string (goal)
-            Hw_end = numpy.eye(4)
-            Hw_end[2, 3] = distance
-
-            goaltsr = prpy.tsr.tsr.TSR(T0_w=numpy.dot(H_world_w, Hw_end),
-                                       Tw_e=H_w_ee,
-                                       Bw=numpy.zeros((6, 2)),
-                                       manip=robot.GetActiveManipulatorIndex())
-            goal_tsr_chain = prpy.tsr.tsr.TSRChain(sample_goal=True,
-                                                   TSRs=[goaltsr])
-            # Serialize TSR string (whole-trajectory constraint)
-            Bw = numpy.zeros((6, 2))
-            epsilon = 0.001
-            Bw = numpy.array([[-epsilon,            epsilon],
-                              [-epsilon,            epsilon],
-                              [min(0.0, distance),  max(0.0, distance)],
-                              [-epsilon,            epsilon],
-                              [-epsilon,            epsilon],
-                              [-epsilon,            epsilon]])
-
-            traj_tsr = prpy.tsr.tsr.TSR(
-                T0_w=H_world_w, Tw_e=H_w_ee, Bw=Bw,
-                manip=robot.GetActiveManipulatorIndex())
-            traj_tsr_chain = prpy.tsr.tsr.TSRChain(constrain=True,
-                                                   TSRs=[traj_tsr])
-
-        kw_args.setdefault('psample', 0.1)
-
-        return self.Plan(
-            robot,
-            tsr_chains=[goal_tsr_chain, traj_tsr_chain],
-            # Smooth since this is a constrained trajectory.
-            smoothingitrs=smoothingitrs,
-            **kw_args
-        )
-
-    @ClonedPlanningMethod
+    @LockedPlanningMethod
     def PlanToTSR(self, robot, tsr_chains, smoothingitrs=100, **kw_args):
         """
         Plan to a goal specified as a list of TSR chains. CBiRRT supports an
@@ -208,7 +164,11 @@ class CBiRRTPlanner(BasePlanner):
     def Plan(self, robot, smoothingitrs=None, timelimit=None, allowlimadj=0,
              jointstarts=None, jointgoals=None, psample=None, tsr_chains=None,
              extra_args=None, **kw_args):
-        from openravepy import CollisionOptionsStateSaver
+        """
+        @param allowlimadj If True, adjust the joint limits to include
+            the robot's start configuration
+        """
+        from openravepy import CollisionOptionsStateSaver, Robot, KinBody
 
         if timelimit is None:
             timelimit = self.timelimit
@@ -218,6 +178,11 @@ class CBiRRTPlanner(BasePlanner):
                              ' non-negative; got {:f}.'.format(timelimit))
 
         env = robot.GetEnv()
+        problem = openravepy.RaveCreateProblem(env, 'CBiRRT')
+
+        if problem is None:
+            raise UnsupportedPlanningError('Unable to create CBiRRT module.')
+
         is_endpoint_deterministic = True
         is_constrained = False
 
@@ -225,7 +190,7 @@ class CBiRRTPlanner(BasePlanner):
         # when an IK solver other than GeneralIK is loaded (e.g. nlopt_ik).
         # self.ClearIkSolver(robot.GetActiveManipulator())
 
-        env.LoadProblem(self.problem, robot.GetName())
+        env.LoadProblem(problem, robot.GetName())
 
         args =  ['RunCBiRRT']
         args += ['timelimit', str(timelimit)]
@@ -306,8 +271,22 @@ class CBiRRTPlanner(BasePlanner):
         # Bypass the context manager since CBiRRT does its own baking in C++.
         collision_checker = self.robot_checker_factory(robot)
         options = collision_checker.collision_options
-        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options):
-            response = self.problem.SendCommand(args_str, True)
+        
+        if tsr_chains is not None:
+            mimicbodies = [env.GetKinBody(chain.mimicbodyname) 
+                           for chain in tsr_chains if chain.mimicbodyname is not 'NULL']
+            mimicbody_savers = [
+                mimicbody.CreateKinBodyStateSaver(KinBody.SaveParameters.LinkTransformation)
+                for mimicbody in mimicbodies]
+        else:
+            mimicbody_savers = []
+
+        with CollisionOptionsStateSaver(env.GetCollisionChecker(), options), \
+            robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF | 
+                                        Robot.SaveParameters.LinkTransformation), \
+            contextlib.nested(*mimicbody_savers), save_dof_limits(robot):
+            response = problem.SendCommand(args_str, True)
+
 
         if not response.strip().startswith('1'):
             raise PlanningError('Unknown error: ' + response,
