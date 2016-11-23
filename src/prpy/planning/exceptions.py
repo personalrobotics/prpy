@@ -93,6 +93,12 @@ class JointLimitError(PlanningError):
                 description=description),
             deterministic=deterministic)
 
+class SoftJointLimitError(JointLimitError):
+    pass
+
+class HardJointLimitError(JointLimitError):
+    pass
+
 
 class SelfCollisionPlanningError(CollisionPlanningError):
     pass

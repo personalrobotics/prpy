@@ -1326,7 +1326,7 @@ def ComputeGeodesicUnitTiming(traj, env=None, alpha=1.0):
     return new_traj
 
 
-def CheckJointLimits(robot, q, deterministic=None):
+def CheckJointLimits(robot, q, hard_limits, deterministic=None):
     """
     Check if a configuration is within a robot's joint position limits.
 
@@ -1338,17 +1338,19 @@ def CheckJointLimits(robot, q, deterministic=None):
     """
     from prpy.planning.exceptions import JointLimitError
 
-    q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
     active_dof_indices = robot.GetActiveDOFIndices()
 
     if len(q) != len(active_dof_indices):
         raise ValueError('The number of joints in the configuration q '
                          'is not equal to the number of active DOF.')
 
+    # Check for soft joint limit error
+    q_limit_min, q_limit_max = robot.GetActiveDOFLimits()
+
     lower_position_violations = (q < q_limit_min)
     if lower_position_violations.any():
         index = lower_position_violations.nonzero()[0][0]
-        raise JointLimitError(
+        raise SoftJointLimitError(
             robot,
             dof_index=active_dof_indices[index],
             dof_value=q[index],
@@ -1359,13 +1361,40 @@ def CheckJointLimits(robot, q, deterministic=None):
     upper_position_violations = (q > q_limit_max)
     if upper_position_violations.any():
         index = upper_position_violations.nonzero()[0][0]
-        raise JointLimitError(
+        raise SoftJointLimitError(
             robot,
             dof_index=active_dof_indices[index],
             dof_value=q[index],
             dof_limit=q_limit_max[index],
             description='position',
             deterministic=deterministic)
+
+
+    # Soft Joint Limit Error implies Hard Limit Error but not vice versa
+    hard_limit_min, hard_limit_max = hard_limits
+
+    lower_position_violations = (q < hard_limit_min)
+    if lower_position_violations.any():
+        index = lower_position_violations.nonzero()[0][0]
+        raise HardJointLimitError(
+            robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_min[index],
+            description='position',
+            deterministic=deterministic)
+
+    upper_position_violations = (q > hard_limit_max)
+    if upper_position_violations.any():
+        index = upper_position_violations.nonzero()[0][0]
+        raise HardJointLimitError(
+            robot,
+            dof_index=active_dof_indices[index],
+            dof_value=q[index],
+            dof_limit=q_limit_max[index],
+            description='position',
+            deterministic=deterministic)
+
 
 
 def GetForwardKinematics(robot, q, manipulator=None, frame=None):

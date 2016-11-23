@@ -79,6 +79,7 @@ class SnapPlanner(Planner):
 
     def _Snap(self, robot, goal, **kw_args):
         from prpy.util import CheckJointLimits
+        from prpy.planning.exceptions import SoftJointLimitError
         from prpy.util import GetLinearCollisionCheckPts
         from prpy.planning.exceptions import CollisionPlanningError
         from prpy.planning.exceptions import SelfCollisionPlanningError
@@ -94,7 +95,10 @@ class SnapPlanner(Planner):
         # Check the start position is within joint limits,
         # this can throw a JointLimitError
         start = robot.GetActiveDOFValues()
-        CheckJointLimits(robot, start, deterministic=True)
+        try:
+            CheckJointLimits(robot, start, deterministic=True)
+        except SoftJointLimitError:
+            pass
 
         # Add the start waypoint
         start_waypoint = numpy.zeros(cspec.GetDOF())
@@ -106,7 +110,11 @@ class SnapPlanner(Planner):
         # Make the trajectory end at the goal configuration, as
         # long as it is not in collision and is not identical to
         # the start configuration.
-        CheckJointLimits(robot, goal, deterministic=True)
+        try:
+            CheckJointLimits(robot, goal, deterministic=True)
+        except SoftJointLimitError:
+            pass
+
         if not numpy.allclose(start, goal):
             goal_waypoint = numpy.zeros(cspec.GetDOF())
             cspec.InsertJointValues(goal_waypoint, goal, robot,
