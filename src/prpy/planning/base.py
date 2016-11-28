@@ -466,6 +466,96 @@ class MethodMask(MetaPlanner):
         else:
             raise UnsupportedPlanningError()
 
+
+class HardwareJointLimitValidator(MetaPlanner):
+    def __init__(self, planner):
+        super(HardwareJointLimitValidator, self).__init__()
+        self._planner = planner
+
+    def __str__(self):
+        return 'HardLimitValidator({:s})'.format(', '.join(map(str, self._planners)))
+
+    def get_planners(self, method_name):
+        if planner.has_planning_method(method_name):
+            return [self._planner]
+        else:
+            return []
+
+    def plan(self, method, args, kw_args):
+
+        # TODO : Is this correct?
+        robot = args[0]
+
+        #Get HARD DOF Limits from robot
+        #hard_limit_min, hard_limit_max = robot.GetHardwareDOFLimits()
+        active_dof_indices = robot.GetActiveDOFIndices()
+        currentDOFVals = robot.getActiveDOFValues()
+        soft_limit_min, soft_limit_max = robot.GetActiveDOFLimits()
+        resetLimits = False
+
+        lower_hard_violations = (currentDOFVals < hard_limit_min)
+        upper_hard_violations = (currentDOFVals > hard_limit_max)
+        lower_soft_violations = (currentDOFVals < soft_limit_min)
+        upper_soft_violations = (currentDOFVals > soft_limit_max)
+
+        if lower_soft_violations.any() || upper_soft_violations.any():
+            
+            # Check if hard limits violated
+            if lower_hard_violations.any():
+                index = lower_hard_violations.nonzero()[0][0]
+                raise HardJointLimitError(
+                    robot,
+                    dof_index=active_dof_indices[index],
+                    dof_value=currentDOFVals[index],
+                    dof_limit=hard_limit_min[index],
+                    description='position',
+                    deterministic=deterministic)
+            if upper_hard_violations.any():
+                index = upper_hard_violations.nonzero()[0][0]
+                raise HardJointLimitError(
+                    robot,
+                    dof_index=active_dof_indices[index],
+                    dof_value=currentDOFVals[index],
+                    dof_limit=hard_limit_max[index],
+                    description='position',
+                    deterministic=deterministic)
+
+            # Between software and hardware limits
+            # Temporarily extend joint limits as needed
+            soft_limit_min_new = soft_limit_min
+            soft_limit_max_new = soft_limit_max
+
+            if lower_soft_violations.any():
+                soft_limit_min_new[lower_soft_violations] = currentDOFVals[lower_soft_violations]
+            if upper_soft_violations.any():
+                soft_limit_max_new[upper_soft_violations] = currentDOFVals[upper_soft_violations]
+
+            robot.SetDOFLimits(soft_limit_min_new, soft_limit_max_new)
+
+            resetLimits = True
+
+        result = None    
+
+        if planner.has_planning_method(method):
+            plan_fn = getattr(planner, method)
+
+            try:
+                result =  plan_fn(*args, **kw_args)
+            except UnsupportedPlanningError:
+                continue
+
+        # Reset limits if they were changed
+        if resetLimits == True:
+            robot.SetDOFLimits(soft_limit_min, soft_limit_max)
+
+        # Return result of planner if applicable
+        if result is not None:
+            return result
+        else:
+            raise UnsupportedPlanningError()
+
+                
+
 @contextmanager
 def save_dof_limits(robot):
     upper, lower = robot.GetDOFLimits()
