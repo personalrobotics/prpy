@@ -468,9 +468,10 @@ class MethodMask(MetaPlanner):
 
 
 class HardwareJointLimitValidator(MetaPlanner):
-    def __init__(self, planner):
+    def __init__(self, planner,hard_limits):
         super(HardwareJointLimitValidator, self).__init__()
         self._planner = planner
+        self.hard_limits = hard_limits
 
     def __str__(self):
         return 'HardLimitValidator({:s})'.format(', '.join(map(str, self._planners)))
@@ -486,19 +487,20 @@ class HardwareJointLimitValidator(MetaPlanner):
         # TODO : Is this correct?
         robot = args[0]
 
-        #Get HARD DOF Limits from robot
-        #hard_limit_min, hard_limit_max = robot.GetHardwareDOFLimits()
+        # Get HARD DOF Limits from robot
+        hard_limit_min, hard_limit_max = self.hard_limits
         active_dof_indices = robot.GetActiveDOFIndices()
         currentDOFVals = robot.getActiveDOFValues()
         soft_limit_min, soft_limit_max = robot.GetActiveDOFLimits()
         resetLimits = False
 
+        # Check for soft or hard joint violations
         lower_hard_violations = (currentDOFVals < hard_limit_min)
         upper_hard_violations = (currentDOFVals > hard_limit_max)
         lower_soft_violations = (currentDOFVals < soft_limit_min)
         upper_soft_violations = (currentDOFVals > soft_limit_max)
 
-        if lower_soft_violations.any() || upper_soft_violations.any():
+        if lower_soft_violations.any() or upper_soft_violations.any():
             
             # Check if hard limits violated
             if lower_hard_violations.any():
@@ -543,10 +545,9 @@ class HardwareJointLimitValidator(MetaPlanner):
                 result =  plan_fn(*args, **kw_args)
             except UnsupportedPlanningError:
                 continue
-
-        # Reset limits if they were changed
-        if resetLimits == True:
-            robot.SetDOFLimits(soft_limit_min, soft_limit_max)
+            finally:
+                if resetLimits == True:
+                    robot.SetDOFLimits(soft_limit_min, soft_limit_max)
 
         # Return result of planner if applicable
         if result is not None:
