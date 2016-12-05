@@ -41,4 +41,6 @@
   <test_depend>or_ompl</test_depend>
   <test_depend>or_parabolicsmoother</test_depend>
   <test_depend>or_trajopt</test_depend>
+
+  <doc_depend>doxypy</doc_depend>
 </package>
