@@ -386,7 +386,7 @@ resolve multiple objects in one statement:
 PrPy has native support for [futures](http://en.wikipedia.org/wiki/Futures_and_promises) and
 [coroutines](http://en.wikipedia.org/wiki/Coroutine) to simplify concurrent programming. A
 _future_ encapsulates the execution of a long-running task. We use the concurrency primitives
-provided by the [`trollius` module](http://trollius.readthedocs.org/en/latest/using.html),
+provided by the [`trollius` module](http://trollius.readthedocs.org/using.html),
 which is a Python 2 backport of the [`asyncio` module](https://docs.python.org/3/library/asyncio.html)
 from Python 3.
 
@@ -420,7 +420,7 @@ types, including: `KinBody`, `Robot`, `Link`, and `Joint`.
 This may appear trivial to accomplish using `setattr`. However, this is
 actually quite challenging to implement because OpenRAVE's Python bindings for
 these classes are automatically generated as [Boost.Python
-bindings](www.boost.org/doc/libs/release/libs/python/) that are managed by a
+bindings](http://www.boost.org/doc/libs/release/libs/python/) that are managed by a
 `shared_ptr`. Each instance of a `shared_ptr` returned by C++ is wrapped in a
 separate Python object. As a result, the following code does not work as
 expected:
