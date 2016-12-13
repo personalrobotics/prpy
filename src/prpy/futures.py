@@ -167,7 +167,7 @@ class Future(object):
         @type  fn: (ResultType) -> None
         """
         with self.lock:
-            if self._is_done:
+            if not self._is_done:
                 if fn in self._callbacks:
                     raise ValueError('Callback is already registered.')
 
@@ -224,7 +224,7 @@ class Future(object):
             try:
                 callback_fn(self)
             except Exception:
-                self.logger.exception('Callback raised an exception.')
+                logger.exception('Callback raised an exception.')
 
 
 def defer(fn, executor=None, args=(), kwargs={}):
