@@ -42,7 +42,7 @@ from .exceptions import (
 from base import (BasePlanner, PlanningError, UnsupportedPlanningError,
                   ClonedPlanningMethod, Tags)
 from prpy.util import VanDerCorputSampleGenerator, SampleTimeGenerator
-import prpy.tsr
+import tsr
 
 SaveParameters = openravepy.KinBody.SaveParameters.LinkEnable
 
