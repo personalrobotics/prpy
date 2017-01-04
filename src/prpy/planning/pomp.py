@@ -13,14 +13,13 @@ from IPython import embed
 
 class POMPPlanner(BasePlanner):
         
-        
     def __init__(self,robot_checker_factory=None):
 
         super(POMPPlanner,self).__init__()
 
         from catkin.find_in_workspaces import find_in_workspaces
         package_name = 'prpy'
-        directory = 'data/roadmaps'
+        directory = 'data/roadmaps' # To obtain stored herb roadmaps
         objects_path = find_in_workspaces(
             search_dirs=['share'],
             project=package_name,
@@ -30,9 +29,8 @@ class POMPPlanner(BasePlanner):
             print('Can\'t find directory %s/%s' % (package_name, directory))
             sys.exit()
         else:
-            print objects_path # for me this is '/home/USERNAME/catkin_workspaces/herb_ws/src/pr-ordata/data/objects'
             objects_path = objects_path[0]
-            roadmap_file = os.path.join(objects_path,'herb_halton_10000_2.graphml')
+            roadmap_file = os.path.join(objects_path,'herb_halton_10000_2.graphml') # A good default roadmap
             self.reqd_model_params = {'prior':0.5,'prior_weight':20,'support':2.0,'knn':15}
             self.reqd_roadmap_params = {'roadmap_type':'fromfile', 'filename':roadmap_file,'gen_roadmap':1}
 
@@ -88,4 +86,4 @@ class POMPPlanner(BasePlanner):
         if status == openravepy.PlannerStatus.HasSolution:
             return traj
         else:
-            raise prpy.planning.base.PlanningError('LEMUR status: {}'.format(status))
+            raise prpy.planning.base.PlanningError('POMP status: {}'.format(status))
