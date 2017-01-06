@@ -544,7 +544,7 @@ class HardwareJointLimitValidator(MetaPlanner):
             try:
                 result =  plan_fn(*args, **kw_args)
             except UnsupportedPlanningError:
-                continue
+                pass
             finally:
                 if resetLimits == True:
                     robot.SetDOFLimits(soft_limit_min, soft_limit_max)
