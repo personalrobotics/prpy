@@ -79,7 +79,6 @@ class SnapPlanner(Planner):
 
     def _Snap(self, robot, goal, **kw_args):
         from prpy.util import CheckJointLimits
-        from prpy.planning.exceptions import SoftJointLimitError
         from prpy.util import GetLinearCollisionCheckPts
         from prpy.planning.exceptions import CollisionPlanningError
         from prpy.planning.exceptions import SelfCollisionPlanningError
