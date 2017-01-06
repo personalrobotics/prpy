@@ -95,10 +95,8 @@ class SnapPlanner(Planner):
         # Check the start position is within joint limits,
         # this can throw a JointLimitError
         start = robot.GetActiveDOFValues()
-        try:
-            CheckJointLimits(robot, start, deterministic=True)
-        except SoftJointLimitError:
-            pass
+        
+        CheckJointLimits(robot, start, deterministic=True)
 
         # Add the start waypoint
         start_waypoint = numpy.zeros(cspec.GetDOF())
@@ -110,10 +108,9 @@ class SnapPlanner(Planner):
         # Make the trajectory end at the goal configuration, as
         # long as it is not in collision and is not identical to
         # the start configuration.
-        try:
-            CheckJointLimits(robot, goal, deterministic=True)
-        except SoftJointLimitError:
-            pass
+        
+        CheckJointLimits(robot, goal, deterministic=True)
+        
 
         if not numpy.allclose(start, goal):
             goal_waypoint = numpy.zeros(cspec.GetDOF())
