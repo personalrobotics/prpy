@@ -498,17 +498,12 @@ class VectorFieldPlanner(Planner):
             called after each integration time step, which means we are
             doing more checks than required.
             """
-            from prpy.planning.exceptions import SoftJointLimitError
-
             if time.time() - time_start >= timelimit:
                 raise TimeLimitError()
 
             # Check joint position limits.
             # We do this before setting the joint angles.
-            try:
-                util.CheckJointLimits(robot, q)
-            except SoftJointLimitError:
-                pass
+            util.CheckJointLimits(robot, q)
 
             robot.SetActiveDOFValues(q)
 
