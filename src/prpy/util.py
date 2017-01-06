@@ -1336,7 +1336,7 @@ def CheckJointLimits(robot, q, deterministic=None):
     @param openravepy.robot robot: The robot.
     @param list             q:     List or array of joint positions.
     """
-    from prpy.planning.exceptions import JointLimitError
+    from prpy.planning.exceptions import SoftJointLimitError
 
     active_dof_indices = robot.GetActiveDOFIndices()
 
