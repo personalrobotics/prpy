@@ -1088,6 +1088,27 @@ class Tests(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(T_loc, expected_T_loc, decimal=7, \
                                                 err_msg=error, verbose=True)
 
+    def test_ConcatenateTrajectories(self):
+        q0 = self.robot.GetDOFValues(self.active_dof_indices).tolist()
+        q1 = [0.02, 0.01, 0.02, 0.01, 0.01, 0.01, 0.0]
+        q2 = [0.50, 0.30, 0.02, 0.01, 0.01, 0.01, 0.0]
+        traj1 = self.CreateTrajectory(q0, q1)
+        traj2 = self.CreateTrajectory(q1, q2)
+        combined_traj = prpy.util.ConcatenateTrajectories(self.robot, [traj1, traj2])
+
+        combined_waypoints = numpy.zeros((combined_traj.GetNumWaypoints(), 7))
+        for j in xrange(combined_traj.GetNumWaypoints()):
+            combined_waypoints[j] = combined_traj.GetWaypoint(j)
+        all_waypoints = [q0, q1, q2]
+
+        error = 'The waypoints on the trajectory' 
+                ' do not match the individual waypoints'
+        numpy.testing.assert_array_almost_equal(combined_waypoints,
+                                                all_waypoints,
+                                                decimal=4,
+                                                err_msg=error,
+                                                verbose=True)
+
 
 class Test_GetPointFrom(unittest.TestCase):
     """

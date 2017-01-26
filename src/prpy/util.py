@@ -2130,7 +2130,7 @@ def GetPointFrom(focus):
 
     return coord
 
-def ConcatenateTrajectories(traj_list):
+def ConcatenateTrajectories(robot, traj_list):
     """
     Given a list of trajectories for a single manipulator,
     concatenate them into a single trajectory
@@ -2143,47 +2143,61 @@ def ConcatenateTrajectories(traj_list):
     if len(traj_list) == 0:
         raise ValueError('Trajectory list is empty')
 
-    base_traj = traj_list[0]
-    base_cspec = base_traj.GetConfigurationSpecification()
+    env = robot.GetEnv()
+
+    # Create an empty trajectory to populate
+    base_traj = openravepy.RaveCreateTrajectory(env, '')
+    base_cspec = robot.GetActiveConfigurationSpecification('linear')
+    base_traj.Init(base_cspec)
+    #base_cspec = base_traj.GetConfigurationSpecification()
 
     smoothFlag = True
     constrainedFlag = False
     deterministicTrajectoryFlag = True
     deterministicEndPointFlag = False
 
-    offset = base_traj.GetNumWaypoints()
-    for i in xrange(1, len(traj_list)):
-        traj_i = traj_list[i]
-
-        cspec_i = traj_i.GetConfigurationSpecification()
+    offset = 0
+    for traj in traj_list:
+        cspec_i = traj.GetConfigurationSpecification()
         if base_cspec != cspec_i:
             raise ValueError('The configuration specifications of the trajectory do not match')
 
-        tags_i = GetTrajectoryTags(traj_i)
+        tags = GetTrajectoryTags(traj)
         # Only True if all trajectories have this set
-        if 'smooth' in tags_i and not tags_i['smooth']:
+        if 'smooth' in tags and not tags['smooth']:
             smoothFlag = False
 
         # True if any trajectory has this set
-        if 'constrained' in tags_i and tags_i['constrained']:
+        if 'constrained' in tags and tags['constrained']:
             constrainedFlag = True
 
          # Only True if all trajectories have this set
-        if 'deterministic' in tags_i and not tags_i['deterministic']:
+        if 'deterministic' in tags and not tags['deterministic']:
             deterministcTrajectoryFlag = False
 
-        # True if the last trajectory has this set
-        if i == len(traj_list)-1 and 'deterministic_endpoint' in tags_i and tags_i['determinstic_endpoint']:
-             deterministicEndPointFlag = True
+        # Check that trajectory leds from previous,
+        # or if the first, start the trajectory
+        epsilon = 0.001
+        if offset == 0:
+            base_traj.Insert(offset, traj.GetWaypoint(0))
+            offset += 1
+        else:
+            if sum(numpy.subtract(traj.GetWaypoint(0), base_traj.GetWaypoint(offset-1))) > epsilon:
+                raise ValueError('The trajectories are not consecutive.')
 
         # Add trajectory in by inserting each waypoint
-        for j in xrange(traj_i.GetNumWaypoints()):
-            waypoint = traj_i.GetWaypoint(j)
+        for j in xrange(1, traj.GetNumWaypoints()):
+            waypoint = traj.GetWaypoint(j)
             base_traj.Insert(offset, waypoint)
             offset += 1
 
-    flagSettings = {TAGS.SMOOTH: smoothFlag, TAGS.CONSTRAINED: constrainedFlag, 
-                    TAGS.DETERMINISTIC_TRAJECTORY: deterministicTrajectoryFlag,
-                    TAGS.DETERMINISTIC_ENDPOINT: deterministicEndPointFlag}
+    # True if the last trajectory has this set
+    last_tags = GetTrajectoryTags(traj_list[-1])
+    if 'deterministic_endpoint' in last_tags and last_tags['determinstic_endpoint']:
+        deterministicEndPointFlag = True
+
+    flagSettings = {Tags.SMOOTH: smoothFlag, Tags.CONSTRAINED: constrainedFlag, 
+                    Tags.DETERMINISTIC_TRAJECTORY: deterministicTrajectoryFlag,
+                    Tags.DETERMINISTIC_ENDPOINT: deterministicEndPointFlag}
     SetTrajectoryTags(base_traj, flagSettings, append=True)
     return base_traj
