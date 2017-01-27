@@ -1101,8 +1101,7 @@ class Tests(unittest.TestCase):
             combined_waypoints[j] = combined_traj.GetWaypoint(j)
         all_waypoints = [q0, q1, q2]
 
-        error = 'The waypoints on the trajectory' 
-                ' do not match the individual waypoints'
+        error = 'The waypoints on the trajectory do not match the individual waypoints'
         numpy.testing.assert_array_almost_equal(combined_waypoints,
                                                 all_waypoints,
                                                 decimal=4,
