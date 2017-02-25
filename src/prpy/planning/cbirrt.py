@@ -104,7 +104,7 @@ class CBiRRTPlanner(Planner):
         @return traj output path
         """
         manipulator_index = robot.GetActiveManipulatorIndex()
-        goal_tsr = TSR(T0_w=goal_pose, manip=manipulator_index)
+        goal_tsr = TSR(T0_w=goal_pose, manipindex=manipulator_index)
         tsr_chain = TSRChain(sample_goal=True, TSR=goal_tsr)
 
         kw_args.setdefault('psample', 0.1)

@@ -74,7 +74,7 @@ class PlanToEndEffectorOffsetTSRAdapter(Planner):
             T0_w=numpy.dot(H_world_w, Hw_end),
             Tw_e=H_w_ee,
             Bw=numpy.zeros((6, 2)),
-            manip=manip_index))
+            manipindex=manip_index))
         constraint_chain = TSRChain(constrain=True, TSR=TSR(
             T0_w=H_world_w,
             Tw_e=H_w_ee,
@@ -85,6 +85,6 @@ class PlanToEndEffectorOffsetTSRAdapter(Planner):
                 [-cls.epsilon, cls.epsilon],
                 [-cls.epsilon, cls.epsilon],
                 [-cls.epsilon, cls.epsilon]]),
-            manip=manip_index))
+            manipindex=manip_index))
 
         return [goal_chain, constraint_chain]
