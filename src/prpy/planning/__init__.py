@@ -46,6 +46,6 @@ from named import NamedPlanner
 from ik import IKPlanner
 from sbpl import SBPLPlanner
 from openrave import BiRRTPlanner
-from tsr import TSRPlanner
+from tsrplanner import TSRPlanner
 from workspace import GreedyIKPlanner
 from vectorfield import VectorFieldPlanner
