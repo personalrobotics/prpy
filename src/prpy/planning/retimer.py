@@ -92,7 +92,8 @@ class OpenRAVERetimer(Planner):
         if not IsTimedTrajectory(output_traj):
             output_traj = SimplifyTrajectory(output_traj, robot)
 
-        with robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF), \
+        with robot.CreateRobotStateSaver(Robot.SaveParameters.ActiveDOF |
+                                         Robot.SaveParameters.LinkTransformation), \
             CollisionOptionsStateSaver(env.GetCollisionChecker(),
                                        CollisionOptions.ActiveDOFs):
             # Only collision check the active DOFs.
