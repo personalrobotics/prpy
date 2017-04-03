@@ -12,7 +12,7 @@ deserialization_logger = logging.getLogger('prpy.deserialization')
 def serialize(obj):
     from numpy import ndarray
     from openravepy import Environment, KinBody, Robot, Trajectory
-    from prpy.tsr import TSR, TSRChain
+    from tsr import TSR, TSRChain
 
     NoneType = type(None)
 

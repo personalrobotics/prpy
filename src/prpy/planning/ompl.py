@@ -50,7 +50,7 @@ from ..util import (
     SetTrajectoryTags,
     GetManipulatorIndex,
 )
-from ..tsr.tsr import (
+from tsr.tsr import (
     TSR,
     TSRChain,
 )

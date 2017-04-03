@@ -33,9 +33,11 @@
   <depend>python-rospkg</depend>
   <depend>python-yaml</depend>
   <depend>python-lxml</depend>
+  <depend>tsr</depend>
   <test_depend>python-nose</test_depend>
   <!-- These optional dependencies cause unit tests can fail if missing. -->
   <test_depend>cbirrt2</test_depend>
+  <test_depend>tsr</test_depend>
   <test_depend>or_cdchomp</test_depend>
   <test_depend>or_ompl</test_depend>
   <test_depend>or_parabolicsmoother</test_depend>

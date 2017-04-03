@@ -31,12 +31,12 @@ import collections
 import functools, logging, openravepy, numpy
 from .. import bind, named_config, exceptions, util
 from ..clone import Clone, Cloned
-from ..tsr.tsrlibrary import TSRLibrary
+from tsr.tsrlibrary import TSRLibrary
 from ..planning.base import Sequence, Tags
 from ..planning.ompl import OMPLSimplifier
 from ..planning.retimer import OpenRAVEAffineRetimer, ParabolicRetimer
 from ..planning.mac_smoother import MacSmoother
-from ..util import SetTrajectoryTags
+from ..util import SetTrajectoryTags, GetManipulatorIndex
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class Robot(openravepy.Robot):
         self.robot_name = robot_name
 
         try:
-            self.tsrlibrary = TSRLibrary(self, robot_name=robot_name)
+            self.tsrlibrary = TSRLibrary(self, manipindex=GetManipulatorIndex(self), robot_name=robot_name)
         except ValueError as e:
             self.tsrlibrary = None
             logger.warning('Failed creating TSRLibrary for robot "%s": %s',
