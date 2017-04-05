@@ -2,6 +2,81 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.1.0 (2017-04-05)
+------------------
+* Add LinkTransformation flag to state saver in retimer.
+  `#369 <https://github.com/personalrobotics/prpy/issues/369>`_
+  `#370 <https://github.com/personalrobotics/prpy/issues/370>`_
+* Generate documentation with Doxygen
+  `#363 <https://github.com/personalrobotics/prpy/issues/363>`_
+* Fix cloning bugs.
+  `#306 <https://github.com/personalrobotics/prpy/issues/306>`_
+  `#335 <https://github.com/personalrobotics/prpy/issues/335>`_
+  `#364 <https://github.com/personalrobotics/prpy/issues/364>`_
+* Fix range parameter in OMPL RRT-Connect.
+  `#356 <https://github.com/personalrobotics/prpy/issues/356>`_
+* Fix bugs in Future
+  `#365 <https://github.com/personalrobotics/prpy/issues/365>`_
+* Fix trajectory tags set by GreedyIkPlanner.
+  `#348 <https://github.com/personalrobotics/prpy/issues/348>`_
+* Fix typos.
+  `#337 <https://github.com/personalrobotics/prpy/issues/337>`_
+* Fix usage of GetManipulatorIndex.
+  `#326 <https://github.com/personalrobotics/prpy/issues/326>`_
+  `#334 <https://github.com/personalrobotics/prpy/issues/334>`_
+* Fix bugs in CHOMP SDF manager.
+  `#317 <https://github.com/personalrobotics/prpy/issues/317>`_
+  `#315 <https://github.com/personalrobotics/prpy/issues/315>`_
+* Fix bug in log handler registration.
+  `#314 <https://github.com/personalrobotics/prpy/issues/314>`_
+* Add constrained planning support to `OMPLPlanner`.
+  `#311 <https://github.com/personalrobotics/prpy/issues/311>`_
+* Add `OMPLRangedPlanner` class.
+  `#353 <https://github.com/personalrobotics/prpy/issues/353>`_
+* Add `RemoveAll` function to perception interface.
+  `#352 <https://github.com/personalrobotics/prpy/issues/352>`_
+* Add timelimit to CBiRRT constructor.
+  `#349 <https://github.com/personalrobotics/prpy/issues/349>`_
+* Add support for baked collision detection.
+  `#331 <https://github.com/personalrobotics/prpy/issues/331>`_
+  `#340 <https://github.com/personalrobotics/prpy/issues/340>`_
+* Add error cheecking to OMPL for unsupported types of TSRs.
+  `#339 <https://github.com/personalrobotics/prpy/issues/339>`_
+* Add metadata about determinism to the planning pipeline
+  `#325 <https://github.com/personalrobotics/prpy/issues/325>`_
+* Add support for URI-only serialization/deserialization.
+  `#328 <https://github.com/personalrobotics/prpy/issues/328>`_
+* Add to TSR library.
+  `#309 <https://github.com/personalrobotics/prpy/issues/309>`_
+  `#313 <https://github.com/personalrobotics/prpy/issues/313>`_
+* Add ActiveDOFs support in several planners.
+  `#318 <https://github.com/personalrobotics/prpy/issues/318>`_
+* Switch from ClonedPlanningMethod to LockedPlanningMethod
+  `#360 <https://github.com/personalrobotics/prpy/issues/360>`_
+* Switch to using `robot.retimer` on smooth paths.
+  `#347 <https://github.com/personalrobotics/prpy/issues/347>`_
+* Optimize `VectorFieldPlanner` by removing duplicate collision checks.
+  `#359 <https://github.com/personalrobotics/prpy/issues/359>`_
+* Optimize `GreedyIkPlanner` by removing duplicate IK calls.
+  `#351 <https://github.com/personalrobotics/prpy/issues/351>`_
+* Optimize TSRPlanner
+  `#322 <https://github.com/personalrobotics/prpy/issues/322>`_ 
+* Modify `AprilTags.DetectObjects` to use `kwargs`.
+  `#357 <https://github.com/personalrobotics/prpy/issues/357>`_
+* Standardize on L2 norm interpretation of DOF resolution.
+  `#332 <https://github.com/personalrobotics/prpy/issues/332>`_
+  `#333 <https://github.com/personalrobotics/prpy/issues/333>`_
+  `#336 <https://github.com/personalrobotics/prpy/issues/336>`_
+* Refactor collision checker context managers.
+  `#343 <https://github.com/personalrobotics/prpy/issues/343>`_
+* Clean up `OMPLPlanner`
+  `#308 <https://github.com/personalrobotics/prpy/issues/308>`_
+  `#320 <https://github.com/personalrobotics/prpy/issues/320>`_
+  `#355 <https://github.com/personalrobotics/prpy/issues/355>`_
+* Update README.
+  `#312 <https://github.com/personalrobotics/prpy/issues/312>`_
+* Contributors: Allison Thackston, Brian Hou, Chris Dellin, Clint Liddick, Gilwoo Lee, Jennifer King, Michael Koval, Pras Velagapudi, Shervin Javdani, Shushman Choudhury
+
 3.0.1 (2016-05-12)
 ------------------
 * Changed `SetPosition` to match OpenRAVE `Controller` `SetDesired` API.
