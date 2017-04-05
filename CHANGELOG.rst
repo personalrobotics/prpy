@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+4.0.0 (2017-04-05)
+------------------
 * Split TSRs into a separate repository
 `#367 <https://github.com/personalrobotics/prpy/issues/367>`_
 `#372 <https://github.com/personalrobotics/prpy/issues/372>`_
