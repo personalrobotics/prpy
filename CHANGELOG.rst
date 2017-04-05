@@ -2,6 +2,13 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Split TSRs into a separate repository
+`#367 <https://github.com/personalrobotics/prpy/issues/367>`_
+`#372 <https://github.com/personalrobotics/prpy/issues/372>`_
+* Contributors: Shushman Choudhury
+
 3.1.0 (2017-04-05)
 ------------------
 * Add LinkTransformation flag to state saver in retimer.
