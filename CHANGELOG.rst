@@ -2,8 +2,8 @@
 Changelog for package prpy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.1.0 (2017-04-05)
+------------------
 * Add LinkTransformation flag to state saver in retimer.
   `#369 <https://github.com/personalrobotics/prpy/issues/369>`_
   `#370 <https://github.com/personalrobotics/prpy/issues/370>`_
